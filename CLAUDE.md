@@ -156,9 +156,23 @@ expected, not a problem to fix.
   passing. 16 are hermetic (built against synthetic in-test fixtures, so they run on a fresh
   clone with no game installed); 4 confirm documented values against the real `dialog.tlk` and
   skip when it is absent. `InfinityFormatException` lives alongside it.
-- ⬅️ **Here: the rest of Phase 0** — `GamCodec` and `CreCodec`, plus the fixture harness for
-  real saves. **Four known bugs in the spike must be fixed properly rather than papered over**
-  — see `docs/findings/verified-format-offsets.md` §Known bugs.
+- ✅ **Fixture harness + `FormatField` + `GamCodec` header read/write.** `tool/dev/sync_fixtures.dart`
+  copies real saves into a gitignored fixture directory; format layouts are enhanced enums with a
+  reusable layout invariant; `Gam` keeps the source bytes as an unmodifiable view and edits patch a
+  copy.
+- ✅ **The write path is proven in-game** (2026-08-07) — party gold edited on a real save, 2 bytes
+  changed out of 95,968, loads in BG:EE showing the new value. See
+  `docs/findings/verified-format-offsets.md` §Write path. **It proves the mechanism, not offset
+  recalculation** — nothing resized.
+- ✅ **GAM NPC structs and `CreCodec` read path.** The 352-byte NPC struct with an exact-fit layout
+  invariant, party and non-party arrays, embedded-CRE location, and the CRE header with its six
+  sections. All 37 creatures in a real save parse, and the CRE section chain closes on each one's
+  declared length.
+- ⬅️ **Here: Phase 1, the writer.** Everything above is the *read* path plus one fixed-width
+  in-place edit. **The hard problem is untouched:** every CRE section is variable-length, so adding
+  a single item moves everything after it in the CRE, then the CRE's size in the GAM, then every
+  GAM offset past that. **Four known bugs in the spike must be fixed properly rather than papered
+  over** — see `docs/findings/verified-format-offsets.md` §Known bugs.
 
 ⚠️ **TLK strings are UTF-8, not cp1252.** Earlier notes throughout this repo said cp1252; that was
 falsified against the shipped game data on 2026-08-07 and is corrected everywhere. cp1252 is real
