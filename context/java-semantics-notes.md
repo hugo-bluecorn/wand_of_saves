@@ -22,9 +22,12 @@ from:
   typed-data *views* use host order. That is a per-call-site hazard, not a one-time setting.
 - **Entry 2 — unsigned values.** Dart `int` is 64-bit; use `getUint8`/`getUint16`/`getUint32` and
   mask deliberately rather than assuming a width.
-- **Entry 3 — encoding. Live on day one.** Dart has **no built-in cp1252 codec**, and `latin1` is
-  *not* equivalent for `0x80–0x9F`. TLK strings are affected; the spike's
-  `String.fromCharCodes` is wrong for any non-ASCII string.
+- **Entry 3 — encoding. VERIFIED 2026-08-07, and the seeded claim was *falsified*.** BG:EE
+  `dialog.tlk` is **UTF-8**, not cp1252 — evidence in
+  `docs/findings/verified-format-offsets.md` §TLK. The hazard is real but is not the one recorded:
+  `String.fromCharCodes` silently aliases latin1 and so mangles every non-ASCII string. Dart *does*
+  ship the codec actually needed (`utf8`, `dart:convert`); it is cp1252 Dart lacks, and cp1252
+  applies to the **classic** engine only, which D3 puts out of scope. Row moved below.
 
 **Protocol, as revised:** an entry's Dart-side claim must rest on a citation (Dart API docs / the
 language spec), not on model memory — *a signature is not a mechanism; neither is a remembered
@@ -35,7 +38,6 @@ at all, it is only to interpret the **output** of NearInfinity run as a black-bo
 |---|---|---|---|---|
 | 1 | **Byte order** — `ByteBuffer` defaults to BIG_ENDIAN; Infinity Engine formats are little-endian, so codecs must (and do) set `ByteOrder.LITTLE_ENDIAN` | **32 measured `LITTLE_ENDIAN` sites** (2026-08-05 grep) — `resource/key/BIF{,F}Reader.java`, `Effect{,2}.java`, `wed/WedResource.java`, … | `ByteData` get/set take `Endian` **per call**, default `Endian.big`; typed-data *views* use host order — a per-call-site hazard, not a one-time setting | SEEDED |
 | 2 | **No unsigned types** — Java emulates unsigned bytes/shorts/ints by masking (`& 0xFF`, …); sign-extension on widening is the trap | the codec family throughout `resource/` + `datatype/` (`DecNumber`, `Unknown`, section counts) | Dart `int` is 64-bit; masks still required but at different widths; `Uint8List`/`ByteData` getUint* solve the byte layer | SEEDED |
-| 3 | **Charsets** — which encoding per string field is a per-format contract, not a global | **32 files** touch `Charset`/encodings (2026-08-05 grep); resource names, TLK strings | ⚠️ **Dart has no built-in cp1252 codec** — `latin1` ≠ cp1252 for 0x80–0x9F; if any format field is cp1252, the port needs an explicit table or package | SEEDED |
 | 4 | **The EDT** — Swing is single-threaded; all UI mutation via the Event Dispatch Thread (`invokeLater`/`invokeAndWait`); background work via workers/pools | `util/Threading` pooled executor; `AbstractSearcher`/`AbstractChecker` batch ops; every viewer | Flutter main isolate + `compute()`/isolates; no shared-memory UI mutation at all — a *stronger* model, but blocking work must leave the main isolate explicitly | SEEDED |
 | 5 | **`java.util.prefs`** — platform backing store (Linux: `~/.java/.userPrefs` XML), node paths are API | `AppOption` registry; the legacy node `org.infinity.gui.BrowserMenuBar` kept deliberately for settings compat | no direct equivalent; settings file or `shared_preferences`; **user-settings migration is a plan-level question** | SEEDED |
 | 6 | **Zip as `FileSystem`** — NIO mounts zips and serves `Path`s through them transparently | `DlcManager` mounts DLC zips; `ResourceEntry` reads through | Dart has no zip-mount; `package:archive` reads entries — the transparent-Path abstraction must be rebuilt or designed around | SEEDED |
@@ -43,6 +45,24 @@ at all, it is only to interpret the **output** of NearInfinity run as a black-bo
 
 ## Entries verified so far
 
-None — all seven are SEEDED. First verification belongs to whichever leg-J finder, comparison
-item, or seed touches the contract first; the verifier updates the row in place (citation URL +
-fetch date + measured sites) and moves it below with a dated line.
+### Entry 3 — charsets · VERIFIED 2026-08-07 · seeded claim **falsified**
+
+| # | Contract | Bites in NearInfinity | Dart-side counterpart | Status |
+|---|---|---|---|---|
+| 3 | **Charsets** — which encoding per string field is a per-format contract, not a global | **32 files** touch `Charset`/encodings (2026-08-05 grep); resource names, TLK strings | BG:EE TLK bodies are **UTF-8**; `utf8.decode` (`dart:convert`) is the codec, and 34,000/34,000 strings decode strict in each of `en_US` and `ru_RU`. The live hazard is **`String.fromCharCodes`, which aliases latin1** and mangles every non-ASCII string. Dart does still lack cp1252 — but cp1252 is a *classic*-engine concern, out of scope under D3. | **VERIFIED** |
+
+**Citation.** `dart:convert` declares `const Utf8Codec utf8 = Utf8Codec();` —
+<https://api.dart.dev/stable/dart-convert/utf8-constant.html>, fetched 2026-08-07.
+
+**Measured sites.** `lang/*/dialog.tlk` on the BG1EE install: four locales sampled byte-by-byte,
+two scanned in full — 68,000 strings, **zero** strict-UTF-8 failures. Full record in
+`docs/findings/verified-format-offsets.md` §TLK.
+
+**Why the seed was wrong, which is the reusable lesson.** IESDP `tlk_v1.htm` calls the strings
+section *"composed of ASCII strings"* and its *Applies to* list omits the EEs entirely — the
+specification of record is describing the **classic** format there. A fact inherited from a spec
+whose scope was not checked is exactly the failure this ledger's protocol exists to catch.
+
+The remaining six entries are SEEDED. First verification belongs to whichever seed touches the
+contract first; the verifier updates the row in place (citation URL + fetch date + measured sites)
+and moves it here with a dated line.

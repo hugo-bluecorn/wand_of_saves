@@ -73,6 +73,44 @@ Cross-checked against NearInfinity `resource/gam/PartyNPC.java:236-281`.
 | `+32` / `+34` | 2 each | Location X / Y |
 | `+192` | 32 | **Name** (plain text — this is where the displayed name comes from) |
 | `+224` | 4 | Times talked to |
+| `+228` | 116 | Character stats sub-struct |
+| `+344` | 8 | Voice set — **the last field** |
+
+### Struct size: **352 bytes.** Verified 2026-08-07, three independent ways
+
+This is the fact whose absence caused the stride bug. **Read it; never infer it.**
+
+1. **IESDP** — the last field is Voice Set at `0x0158` (= 344), 8 bytes wide. 344 + 8 = **352**.
+2. **The party array** — `partyOffset` is 180 and there is 1 member; 180 + 1 × 352 = **532**, which
+   is exactly where the embedded party CRE begins (`0x214`).
+3. **The non-party array** — `nonPartyOffset` 7312 with 36 structs; 7312 + 36 × 352 = **19,984**,
+   exactly where the first non-party CRE begins. Read at that stride, all 36 CRE blobs chain
+   perfectly (`offset[i] + size[i] == offset[i+1]`) and carry recognisable BG1 companions
+   (`*KHALID`, `*JAHEIRA`, `*MINSC`, `*VICONIA`, `*IMOEN`). A wrong stride breaks that 36-link
+   chain immediately.
+
+The same struct serves both party and non-party NPCs.
+
+### Fixture composition — this shapes the test strategy
+
+Measured across all three saves (`000000020-start`, `000000021-basic_weapon`, `000000022-last`),
+which are **identical** in these values:
+
+| Field | Value |
+|---|---|
+| `partyOffset` / `partyCount` | 180 / **1** |
+| `partyInventoryOffset` / `partyInventoryCount` | **0 / 0 — the section is absent** |
+| `nonPartyOffset` / `nonPartyCount` | 7192, 7272, 7312 (per save) / **36** |
+
+Two consequences for `GamCodec`'s tests:
+
+- **A stride bug is invisible in the party array** — every fixture has exactly one member, so any
+  stride produces correct output. Testing the party stride needs a *synthetic* multi-member GAM.
+- **The non-party array is the real-data stride test.** 36 structs of identical layout, with the
+  contiguity property above as a strong invariant.
+
+Layout of `000000022-last`, for orientation: header → party structs (180) → party CRE (532) →
+non-party structs (7312) → non-party CREs (19,984 onward).
 
 ## CRE V1.0
 
@@ -115,8 +153,12 @@ v2 (264 bytes).
 
 ## TLK (`dialog.tlk`)
 
-Located at `<game>/lang/<locale>/dialog.tlk` — for this install, `lang/en_US/dialog.tlk`,
-**34,000 strings**.
+Source: IESDP `file_formats/ie_formats/tlk_v1.htm`. ⚠️ That page's *Applies to* list covers the
+classic games and **omits the EEs entirely** — it documents the classic-era format. That is why the
+cp1252 assumption previously recorded here was reasonable, and why it is nonetheless wrong.
+
+Located at `<game>/lang/<locale>/dialog.tlk`. On this install: 15 locales, **34,000 strings** each;
+`en_US` is 4,739,485 bytes, `ru_RU` 8,004,361.
 
 | Offset | Size | Field |
 |---|---|---|
@@ -130,27 +172,84 @@ Located at `<game>/lang/<locale>/dialog.tlk` — for this install, `lang/en_US/d
 Entry: flags (2), sound resref (8), volume variance (4), pitch variance (4), **string offset (4,
 relative to string-data offset)**, **string length (4)**.
 
-`dialog.tlk` is tens of MB. Dart has no mmap — use `RandomAccessFile`, seek per lookup, and put an
-LRU in front. Do **not** load all strings.
+The entry array start is **hardcoded to byte 18** by the format, not derived from the header.
 
-⚠️ **Encoding:** see `context/java-semantics-notes.md` entry 3. Dart has no built-in cp1252 codec
-and `latin1` is *not* equivalent for `0x80–0x9F`. The spike uses `String.fromCharCodes`, which is
-wrong for any non-ASCII string and must be fixed in Phase 0.
+Use `RandomAccessFile`, seek per lookup, and put an LRU in front. Dart has no mmap, and the largest
+single string measured is 15,111 bytes. Do **not** load all strings.
+
+### Encoding — UTF-8. Verified 2026-08-07
+
+**BG:EE `dialog.tlk` is UTF-8.** This supersedes the cp1252 claim previously recorded here, which
+came from `context/java-semantics-notes.md` entry 3 and is true only of the *classic* engine — out
+of scope under D3.
+
+| Evidence | Result |
+|---|---|
+| `en_US` em dash | `e2 80 94` → `—`. cp1252 encodes it as the single byte `0x97`. |
+| `pt_BR` / `de_DE` | `c3 a3` → `ã`, `c3 bc` → `ü` — not `0xE3` / `0xFC`. |
+| `ru_RU` | `d0 9d d1 83` → `Ну`. **Decisive: cp1252 cannot represent Cyrillic at all.** |
+| Full scan, `en_US` + `ru_RU` | **34,000 / 34,000 strings each decode as strict UTF-8. Zero failures.** |
+
+The fix is therefore `utf8.decode` from `dart:convert`. **There is no cp1252 codec to write.** The
+spike's `String.fromCharCodes` is still wrong — it silently aliases latin1 and renders
+`My name is Viconia. Iâ I'm not from around here` — but the remedy is not the one previously
+recorded here.
+
+⚠️ IESDP describes this section as *"composed of ASCII strings"*. Measurably untrue for the EEs,
+and untrue for any non-English classic install either.
+
+### Further measured properties
+
+- **NUL termination — IESDP and the data disagree.** IESDP: *"some strings are NULL terminated,
+  others are not, hence a combination of NULL terminators and the string length should be used to
+  find the true string length."* Measured on BG:EE: **zero NULs across 68,000 strings**
+  (`en_US` + `ru_RU`). Resolution adopted: **trim at the first NUL if one is present** — a no-op on
+  EE data, correct for classic files, and safe because `0x00` in UTF-8 only ever means U+0000.
+- **Language ID is `0` in every locale**, `ru_RU` and `ja_JP` included. The header field therefore
+  cannot select an encoding even in principle. Do not dispatch on it.
+- **`strBase` is observed to equal `18 + count × 26`** — 884,018 in every locale, because the entry
+  table is a shared index and only the string bodies differ. That is an *observation, not an
+  invariant*: the format carries an explicit field precisely so it need not hold. **Read the field,
+  never compute it.** Same class of error as the party-stride bug below.
+- **String data is tightly packed.** `strBase + max(offset + length)` lands exactly on EOF in both
+  files scanned. No slack, no padding.
+- **Entry flags observed: `{0, 1, 2, 3, 5, 7}`**, fully explained by three independent bits
+  (`1` = text, `2` = sound, `4` = token). Not needed yet; preserve them.
+- **`dialogF.tlk`** — the female-variant string table — is present in 9 gendered locales (`de_DE`,
+  `es_ES`, `fr_FR`, `it_IT`, `ja_JP`, `pl_PL`, `pt_BR`, `ru_RU`, `uk_UA`) and **absent for
+  `en_US`**. It is spelled with a **capital `F`** on disk — a live instance of the DOS-casing hazard
+  in `context/java-semantics-notes.md` entry 7. Out of scope for v1; recorded so it is not
+  rediscovered.
 
 ## Known bugs in the spike
 
-`tool/spike/gam_cre_tlk_spike.dart` works but is **not** correct. Three defects, deliberately left
+`tool/spike/gam_cre_tlk_spike.dart` works but is **not** correct. Four defects, deliberately left
 in place so Phase 0 fixes them properly:
 
 1. **Stride computation is wrong.** It derives the NPC struct size from
-   `partyInventoryOffset - partyOffset`, which yields **-180** on the fixture because the inventory
-   block precedes the party block. It produced correct output only because there is one party
-   member. Use the documented struct size; never infer sizes from offset arithmetic.
+   `partyInventoryOffset - partyOffset`, which yields **-180**. It produced correct output only
+   because there is one party member, so the stride is never actually applied.
+   Use the documented struct size (**352** — see §GAM party NPC struct); never infer sizes from
+   offset arithmetic.
+
+   ⚠️ **Corrected 2026-08-07.** This entry previously said the `-180` arose "because the inventory
+   block precedes the party block". That is **wrong**, and so is the general claim it was cited to
+   support. All three saves carry `partyInventoryOffset = 0, partyInventoryCount = 0` — the section
+   is **absent**, not misordered — and the real layout is strictly ordered. The rule ("never infer
+   a size from the difference between two offsets") stands; the actual hazard is sharper: **an
+   offset field of `0` means the section is absent, so arithmetic on it is meaningless.**
 2. **`strref = -1` is unhandled.** The protagonist's CRE name strref is `0xFFFFFFFF`. The displayed
    name comes from the GAM NPC struct `+192` (`"Aard"` on the fixture) or from the save-local
    `.tot`/`.toh` pair. Name *editing* will need the `.tot`/`.toh` path.
 3. **The round-trip check is tautological.** It re-reads the file and compares it to the buffer it
    already read. A real round-trip requires a writer; it arrives in Phase 1.
+4. **Locale selection is arbitrary.** It takes the first `lang/*` directory `listSync()` happens to
+   return — **`pt_BR`** on this install — while `Baldur.lua` records
+   `SetPrivateProfileString('Language','Text','en_US')`. Currently invisible only because the one
+   strref it looks up is `-1` and never resolves. Structural fix: `Tlk.open` takes a path and
+   performs no discovery; locale resolution belongs to `GameProfileService` in the app layer, not
+   to `infinity_formats` — "where is the game installed" is a fact about this machine, not about a
+   file format.
 
 Additionally: CRE `+60` reads **110** where the GAM party reputation is 11.0, suggesting CRE
 reputation is also stored ×10. **Unverified** — confirm against the oracle before relying on it.

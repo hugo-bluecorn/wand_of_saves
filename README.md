@@ -10,16 +10,18 @@ It is a functional successor to [EE Keeper](http://forum.baldursgate.com/discuss
 — the feature set is the target, but the UI and architecture are deliberately different: Material 3
 rather than Win32/MFC, and Flutter MVVM rather than MFC Document/View.
 
-> **Status: pre-implementation.** No application code yet beyond the scaffold. What exists is the groundwork — the
-> pinned target-side canon, the format offsets verified against real save data, the reverse
-> engineering of EE Keeper's feature set, and a working read-path spike.
+> **Status: Phase 0, in progress.** The first codec has landed — `Tlk`, the talk-table reader,
+> written test-first with 20 passing tests. The GAM and CRE codecs are next; the Flutter shell
+> comes after them. Underneath sits the groundwork: the pinned target-side canon, format offsets
+> verified against real save data, the reverse engineering of EE Keeper's feature set, and a
+> working read-path spike.
 
 ## What's here
 
 | Path | What it is |
 |---|---|
 | `CLAUDE.md` | **Start here.** Purpose, hard rules, current stage. |
-| `planning/decisions.md` | The decision log. **D1 (licensing) is open and blocks source headers.** |
+| `planning/decisions.md` | The decision log. **D1 (licensing) is closed: Apache-2.0 — read the constraint it imposes before writing any codec.** |
 | `planning/using-nearinfinity.md` | What may and may not be done with the Java reference. |
 | `planning/architecture.md` | MVVM layering, package split, the editing model. |
 | `planning/roadmap.md` | Phases 0–7. |
