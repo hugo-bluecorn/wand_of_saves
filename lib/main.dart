@@ -14,21 +14,19 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wand_of_saves/ui/core/theme.dart';
+import 'package:wand_of_saves/ui/saves/save_browser_view.dart';
 
 /// Entry point.
 ///
-/// Still Flutter's placeholder body — the real shell comes from
-/// `planning/architecture.md`. The one thing already in place is
-/// [ProviderScope]: Riverpod without code generation is a closed decision (D2),
-/// and the scope has to wrap the whole tree, so it belongs here from the start.
+/// [ProviderScope] wraps the whole tree because Riverpod is this app's DI
+/// container (D2, D7) — every service, repository and viewmodel is reached
+/// through it.
 void main() {
   runApp(const ProviderScope(child: WandOfSavesApp()));
 }
 
 /// The application root.
-///
-/// A placeholder shell. Theming here is deliberately minimal — the real
-/// `ThemeData` belongs in `ui/core/` per `planning/architecture.md`.
 class WandOfSavesApp extends StatelessWidget {
   /// Creates the application root.
   const WandOfSavesApp({super.key});
@@ -37,15 +35,9 @@ class WandOfSavesApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Wand of Saves',
-      theme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        brightness: Brightness.light,
-      ),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        brightness: Brightness.dark,
-      ),
-      home: const Scaffold(body: Center(child: Text('Wand of Saves'))),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      home: const SaveBrowserView(),
     );
   }
 }
