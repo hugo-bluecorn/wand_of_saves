@@ -1,0 +1,16 @@
+# Normalise to LF in the repository. This project targets three desktop
+# platforms, so Windows checkouts would otherwise introduce CRLF churn.
+* text=auto eol=lf
+
+# Binary assets — never touched by EOL conversion.
+*.png binary
+*.jpg binary
+*.ico binary
+*.bmp binary
+*.gam binary
+*.sav binary
+*.tlk binary
+
+# Generated / vendored: keep out of language stats and diffs where possible.
+context/**            linguist-documentation
+docs/findings/*.json  linguist-generated

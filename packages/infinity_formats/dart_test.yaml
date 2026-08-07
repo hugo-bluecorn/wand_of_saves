@@ -1,0 +1,4 @@
+# The infinity_formats suite is pure Dart and must stay that way. Pinning the platform
+# to the Dart VM makes the Flutter-free rule mechanical: a `package:flutter`
+# import fails to compile here and names the file. See planning/architecture.md.
+platforms: [vm]

@@ -1,0 +1,11 @@
+# Dart/Flutter package conventions (matches `flutter create --template=package`).
+#
+# pubspec.lock is NOT committed for a library package: the consuming
+# application's lock file governs resolution. Only applications commit theirs —
+# the root pubspec.lock of this repo is committed for exactly that reason.
+/pubspec.lock
+
+.dart_tool/
+/build/
+/coverage/
+**/doc/api/

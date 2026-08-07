@@ -1,0 +1,54 @@
+Wand of Saves
+Copyright 2026 hugo-bluecorn
+
+This product includes software developed by the Wand of Saves project.
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+================================================================================
+Third-party material included in this repository
+================================================================================
+
+The following files are NOT covered by this project's Apache-2.0 license. They
+are reproductions of third-party documentation, retained for reference, and each
+carries its upstream provenance in its own header. They remain under their own
+terms.
+
+  context/flutter-ai-rules.md
+      Reproduction of flutter/flutter `docs/rules/rules_10k.md`.
+      Upstream: https://github.com/flutter/flutter (BSD-3-Clause).
+
+  context/effective-dart-style.md
+      Reproduction of dart-lang/site-www `src/content/effective-dart/style.md`.
+      Upstream: https://github.com/dart-lang/site-www.
+
+  context/mvvm-architecture-record.md
+      A distillation of https://docs.flutter.dev/app-architecture/guide, with
+      quoted phrases from the guide's own wording.
+
+  context/java-semantics-notes.md
+      Originally authored as part of the `near_infinity_flutter` project
+      (Copyright (C) 2026 hugo-bluecorn, LGPL-2.1). Relicensed into this project
+      under Apache-2.0 by its copyright holder. See planning/decisions.md, D1.
+
+================================================================================
+Reference material NOT included in this repository
+================================================================================
+
+This project consults external sources that are not redistributed here. See
+reference/README.md.
+
+  IESDP (Infinity Engine Structures Description Project) — the primary
+  specification source for all file formats implemented by this project.
+  https://github.com/Gibberlings3/iesdp
+
+  Near Infinity (Copyright (C) 2001 Jon Olav Hauglid and contributors,
+  LGPL-2.1) — used ONLY as a black-box test oracle: executed, its output
+  compared against this project's. No code is copied, translated, or derived
+  from it. Apache-2.0 is incompatible with LGPL-2.1, and this boundary is what
+  keeps the two separable. See planning/decisions.md, D1.
+
+  EE Keeper (Copyright (C) 2012-2017 Troodon80) — the feature target. Observed
+  behaviour only; no code derived.
+
+  Shadow Keeper (Copyright (c) 2000 Aaron O'Neil) — NOT used. Its license
+  imposes additional restrictions incompatible with Apache-2.0.
