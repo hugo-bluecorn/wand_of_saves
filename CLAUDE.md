@@ -68,6 +68,11 @@ to undo.
   project — it has already been misread as a blanket ban. Serialization and data classes use
   **`dart_mappable`**, which brings `build_runner` in with it when the first domain model lands
   in Phase 2.
+- **Work test-first, and plan before coding.** Write the failing test, **run it to confirm it
+  fails for the right reason**, then implement. Before starting any implementation not already
+  covered by an approved plan, enter plan mode and get the plan agreed. **Do not use the
+  `tdd-workflow` plugin** — not its skills, agents or slash commands. Hand-rolled TDD only; the
+  point is the discipline, not the scaffolding.
 - **Lint is `very_good_analysis`, applied whole, with NO suppressions** (D8). No `exclude:`
   entries, no rule carve-outs, no `// ignore` or `// ignore_for_file` anywhere. This is
   checkable, so check it:
@@ -168,11 +173,31 @@ expected, not a problem to fix.
   invariant, party and non-party arrays, embedded-CRE location, and the CRE header with its six
   sections. All 37 creatures in a real save parse, and the CRE section chain closes on each one's
   declared length.
-- ⬅️ **Here: Phase 1, the writer.** Everything above is the *read* path plus one fixed-width
-  in-place edit. **The hard problem is untouched:** every CRE section is variable-length, so adding
-  a single item moves everything after it in the CRE, then the CRE's size in the GAM, then every
-  GAM offset past that. **Four known bugs in the spike must be fixed properly rather than papered
-  over** — see `docs/findings/verified-format-offsets.md` §Known bugs.
+- ✅ **The Flutter app has a window** — save browser with real save screenshots, full MVVM
+  (`GameProfileService` → `SaveGameRepository` → `SaveBrowserViewModel` → view), Material 3 theme.
+  `lib/` is no longer a stub.
+- ⬅️ **Here: Phase 2, the app.** Editor shell with the party portrait rail, then stat editing with
+  write-back.
+
+### Phase 1 is deliberately deferred, and that is not an oversight
+
+Phase 1 is the writer's **layout pass** — the cascade where a resized section shifts every offset
+after it. It was skipped because **nothing in Phase 2 needs it**: gold, XP, HP, THAC0, ability
+scores and reputation are all *fixed-width* fields, and the existing patch-a-copy writer already
+handles them, proven in-game.
+
+**So the hard problem is untouched.** Every CRE section is variable-length: adding one item moves
+everything after it in the CRE, then the CRE's size in the GAM NPC struct, then every GAM offset
+past that. Two facts recorded for whoever picks it up, both in
+`docs/findings/verified-format-offsets.md`:
+
+- **`GamHeaderField` records five of the GAM's nine offset fields.** A layout pass that relocates
+  data without patching all nine corrupts the save silently.
+- **"Absent" is encoded three different ways** in that one header — `0`, `0xFFFFFFFF`, and
+  *offset-equals-EOF with count 0*. The `offset != 0` rule used elsewhere is not sufficient there.
+
+Also still outstanding: **four known bugs in the spike must be fixed properly rather than papered
+over** — see `docs/findings/verified-format-offsets.md` §Known bugs.
 
 ⚠️ **TLK strings are UTF-8, not cp1252.** Earlier notes throughout this repo said cp1252; that was
 falsified against the shipped game data on 2026-08-07 and is corrected everywhere. cp1252 is real

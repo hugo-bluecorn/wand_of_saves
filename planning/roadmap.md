@@ -4,7 +4,7 @@ Phases 0–2 produce a genuinely useful tool. Everything after is breadth. Scope
 
 ---
 
-## Phase 0 — `infinity_formats` read path · **next**
+## Phase 0 — `infinity_formats` read path · **done**
 
 Promote `tool/spike/gam_cre_tlk_spike.dart` into real code.
 
@@ -21,7 +21,15 @@ Promote `tool/spike/gam_cre_tlk_spike.dart` into real code.
 
 **Gate:** spike behaviour reproduced by tests, all four bugs fixed, non-ASCII strings correct.
 
-## Phase 1 — the writer
+## Phase 1 — the writer · **deferred, deliberately**
+
+Skipped for now because **nothing in Phase 2 needs it**: gold, XP, HP, THAC0 and
+ability scores are all fixed-width, and the existing patch-a-copy writer already
+handles them — proven in-game. It becomes unavoidable at Phase 4, when inventory and
+spells start resizing sections. Two traps are recorded in
+`docs/findings/verified-format-offsets.md`: `GamHeaderField` covers only five of the
+GAM's nine offset fields, and "absent" is encoded three different ways in that one
+header.
 
 The hard phase. See `planning/architecture.md` §Offset recalculation.
 
@@ -31,7 +39,7 @@ The hard phase. See `planning/architecture.md` §Offset recalculation.
 
 **Gate: round-trip byte identity on every fixture.** No writer ships without it.
 
-## Phase 2 — first useful app
+## Phase 2 — first useful app · **here**
 
 - Flutter shell: save browser → party → stats/gold/XP/HP editing.
 - MVVM wiring per `architecture.md`; D2 (state management) must be settled here.
