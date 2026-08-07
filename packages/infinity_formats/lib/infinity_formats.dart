@@ -20,6 +20,11 @@
 library;
 
 export 'src/exceptions.dart';
+export 'src/gam/gam.dart';
+export 'src/gam/gam_codec.dart';
+export 'src/io/atomic_file.dart';
+export 'src/spec/format_field.dart';
+export 'src/spec/gam_v2_0.dart';
 export 'src/tlk/tlk.dart';
 
 // Phase 0 continues here: GamCodec, CreCodec.
