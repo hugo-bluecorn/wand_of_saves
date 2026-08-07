@@ -71,7 +71,14 @@ class _SaveSlotGrid extends StatelessWidget {
             crossAxisCount: columns,
             mainAxisSpacing: 16,
             crossAxisSpacing: 16,
-            childAspectRatio: 0.82,
+            // Height is the 4:3 screenshot plus the text block, rather than a
+            // guessed ratio -- the first attempt left a visible gap under
+            // every card.
+            mainAxisExtent:
+                (constraints.maxWidth - 32 - (columns - 1) * 16) /
+                    columns /
+                    (239 / 180) +
+                88,
           ),
           itemCount: slots.length,
           itemBuilder: (context, index) => _SaveSlotCard(slot: slots[index]),
@@ -90,7 +97,7 @@ class _SaveSlotCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card.outlined(
+    return Card.filled(
       child: InkWell(
         // Opening a save is slice B; the affordance is here so the card reads
         // as actionable rather than decorative.

@@ -35,6 +35,8 @@ class WandOfSavesApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Wand of Saves',
+      // The banner sits exactly where the app bar's actions go, hiding them.
+      debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       home: const SaveBrowserView(),
