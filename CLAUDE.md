@@ -112,6 +112,11 @@ fvm dart run tool/spike/gam_cre_tlk_spike.dart   # the working read-path spike
 cd packages/infinity_formats && fvm dart test
 ```
 
+**There is no CI** — deliberately (solo project, one machine). Nothing enforces the checks above,
+so run them yourself before committing: `analyze`, `dart format`, and the `infinity_formats` suite.
+Consequence to keep in mind: **`macos/` and `windows/` are never built by anything**, so breakage
+there will surface only when someone first tries to build on those platforms.
+
 **Platforms: desktop only** — `linux/`, `macos/`, `windows/`. No web, no mobile, deliberately: this
 app reads a local game installation and writes to local save files, which is not a sandboxed-mobile
 or browser workload. Development happens on Linux; macOS and Windows are scaffolded but unverified.
