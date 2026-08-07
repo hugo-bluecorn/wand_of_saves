@@ -101,6 +101,43 @@ void main() {
     });
   });
 
+  group('signedness', () {
+    // Every creature in the real save sits at armour class 10 and belongs to
+    // the party, so neither of these can be caught by the fixture: both fields
+    // read identically signed or unsigned there. Synthetic input is the only
+    // way to pin them down.
+
+    test('armour class reads a negative value as negative', () {
+      // IESDP cre_v1.htm: "2 (signed word)". Plate and shield reaches AC -2,
+      // which an unsigned read renders as 65534.
+      final bytes = bareCre();
+      ByteData.sublistView(bytes)
+        ..setInt16(
+          CreHeaderField.armorClassEffective.offset,
+          -2,
+          Endian.little,
+        )
+        ..setInt16(CreHeaderField.armorClassNatural.offset, -1, Endian.little);
+
+      final cre = CreCodec.decode(bytes);
+
+      expect(cre.armorClass, -2);
+      expect(cre.armorClassNatural, -1);
+    });
+
+    test('an absent name strref reads as -1, not 4294967295', () {
+      // `Tlk.get`'s contract is written around a *negative* strref. Read
+      // unsigned, the protagonist's 0xFFFFFFFF resolved to null only by
+      // accident of the bounds check rather than by the documented rule.
+      final bytes = bareCre();
+      ByteData.sublistView(
+        bytes,
+      ).setUint32(CreHeaderField.longName.offset, 0xFFFFFFFF, Endian.little);
+
+      expect(CreCodec.decode(bytes).longNameStrref, -1);
+    });
+  });
+
   group('the real save', () {
     final path = fixtureGam('000000022-last');
     final skip = path == null
@@ -244,6 +281,8 @@ void main() {
         expect(cre.currentHitPoints, 6);
         expect(cre.maximumHitPoints, 7);
         expect(cre.thac0, 20);
+        expect(cre.armorClass, 10);
+        expect(cre.armorClassNatural, 10);
         expect(cre.levels, (1, 1, 0));
         expect(cre.strength, 18);
         expect(cre.strengthBonus, 100);
@@ -270,12 +309,9 @@ void main() {
     test(
       "the protagonist's name is not in dialog.tlk",
       () {
-        // 0xFFFFFFFF. The displayed name comes from the GAM NPC struct -- the
-        // spike's second known bug was rendering this as '<invalid ...>'.
-        expect(
-          CreCodec.decode(everyone().first.creBytes).longNameStrref,
-          0xFFFFFFFF,
-        );
+        // -1. The displayed name comes from the GAM NPC struct -- the spike's
+        // second known bug was rendering this as '<invalid ...>'.
+        expect(CreCodec.decode(everyone().first.creBytes).longNameStrref, -1);
       },
       skip: skip,
     );

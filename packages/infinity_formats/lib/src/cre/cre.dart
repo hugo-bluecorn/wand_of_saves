@@ -32,13 +32,20 @@ final class Cre {
 
   int _u8(CreHeaderField f) => _view.getUint8(f.offset);
   int _u16(CreHeaderField f) => _view.getUint16(f.offset, Endian.little);
+  int _i16(CreHeaderField f) => _view.getInt16(f.offset, Endian.little);
   int _u32(CreHeaderField f) => _view.getUint32(f.offset, Endian.little);
+  int _i32(CreHeaderField f) => _view.getInt32(f.offset, Endian.little);
 
-  /// Strref of this creature's long name.
+  /// Strref of this creature's long name, or `-1` when there is none.
   ///
-  /// `0xFFFFFFFF` for the protagonist, whose name is not in `dialog.tlk` —
-  /// it comes from the GAM NPC struct instead.
-  int get longNameStrref => _u32(CreHeaderField.longName);
+  /// `-1` for the protagonist, whose name is not in `dialog.tlk` — it comes
+  /// from the GAM NPC struct instead.
+  ///
+  /// Read **signed**, so the engine's "no string" sentinel arrives as the `-1`
+  /// every consumer is written around rather than as `4294967295`. `Tlk.get`
+  /// documents its contract in terms of a negative strref; an unsigned read
+  /// satisfied it only by accident of the bounds check.
+  int get longNameStrref => _i32(CreHeaderField.longName);
 
   /// This character's experience points.
   ///
@@ -56,7 +63,21 @@ final class Cre {
   int get maximumHitPoints => _u16(CreHeaderField.maximumHitPoints);
 
   /// THAC0.
+  ///
+  /// Unsigned, and verified as such rather than assumed: IESDP gives this one
+  /// as "1 (byte)" with a range of 1-25, while the armour class fields two
+  /// rows above it are explicitly signed.
   int get thac0 => _u8(CreHeaderField.thac0);
+
+  /// Effective armour class — what the character actually defends at.
+  ///
+  /// **Signed**, per IESDP's "2 (signed word)". Plate and shield reaches AC
+  /// −2, and an unsigned read renders that as 65534. Nothing in the fixture
+  /// catches this: all 37 creatures there sit at AC 10.
+  int get armorClass => _i16(CreHeaderField.armorClassEffective);
+
+  /// Natural armour class, before equipment.
+  int get armorClassNatural => _i16(CreHeaderField.armorClassNatural);
 
   /// Reputation, as displayed — the stored value divided by ten.
   ///
