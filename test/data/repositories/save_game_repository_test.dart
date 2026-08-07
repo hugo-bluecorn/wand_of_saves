@@ -311,6 +311,59 @@ void main() {
       expect(party.single.portraitPath, isNull);
     });
 
+    test('writes an edited save and leaves the original as a .bak', () async {
+      // The rule the whole project is built around: never edit a real save in
+      // place, always leave a way back.
+      final separator = Platform.pathSeparator;
+      final original = buildSave();
+      writeSaveSlot(
+        Directory('${tmp.path}${separator}save')..createSync(recursive: true),
+        '000000022-last',
+        gam: original,
+      );
+      final repository = repositoryOver(saveRoot());
+      final slot = (await repository.listSlots()).single;
+      final gam = await repository.load(slot);
+
+      await repository.write(
+        slot,
+        gam.withCreatureField(
+          creOffset: gam.partyMembers.single.creOffset,
+          field: CreHeaderField.strength,
+          value: 19,
+        ),
+      );
+
+      final reread = await repository.party(slot);
+      expect(reread.single.abilities.strength, 19);
+      expect(
+        File(
+          '${slot.path}${separator}BALDUR.gam$atomicBackupSuffix',
+        ).readAsBytesSync(),
+        orderedEquals(original),
+        reason: 'the backup must hold exactly what was there before',
+      );
+    });
+
+    test('leaves no temporary file behind', () async {
+      final separator = Platform.pathSeparator;
+      writeSaveSlot(
+        Directory('${tmp.path}${separator}save')..createSync(recursive: true),
+        '000000022-last',
+      );
+      final repository = repositoryOver(saveRoot());
+      final slot = (await repository.listSlots()).single;
+
+      await repository.write(slot, await repository.load(slot));
+
+      expect(
+        File(
+          '${slot.path}${separator}BALDUR.gam$atomicTempSuffix',
+        ).existsSync(),
+        isFalse,
+      );
+    });
+
     test('a damaged creature record fails loudly', () async {
       // Unlike listing, where a broken save is skipped: the user chose to open
       // this one, so silence would be worse than an error.

@@ -79,6 +79,11 @@ class CharacterMapper extends ClassMapperBase<Character> {
     'armorClass',
     _$armorClass,
   );
+  static int _$armorClassNatural(Character v) => v.armorClassNatural;
+  static const Field<Character, int> _f$armorClassNatural = Field(
+    'armorClassNatural',
+    _$armorClassNatural,
+  );
   static int _$levelFirstClass(Character v) => v.levelFirstClass;
   static const Field<Character, int> _f$levelFirstClass = Field(
     'levelFirstClass',
@@ -126,6 +131,7 @@ class CharacterMapper extends ClassMapperBase<Character> {
     #gold: _f$gold,
     #thac0: _f$thac0,
     #armorClass: _f$armorClass,
+    #armorClassNatural: _f$armorClassNatural,
     #levelFirstClass: _f$levelFirstClass,
     #levelSecondClass: _f$levelSecondClass,
     #levelThirdClass: _f$levelThirdClass,
@@ -149,6 +155,7 @@ class CharacterMapper extends ClassMapperBase<Character> {
       gold: data.dec(_f$gold),
       thac0: data.dec(_f$thac0),
       armorClass: data.dec(_f$armorClass),
+      armorClassNatural: data.dec(_f$armorClassNatural),
       levelFirstClass: data.dec(_f$levelFirstClass),
       levelSecondClass: data.dec(_f$levelSecondClass),
       levelThirdClass: data.dec(_f$levelThirdClass),
@@ -232,6 +239,7 @@ abstract class CharacterCopyWith<$R, $In extends Character, $Out>
     int? gold,
     int? thac0,
     int? armorClass,
+    int? armorClassNatural,
     int? levelFirstClass,
     int? levelSecondClass,
     int? levelThirdClass,
@@ -268,6 +276,7 @@ class _CharacterCopyWithImpl<$R, $Out>
     int? gold,
     int? thac0,
     int? armorClass,
+    int? armorClassNatural,
     int? levelFirstClass,
     int? levelSecondClass,
     int? levelThirdClass,
@@ -289,6 +298,7 @@ class _CharacterCopyWithImpl<$R, $Out>
       if (gold != null) #gold: gold,
       if (thac0 != null) #thac0: thac0,
       if (armorClass != null) #armorClass: armorClass,
+      if (armorClassNatural != null) #armorClassNatural: armorClassNatural,
       if (levelFirstClass != null) #levelFirstClass: levelFirstClass,
       if (levelSecondClass != null) #levelSecondClass: levelSecondClass,
       if (levelThirdClass != null) #levelThirdClass: levelThirdClass,
@@ -312,6 +322,10 @@ class _CharacterCopyWithImpl<$R, $Out>
     gold: data.get(#gold, or: $value.gold),
     thac0: data.get(#thac0, or: $value.thac0),
     armorClass: data.get(#armorClass, or: $value.armorClass),
+    armorClassNatural: data.get(
+      #armorClassNatural,
+      or: $value.armorClassNatural,
+    ),
     levelFirstClass: data.get(#levelFirstClass, or: $value.levelFirstClass),
     levelSecondClass: data.get(#levelSecondClass, or: $value.levelSecondClass),
     levelThirdClass: data.get(#levelThirdClass, or: $value.levelThirdClass),

@@ -47,6 +47,7 @@ class Character with CharacterMappable {
     required this.gold,
     required this.thac0,
     required this.armorClass,
+    required this.armorClassNatural,
     required this.levelFirstClass,
     required this.levelSecondClass,
     required this.levelThirdClass,
@@ -106,8 +107,16 @@ class Character with CharacterMappable {
   /// THAC0 — "to hit armour class 0". Lower is better.
   final int thac0;
 
-  /// Effective armour class. Lower is better, and it goes negative.
+  /// Effective armour class — what they actually defend at, equipment
+  /// included. Lower is better, and it goes negative.
+  ///
+  /// **The engine's to compute, not ours to set.** Equipping armour changes
+  /// it, so it is shown and never edited; [armorClassNatural] is the authored
+  /// half.
   final int armorClass;
+
+  /// Natural armour class — the character's own, before anything is worn.
+  final int armorClassNatural;
 
   /// Level in the first class slot.
   final int levelFirstClass;

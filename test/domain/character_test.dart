@@ -39,6 +39,7 @@ Character aard({
   gold: 0,
   thac0: 20,
   armorClass: 10,
+  armorClassNatural: 10,
   levelFirstClass: levelFirstClass,
   levelSecondClass: levelSecondClass,
   levelThirdClass: levelThirdClass,

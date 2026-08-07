@@ -38,12 +38,36 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
     opt: true,
     def: 0,
   );
+  static bool _$isDirty(PartyState v) => v.isDirty;
+  static const Field<PartyState, bool> _f$isDirty = Field(
+    'isDirty',
+    _$isDirty,
+    opt: true,
+    def: false,
+  );
+  static bool _$canUndo(PartyState v) => v.canUndo;
+  static const Field<PartyState, bool> _f$canUndo = Field(
+    'canUndo',
+    _$canUndo,
+    opt: true,
+    def: false,
+  );
+  static bool _$canRedo(PartyState v) => v.canRedo;
+  static const Field<PartyState, bool> _f$canRedo = Field(
+    'canRedo',
+    _$canRedo,
+    opt: true,
+    def: false,
+  );
 
   @override
   final MappableFields<PartyState> fields = const {
     #slot: _f$slot,
     #members: _f$members,
     #selectedIndex: _f$selectedIndex,
+    #isDirty: _f$isDirty,
+    #canUndo: _f$canUndo,
+    #canRedo: _f$canRedo,
   };
 
   static PartyState _instantiate(DecodingData data) {
@@ -51,6 +75,9 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
       slot: data.dec(_f$slot),
       members: data.dec(_f$members),
       selectedIndex: data.dec(_f$selectedIndex),
+      isDirty: data.dec(_f$isDirty),
+      canUndo: data.dec(_f$canUndo),
+      canRedo: data.dec(_f$canRedo),
     );
   }
 
@@ -117,7 +144,14 @@ abstract class PartyStateCopyWith<$R, $In extends PartyState, $Out>
   SaveSlotCopyWith<$R, SaveSlot, SaveSlot> get slot;
   ListCopyWith<$R, Character, CharacterCopyWith<$R, Character, Character>>
   get members;
-  $R call({SaveSlot? slot, List<Character>? members, int? selectedIndex});
+  $R call({
+    SaveSlot? slot,
+    List<Character>? members,
+    int? selectedIndex,
+    bool? isDirty,
+    bool? canUndo,
+    bool? canRedo,
+  });
   PartyStateCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(Then<$Out2, $R2> t);
 }
 
@@ -140,19 +174,31 @@ class _PartyStateCopyWithImpl<$R, $Out>
     (v) => call(members: v),
   );
   @override
-  $R call({SaveSlot? slot, List<Character>? members, int? selectedIndex}) =>
-      $apply(
-        FieldCopyWithData({
-          if (slot != null) #slot: slot,
-          if (members != null) #members: members,
-          if (selectedIndex != null) #selectedIndex: selectedIndex,
-        }),
-      );
+  $R call({
+    SaveSlot? slot,
+    List<Character>? members,
+    int? selectedIndex,
+    bool? isDirty,
+    bool? canUndo,
+    bool? canRedo,
+  }) => $apply(
+    FieldCopyWithData({
+      if (slot != null) #slot: slot,
+      if (members != null) #members: members,
+      if (selectedIndex != null) #selectedIndex: selectedIndex,
+      if (isDirty != null) #isDirty: isDirty,
+      if (canUndo != null) #canUndo: canUndo,
+      if (canRedo != null) #canRedo: canRedo,
+    }),
+  );
   @override
   PartyState $make(CopyWithData data) => PartyState(
     slot: data.get(#slot, or: $value.slot),
     members: data.get(#members, or: $value.members),
     selectedIndex: data.get(#selectedIndex, or: $value.selectedIndex),
+    isDirty: data.get(#isDirty, or: $value.isDirty),
+    canUndo: data.get(#canUndo, or: $value.canUndo),
+    canRedo: data.get(#canRedo, or: $value.canRedo),
   );
 
   @override

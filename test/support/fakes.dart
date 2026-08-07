@@ -20,6 +20,7 @@
 library;
 
 import 'package:infinity_formats/infinity_formats.dart';
+import 'package:wand_of_saves/data/party_projection.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
@@ -32,6 +33,7 @@ class FakeSaveGameRepository implements SaveGameRepository {
   FakeSaveGameRepository({
     this.slots = const [],
     this.parties = const {},
+    this.gam,
     this.failure,
   });
 
@@ -39,7 +41,16 @@ class FakeSaveGameRepository implements SaveGameRepository {
   List<SaveSlot> slots;
 
   /// Party members per slot directory name.
+  ///
+  /// Ignored when [gam] is set.
   Map<String, List<Character>> parties;
+
+  /// A savegame to project the party from, instead of [parties].
+  ///
+  /// Set this when a test edits: the projection is the **real** one, so a
+  /// patched savegame shows changed values. A canned list of characters could
+  /// not, since nothing would connect an edit to what comes back.
+  Gam? gam;
 
   /// Thrown by every method when set, so failure paths can be exercised.
   Exception? failure;
@@ -63,11 +74,30 @@ class FakeSaveGameRepository implements SaveGameRepository {
   @override
   Future<List<Character>> party(SaveSlot slot) async {
     if (failure != null) throw failure!;
+    final source = gam;
+    if (source != null) return charactersFrom(source, slot);
     return parties[slot.directoryName] ?? const [];
   }
 
   @override
-  Future<Gam> load(SaveSlot slot) => throw UnimplementedError();
+  Future<Gam> load(SaveSlot slot) async {
+    if (failure != null) throw failure!;
+    final source = gam;
+    if (source == null) {
+      throw StateError('this fake was not given a savegame to load');
+    }
+    return source;
+  }
+
+  /// Savegames handed to [write], newest last — so a test can assert what was
+  /// saved without touching a filesystem.
+  final List<Gam> written = [];
+
+  @override
+  Future<void> write(SaveSlot slot, Gam gam) async {
+    if (failure != null) throw failure!;
+    written.add(gam);
+  }
 }
 
 /// A talk table answering from a map.
@@ -124,6 +154,7 @@ Character fakeCharacter({
   gold: 0,
   thac0: 20,
   armorClass: 10,
+  armorClassNatural: 10,
   levelFirstClass: 1,
   levelSecondClass: 1,
   levelThirdClass: 0,
