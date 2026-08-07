@@ -25,6 +25,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
+import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
 
 /// Locates the game installation and save directory on this machine.
@@ -38,3 +39,18 @@ final saveGameRepositoryProvider = Provider<SaveGameRepository>(
     profile: ref.watch(gameProfileServiceProvider),
   ),
 );
+
+/// Source of truth for the game's displayable text.
+///
+/// Which `dialog.tlk` to open is a fact about this machine, so the choice is
+/// made here from the profile service rather than inside the repository. A
+/// machine with saves but no game installed gets [AbsentStringRepository] — an
+/// explicit state, not a null to thread through every caller.
+final stringRepositoryProvider = Provider<StringRepository>((ref) {
+  final path = ref.watch(gameProfileServiceProvider).findDialogTlk();
+  if (path == null) return const AbsentStringRepository();
+
+  final repository = TlkStringRepository(path: path);
+  ref.onDispose(repository.close);
+  return repository;
+});
