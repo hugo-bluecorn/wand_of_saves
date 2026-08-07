@@ -107,6 +107,38 @@ void main() {
     // read identically signed or unsigned there. Synthetic input is the only
     // way to pin them down.
 
+    test('the layout table declares which fields are signed', () {
+      // Signedness is a layout fact, so it belongs in the table rather than in
+      // each accessor's choice of getInt16 or getUint16. The writer needs the
+      // same knowledge, and two tables would be free to disagree — which is
+      // exactly how the armour-class bug happened.
+      expect(CreHeaderField.armorClassNatural.signed, isTrue);
+      expect(CreHeaderField.armorClassEffective.signed, isTrue);
+      expect(CreHeaderField.longName.signed, isTrue);
+      expect(CreHeaderField.shortName.signed, isTrue);
+
+      expect(CreHeaderField.strength.signed, isFalse);
+      expect(CreHeaderField.thac0.signed, isFalse);
+      expect(CreHeaderField.experience.signed, isFalse);
+    });
+
+    test('reputation is unsigned despite IESDP calling it a signed byte', () {
+      // It is stored times ten over a 0-20 range, so real values reach 200.
+      // Read signed, a reputation of 20 comes back as -56 and displays as
+      // -5.6. The annotation and the documented range cannot both be right.
+      final bytes = bareCre();
+      bytes[CreHeaderField.reputation.offset] = 200;
+
+      expect(CreCodec.decode(bytes).reputation, 20.0);
+    });
+
+    test('an ability score of 255 is 255, not -1', () {
+      final bytes = bareCre();
+      bytes[CreHeaderField.strength.offset] = 0xff;
+
+      expect(CreCodec.decode(bytes).strength, 255);
+    });
+
     test('armour class reads a negative value as negative', () {
       // IESDP cre_v1.htm: "2 (signed word)". Plate and shield reaches AC -2,
       // which an unsigned read renders as 65534.

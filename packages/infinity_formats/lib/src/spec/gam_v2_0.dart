@@ -84,6 +84,16 @@ enum GamHeaderField implements FormatField {
 
   @override
   final int length;
+
+  /// No GAM header field is signed. Offsets, counts, gold and game time are
+  /// all quantities that cannot go below zero, and reputation is stored ×10
+  /// over a 0-20 range.
+  ///
+  /// A getter rather than a constructor parameter, so the table says this once
+  /// instead of every value repeating a default. It becomes a parameter on the
+  /// day a signed field turns up.
+  @override
+  bool get signed => false;
 }
 
 /// GAM V2.0 NPC struct layout — data only, no logic (D6).
@@ -232,4 +242,9 @@ enum GamNpcField implements FormatField {
 
   @override
   final int length;
+
+  /// No NPC struct field is signed. `partyOrder`'s `0xFFFF` is a sentinel read
+  /// unsigned, not a negative.
+  @override
+  bool get signed => false;
 }

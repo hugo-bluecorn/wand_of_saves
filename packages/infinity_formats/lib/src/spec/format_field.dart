@@ -42,4 +42,33 @@ abstract interface class FormatField {
 
   /// Width of the field in bytes.
   int get length;
+
+  /// Whether this field's value is two's-complement signed.
+  ///
+  /// Declared by the table rather than decided by each accessor, so a reader
+  /// and a writer cannot disagree about what a field means. That discretion is
+  /// what produced the armour-class bug, where the layout already recorded
+  /// "signed word" and the getter used `getUint16` anyway.
+  bool get signed;
+}
+
+/// What a [FormatField] can hold, derived from its width and signedness.
+///
+/// An extension rather than members on each enum: the arithmetic is identical
+/// for every format, and three copies of it would be three chances to get a
+/// boundary wrong. It applies to any implementer without a `with` clause.
+extension FormatFieldBounds on FormatField {
+  /// The lowest value this field can hold.
+  int get minimum => signed ? -(1 << (length * 8 - 1)) : 0;
+
+  /// The highest value this field can hold.
+  int get maximum =>
+      signed ? (1 << (length * 8 - 1)) - 1 : (1 << (length * 8)) - 1;
+
+  /// Whether [value] fits.
+  ///
+  /// A value that does not fit must be **refused, never truncated**: a wrapped
+  /// number written into a savegame is silent corruption, which is the failure
+  /// mode this project is shaped around.
+  bool holds(int value) => value >= minimum && value <= maximum;
 }

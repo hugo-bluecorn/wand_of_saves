@@ -70,6 +70,36 @@ final class InfinityFormatException implements FormatException {
     offset: offset,
   );
 
+  /// A field's declared width is not one this library can read or write.
+  ///
+  /// Numeric access handles 1, 2 and 4 bytes; a string field or a mistyped
+  /// width reaches here. A programmer error in spirit, but an [Exception] all
+  /// the same — see the class note.
+  factory InfinityFormatException.unreadableField({
+    required String what,
+    required int length,
+    Object? source,
+  }) => InfinityFormatException._(
+    '$what is $length bytes, which is not a readable numeric width',
+    source: source,
+  );
+
+  /// A value does not fit the field it was to be written into.
+  ///
+  /// Refused rather than truncated: a wrapped number written into a savegame
+  /// is silent corruption, which is precisely the failure this project is
+  /// shaped around.
+  factory InfinityFormatException.valueOutOfRange({
+    required String what,
+    required int value,
+    required int minimum,
+    required int maximum,
+    Object? source,
+  }) => InfinityFormatException._(
+    '$value does not fit $what, which holds $minimum to $maximum',
+    source: source,
+  );
+
   @override
   final String message;
 
