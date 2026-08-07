@@ -164,9 +164,15 @@ expected, not a problem to fix.
   changed out of 95,968, loads in BG:EE showing the new value. See
   `docs/findings/verified-format-offsets.md` §Write path. **It proves the mechanism, not offset
   recalculation** — nothing resized.
-- ⬅️ **Here: the rest of Phase 0** — the GAM party/non-party NPC structs, then `CreCodec`.
-  **Four known bugs in the spike must be fixed properly rather than papered over** — see
-  `docs/findings/verified-format-offsets.md` §Known bugs.
+- ✅ **GAM NPC structs and `CreCodec` read path.** The 352-byte NPC struct with an exact-fit layout
+  invariant, party and non-party arrays, embedded-CRE location, and the CRE header with its six
+  sections. All 37 creatures in a real save parse, and the CRE section chain closes on each one's
+  declared length.
+- ⬅️ **Here: Phase 1, the writer.** Everything above is the *read* path plus one fixed-width
+  in-place edit. **The hard problem is untouched:** every CRE section is variable-length, so adding
+  a single item moves everything after it in the CRE, then the CRE's size in the GAM, then every
+  GAM offset past that. **Four known bugs in the spike must be fixed properly rather than papered
+  over** — see `docs/findings/verified-format-offsets.md` §Known bugs.
 
 ⚠️ **TLK strings are UTF-8, not cp1252.** Earlier notes throughout this repo said cp1252; that was
 falsified against the shipped game data on 2026-08-07 and is corrected everywhere. cp1252 is real

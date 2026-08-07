@@ -147,9 +147,72 @@ Prefer IESDP's absolute form in new code and convert once at the boundary.
 Confirmed live: `STR 18(100) INT 18 WIS 9 DEX 17 CON 16 CHA 9`, XP 325, HP 6/7, THAC0 20 —
 plausible BG1 level-1 protagonist values.
 
-Still to verify: the offset+count table (known spells, memorisation info, memorised spells, item
-slots, items, effects) and the EFF-structure-version flag that selects effect v1 (48 bytes) vs
-v2 (264 bytes).
+### Header size and sections — verified 2026-08-07 against all 37 creatures in a save
+
+**The fixed header is 724 bytes** (`0x2cc` + 8, the dialogue resref being the last field).
+Confirmed from data, not transcription: on every creature, the first *present* section begins
+exactly at 724.
+
+| Section | Offset | Count | Entry |
+|---|---|---|---|
+| Known spells | `0x2a0` | `0x2a4` | 12 |
+| Spell memorisation info | `0x2a8` | `0x2ac` | 16 |
+| Memorised spells | `0x2b0` | `0x2b4` | 12 |
+| Item slots | `0x2b8` | **none** | **80, fixed** |
+| Items | `0x2bc` | `0x2c0` | 20 |
+| Effects | `0x2c4` | `0x2c8` | 48 or 264 — see below |
+
+Item slots is the **only** section with no count field; its table is a fixed 80 bytes. Every entry
+size is confirmed twice: from IESDP's sub-tables, and from the chain arithmetic below. The 20-byte
+item entry additionally matches EE Keeper's disassembled `imul ebx,ebx,0x14`
+(`eekeeper-reverse-engineering.md`).
+
+**Effect structure version flag: `0x33`.** `0` selects 48-byte effects, `1` selects 264-byte. Not
+cosmetic — on the fixture only the 264-byte reading makes the layout close on the file's declared
+length; the 48-byte reading ends 4,536 bytes short.
+
+### ⚠️ An offset of `0` means the section is ABSENT
+
+The rule already recorded for the GAM's party inventory **generalises to CRE sections**. Measured:
+two of the 37 creatures carry `knownSpellsOffset = 0`, and several carry `itemsOffset = 0`. They do
+not have a section at position zero; they have no section.
+
+Any code that treats such an offset as a position, or does arithmetic with it, is wrong. Prefer an
+explicit `hasSection`-style predicate over comparing an offset to zero.
+
+### The section chain closes — the strongest check available on a CRE
+
+Summing the layout reproduces the record's declared size exactly. For the protagonist:
+
+```
+header 724 → +2 spells×12 → 748 → +16 memo×16 → 1004 → +1 memorised×12 → 1016
+           → +80 slots     → 1096 → +7 items×20 → 1236 → +21 effects×264 → 6780 ✓
+```
+
+One comparison reconciles all six section pointers, every entry size, and the version flag — and it
+holds on all 37 creatures, over data nobody authored for the purpose.
+
+**This is also the arithmetic the Phase 1 writer must reproduce.** Every section is
+variable-length, so adding one item moves everything after it inside the CRE, then the CRE's size in
+the GAM NPC struct, then every GAM offset past that.
+
+### `0x18` is dual-purpose
+
+IESDP: *"Creature Power Level (for summoning spells) / XP of the creature (for party members)"*.
+Measured: 325 for the protagonist, 36,293 for Minsc, 42 for Khalid — party-joinable characters carry
+experience here. `0x14` ("XP for killing this creature") is 0 for companions.
+
+### ⚠️ Reading IESDP's CRE page
+
+It **interleaves game variants in one column**. At `0x0084` a *"BG1, BG2 and BGEE"* row (Tracking
+target, 32 bytes) competes with a run of PSTEE-only rows; walking the table in order produces a
+**backwards offset jump**. On the BGEE branch, `0x0084 + 32` lands exactly on `0x00a4`, the next
+shared field. With PSTEE excluded and array notation (`4*100`) handled, the BGEE header is 126
+fields with no gaps ending at 724.
+
+`lib/src/spec/cre_v1_0.dart` therefore records a **verified subset** rather than all 126 fields, and
+takes its assurance from the chain check above instead of an exact-fit invariant. That is a
+deliberate departure from `GamNpcField`, whose table is mechanical enough to transcribe wholesale.
 
 ## TLK (`dialog.tlk`)
 
@@ -251,8 +314,9 @@ in place so Phase 0 fixes them properly:
    to `infinity_formats` — "where is the game installed" is a fact about this machine, not about a
    file format.
 
-Additionally: CRE `+60` reads **110** where the GAM party reputation is 11.0, suggesting CRE
-reputation is also stored ×10. **Unverified** — confirm against the oracle before relying on it.
+Additionally: CRE `+60` (IESDP `0x44`) reads **110** where the GAM party reputation is 11.0.
+**CONFIRMED 2026-08-07 — CRE reputation is stored ×10.** BG1 reputation ranges 0–20, so 110 cannot
+be a raw value. Divide by ten for display.
 
 ## Write path — confirmed in-game 2026-08-07
 
