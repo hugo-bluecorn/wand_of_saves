@@ -3,7 +3,10 @@
 > Source: https://docs.flutter.dev/app-architecture/guide (official Flutter architecture guidance)
 > Fetched: 2026-08-05 · This is a **distillation**, not a verbatim pin — quoted phrases are the
 > guide's own wording. The guide is state-solution-agnostic; the Riverpod mapping is **ours**, via
-> the declared deviation in `nearinfinity-port-contract.md`, and is established at the oracle leg.
+> the declared deviations in `planning/decisions.md` — D2 (Riverpod, no codegen) and D7 (DI through
+> providers). **Re-homed 2026-08-07:** this line previously pointed at
+> `nearinfinity-port-contract.md`, a document of the earlier `near_infinity_flutter` experiment that
+> does not exist in this repository.
 
 ---
 
@@ -55,15 +58,20 @@ ViewModel or the domain layer.
 | Repository | source-of-truth data + app-wide lifecycle state |
 | Service | **nothing** — stateless by rule |
 
-## The Riverpod 3.x mapping — established at the oracle leg, not here
+## The Riverpod mapping — SETTLED 2026-08-07
 
-The deviation (contract doc) makes ViewModels Riverpod-based. The concrete mapping is **oracle-leg
-work against the pinned Riverpod 3.3.2 sources + official docs**, and must answer at least:
+Previously listed here as open "oracle-leg work against the pinned Riverpod **3.3.2** sources". That
+version is stale — this project resolves **3.4.2** — and the questions are now answered. The mapping
+lives in `planning/architecture.md` §The provider graph; the decisions behind it are D2 (manual
+declaration, no codegen) and D7 (DI through providers).
 
-1. Which provider/notifier types realize a ViewModel (and how commands surface as members).
-2. How Views bind (watch/listen) while keeping the 1:1 view–viewmodel rule.
-3. How Repositories and Services are provided (the DI graph replacing manual constructor injection —
-   itself a declared deviation from the rules file's manual-DI bullet).
-4. *(ruled 2026-08-05: manual, NO codegen — see the contract)* — so the mapping in 1–3 is
-   established against Riverpod's manual declaration style, never the annotation/generator
-   toolchain.
+| Question | Answer |
+|---|---|
+| Which types realize a ViewModel | `NotifierProvider` / `AsyncNotifierProvider`; commands are members on the notifier |
+| How Views bind | `ConsumerWidget` + `ref.watch`, one ViewModel per view, preserving the 1 : 1 rule |
+| How Repositories and Services are provided | `Provider`, declared by hand in `lib/config/` (D7) |
+| Codegen | None, ever (D2) — manual declaration style only |
+
+Verified against the Riverpod 3.4.2 sources: `Provider`, `FutureProvider`, `NotifierProvider` and
+`AsyncNotifierProvider` are all current API. `StateProvider` and `StateNotifierProvider` are the
+ones Riverpod 3.x treats as legacy — do not use them.

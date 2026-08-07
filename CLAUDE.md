@@ -40,8 +40,9 @@ to undo.
 5. `docs/findings/eekeeper-reverse-engineering.md` — what EE Keeper actually does, recovered from
    the binary. This is the feature checklist.
 6. `context/` — the pinned target-side canon (Flutter AI rules, Effective Dart, MVVM record,
-   Java semantics ledger). Where code disagrees with `context/`, that is a defect or a recorded
-   deviation, not a preference.
+   Java semantics ledger, **Dart data-modelling ledger**). Where code disagrees with `context/`,
+   that is a defect or a recorded deviation, not a preference. Deviations recorded so far:
+   D2, D6, D7, D8, D9.
 
 ## Hard rules
 
@@ -58,11 +59,20 @@ to undo.
   names the file. `packages/infinity_formats/dart_test.yaml` pins `platforms: [vm]` to keep that true,
   and `test/flutter_free_test.dart` walks every source file so the rule covers code no test has
   reached yet.
-- **State management is Riverpod 3.x with manually declared providers — NO code generation**
-  (D2). No `@riverpod` annotations, no `*.g.dart`, no `build_runner`. This is a *declared
+- **State management is Riverpod 3.x with manually declared providers — NO code generation
+  *for Riverpod*** (D2). No `@riverpod` annotations, no `*.g.dart`. This is a *declared
   deviation* from `context/flutter-ai-rules.md`'s native-first default; everywhere else, a
   disagreement with `context/` is still a defect. See `planning/architecture.md` §The provider
   graph.
+- **Code generation is decided per dependency** (D9). D2's denial covers Riverpod, not the
+  project — it has already been misread as a blanket ban. Serialization and data classes use
+  **`dart_mappable`**, which brings `build_runner` in with it when the first domain model lands
+  in Phase 2.
+- **Lint is `very_good_analysis`, applied whole, with NO suppressions** (D8). No `exclude:`
+  entries, no rule carve-outs, no `// ignore` or `// ignore_for_file` anywhere. This is
+  checkable, so check it:
+  `grep -rn 'ignore_for_file\|// ignore:' --include='*.dart' .` must return nothing. If a rule
+  is unsatisfiable, fix the code or reopen D8 — do not silence it.
 - **Round-trip byte identity is the gate for every writer.** Read a real file, write it back with
   no edits, compare bytes. A writer without a passing round-trip test is not done.
 - **Preserve unknown bytes.** GAM and CRE contain unused and undocumented regions. Parse into a
@@ -129,7 +139,7 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phase 0, not started.** What exists is groundwork, not application code:
+**Phase 0, in progress.** The first codec has landed; the groundwork below it is complete:
 
 - ✅ Flutter scaffold (`flutter create --empty --platforms=linux,macos,windows`), SDK pinned,
   dependencies brought to latest with `pub upgrade --major-versions`.
@@ -142,10 +152,17 @@ expected, not a problem to fix.
 - ✅ Format offsets for `GAM V2.0` and `CRE V1.0` verified against a real save.
 - ✅ **A working read-path spike** — `tool/spike/gam_cre_tlk_spike.dart` parses
   GAM → party → embedded CRE → `dialog.tlk` in ~120 lines of pure Dart, and runs today.
-- ⬅️ **Here: Phase 0** — promote the spike into real `GamCodec` / `CreCodec` / `Tlk` classes in
-  `packages/infinity_formats`, with a fixture-based test suite. **Three known bugs in the spike,
-  plus a cp1252 encoding defect, must be fixed properly rather than papered over** — see
-  `docs/findings/verified-format-offsets.md` §Known bugs.
+- ✅ **`Tlk` shipped** — `packages/infinity_formats/lib/src/tlk/`, written test-first, 20 tests
+  passing. 16 are hermetic (built against synthetic in-test fixtures, so they run on a fresh
+  clone with no game installed); 4 confirm documented values against the real `dialog.tlk` and
+  skip when it is absent. `InfinityFormatException` lives alongside it.
+- ⬅️ **Here: the rest of Phase 0** — `GamCodec` and `CreCodec`, plus the fixture harness for
+  real saves. **Four known bugs in the spike must be fixed properly rather than papered over**
+  — see `docs/findings/verified-format-offsets.md` §Known bugs.
+
+⚠️ **TLK strings are UTF-8, not cp1252.** Earlier notes throughout this repo said cp1252; that was
+falsified against the shipped game data on 2026-08-07 and is corrected everywhere. cp1252 is real
+for the *classic* engine, which D3 puts out of scope.
 
 `lib/` is still Flutter's empty stub and is expected to be replaced. The MVVM folder layout and
 the provider graph come from `planning/architecture.md`, not from improvisation on the scaffold.
@@ -158,9 +175,11 @@ This application writes to files that represent tens of hours of someone's play.
 is not a crash — it is a save that loads and is subtly wrong, or does not load at all. Two specific
 hazards, both already observed:
 
-1. **Offsets are not ordered.** In a real BG1EE save the party inventory block sits *before* the
-   party block. Any code that infers a size or a stride from the difference between two offsets is
-   wrong. Read the documented struct size.
+1. **Never infer a size or a stride from the difference between two offsets.** An offset field of
+   `0` means the section is **absent**, not that it sits at the start of the file — all three
+   BG1EE fixtures carry `partyInventoryOffset = 0`, which is exactly how the spike computed a
+   stride of **−180**. Read the documented struct size: the GAM party NPC struct is **352 bytes**,
+   verified three ways in `docs/findings/verified-format-offsets.md`.
 2. **Editing changes sizes.** A CRE that grows moves every subsequent offset in the GAM, and the
    same applies inside CRE itself (known spells, memorisation, item slots, effects each carry
    offset+count headers). Offset recalculation on write is where save corruption comes from.

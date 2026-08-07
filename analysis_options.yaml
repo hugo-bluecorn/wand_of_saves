@@ -1,1 +1,10 @@
-include: package:flutter_lints/flutter.yaml
+# very_good_analysis, applied whole — 212 rules plus strict-casts,
+# strict-inference and strict-raw-types (D8). A superset of the three rules
+# context/flutter-ai-rules.md names, so it subsumes the canon rather than
+# weakening it.
+#
+# NO suppressions: no exclude entries, no rule carve-outs, no // ignore
+# comments anywhere in the repository. A strict ruleset that is exempted
+# wherever it bites is a weaker ruleset with extra steps. If a rule is
+# genuinely unsatisfiable, fix the code or reopen D8 — do not silence it.
+include: package:very_good_analysis/analysis_options.yaml

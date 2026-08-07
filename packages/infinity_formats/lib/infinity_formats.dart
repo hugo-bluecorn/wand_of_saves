@@ -19,5 +19,8 @@
 /// See `planning/architecture.md`.
 library;
 
-// Phase 0 populates this: GamCodec, CreCodec, Tlk.
-// The working read path currently lives in tool/spike/gam_cre_tlk_spike.dart.
+export 'src/exceptions.dart';
+export 'src/tlk/tlk.dart';
+
+// Phase 0 continues here: GamCodec, CreCodec.
+// The remaining read path still lives in tool/spike/gam_cre_tlk_spike.dart.

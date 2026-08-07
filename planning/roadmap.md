@@ -11,12 +11,15 @@ Promote `tool/spike/gam_cre_tlk_spike.dart` into real code.
 - `GamCodec`, `CreCodec`, `Tlk` as proper classes in `packages/infinity_formats`.
 - Offset/enum tables into `lib/src/spec/` as data.
 - Fixture suite against copies of the three real saves.
-- **Fix the three spike bugs properly** — stride inference, `strref = -1`, and the tautological
-  round-trip check. See `docs/findings/verified-format-offsets.md` §Known bugs.
-- **Fix cp1252** — `String.fromCharCodes` is wrong for non-ASCII TLK strings
-  (`context/java-semantics-notes.md` entry 3).
+- **Fix the four spike bugs properly** — stride inference, `strref = -1`, the tautological
+  round-trip check, and arbitrary locale selection. See
+  `docs/findings/verified-format-offsets.md` §Known bugs.
+- **Fix TLK string decoding** — `String.fromCharCodes` silently aliases latin1 and mangles every
+  non-ASCII string. BG:EE `dialog.tlk` is **UTF-8** (verified 2026-08-07), so the fix is
+  `utf8.decode` from `dart:convert`; there is **no cp1252 codec to write**. See
+  `docs/findings/verified-format-offsets.md` §TLK.
 
-**Gate:** spike behaviour reproduced by tests, all three bugs fixed, non-ASCII strings correct.
+**Gate:** spike behaviour reproduced by tests, all four bugs fixed, non-ASCII strings correct.
 
 ## Phase 1 — the writer
 

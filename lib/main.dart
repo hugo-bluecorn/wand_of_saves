@@ -18,14 +18,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Entry point.
 ///
 /// Still Flutter's placeholder body — the real shell comes from
-/// `planning/architecture.md`. The one thing already in place is [ProviderScope]:
-/// Riverpod without code generation is a closed decision (D2), and the scope has
-/// to wrap the whole tree, so it belongs here from the start.
+/// `planning/architecture.md`. The one thing already in place is
+/// [ProviderScope]: Riverpod without code generation is a closed decision (D2),
+/// and the scope has to wrap the whole tree, so it belongs here from the start.
 void main() {
   runApp(const ProviderScope(child: WandOfSavesApp()));
 }
 
+/// The application root.
+///
+/// A placeholder shell. Theming here is deliberately minimal — the real
+/// `ThemeData` belongs in `ui/core/` per `planning/architecture.md`.
 class WandOfSavesApp extends StatelessWidget {
+  /// Creates the application root.
   const WandOfSavesApp({super.key});
 
   @override

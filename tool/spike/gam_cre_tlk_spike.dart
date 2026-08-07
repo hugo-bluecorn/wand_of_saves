@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Vertical-slice spike: GAM V2.0 -> party NPCs -> embedded CRE V1.0 -> dialog.tlk
-// Pure Dart, no Flutter. Proves the whole v1 read path.
+// Vertical-slice spike: GAM V2.0 -> party NPCs -> embedded CRE V1.0 ->
+// dialog.tlk. Pure Dart, no Flutter. Proves the whole v1 read path.
 //
 // Usage:
 //   dart run tool/spike/gam_cre_tlk_spike.dart [saveSlotDir] [gameDir]
@@ -23,23 +23,33 @@
 //   2. environment: BGEE_SAVE_DIR (save root or a single slot), BGEE_GAME_DIR
 //   3. the well-known install locations in _gameCandidates / _saveCandidates
 //
-// PROVENANCE (see planning/decisions.md, D1). Field offsets are facts about the file
-// formats and are documented in IESDP (file_formats/ie_formats/{gam_v2.0,cre_v1}.htm);
-// they were cross-checked against NearInfinity during exploration, before Apache-2.0
-// was adopted. No NearInfinity code, structure or naming was used -- the Reader and
-// Tlk classes here are original. Codec work from Phase 0 onward is an independent
-// implementation from IESDP, with NearInfinity used only as a black-box oracle.
+// PROVENANCE (see planning/decisions.md, D1). Field offsets are facts about
+// the file formats and are documented in IESDP
+// (file_formats/ie_formats/{gam_v2.0,cre_v1}.htm); they were cross-checked
+// against NearInfinity during exploration, before Apache-2.0 was adopted. No
+// NearInfinity code, structure or naming was used -- the Reader and Tlk
+// classes here are original. Codec work from Phase 0 onward is an independent
+// implementation from IESDP, with NearInfinity used only as a black-box
+// oracle.
 //
-// THIS IS A SPIKE, NOT A REFERENCE IMPLEMENTATION. It has three known defects that
-// Phase 0 must fix properly rather than carry over -- see
+// THIS IS A SPIKE, NOT A REFERENCE IMPLEMENTATION. It has four known defects
+// that Phase 0 must fix properly rather than carry over -- see
 // docs/findings/verified-format-offsets.md, section "Known bugs":
-//   1. NPC struct stride is inferred from offset arithmetic and is wrong (-180 here).
+//   1. NPC struct stride is inferred from offset arithmetic and is wrong
+//      (-180 here).
 //   2. strref == -1 (the protagonist's name) is unhandled.
 //   3. The round-trip check is tautological.
-// It also uses String.fromCharCodes for TLK strings, which is wrong for cp1252.
+//   4. Locale selection takes the first lang/* directory listSync() returns
+//      (pt_BR on the dev install), not the locale Baldur.lua configures
+//      (en_US).
+// It also uses String.fromCharCodes for TLK strings, which silently aliases
+// latin1 and mangles every non-ASCII string. BG:EE dialog.tlk is UTF-8 --
+// utf8.decode from dart:convert is the fix. It is NOT cp1252; earlier notes
+// here said otherwise.
 //
-// A command-line diagnostic tool: printing is the output.
-// ignore_for_file: avoid_print
+// A command-line diagnostic tool: stdout IS the output. It writes to the
+// stream directly rather than through dart:core's print(), because avoid_print
+// is enabled repo-wide (D8) and no file here carries a suppression.
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -50,27 +60,30 @@ import 'dart:typed_data';
 String get _home =>
     Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
 
+/// Steam's folder name for the game; Beamdog and GOG spell it differently.
+const _steamName = "Baldur's Gate Enhanced Edition";
+const _gogName = "Baldur's Gate - Enhanced Edition";
+const _steamCommon = 'steamapps/common';
+
 /// Well-known BG:EE installation roots (the directory holding `chitin.key`).
 List<String> get _gameCandidates => [
   // Linux / Steam
-  '$_home/.local/share/Steam/steamapps/common/Baldur\'s Gate Enhanced Edition',
-  '$_home/.steam/steam/steamapps/common/Baldur\'s Gate Enhanced Edition',
+  '$_home/.local/share/Steam/$_steamCommon/$_steamName',
+  '$_home/.steam/steam/$_steamCommon/$_steamName',
   // macOS / Steam
-  '$_home/Library/Application Support/Steam/steamapps/common/Baldur\'s Gate Enhanced Edition',
+  '$_home/Library/Application Support/Steam/$_steamCommon/$_steamName',
   // GOG / Beamdog
-  '$_home/GOG Games/Baldur\'s Gate - Enhanced Edition',
-  '$_home/Games/Baldur\'s Gate - Enhanced Edition',
+  '$_home/GOG Games/$_gogName',
+  '$_home/Games/$_gogName',
   // Windows
-  r'C:\Program Files (x86)\Steam\steamapps\common\Baldur'
-      "'"
-      r's Gate Enhanced Edition',
+  'C:\\Program Files (x86)\\Steam\\$_steamCommon\\$_steamName',
 ];
 
 /// Well-known save roots (the directory holding the numbered slot folders).
 List<String> get _saveCandidates => [
-  '$_home/.local/share/Baldur\'s Gate - Enhanced Edition/save',
-  '$_home/Documents/Baldur\'s Gate - Enhanced Edition/save',
-  '$_home/Library/Application Support/Baldur\'s Gate - Enhanced Edition/save',
+  '$_home/.local/share/$_gogName/save',
+  '$_home/Documents/$_gogName/save',
+  '$_home/Library/Application Support/$_gogName/save',
 ];
 
 /// First candidate directory containing [marker], or null.
@@ -107,13 +120,14 @@ String? _resolveSlot(String dir) {
 }
 
 Never _bail(String what, String envVar, List<String> tried) {
-  stderr.writeln('spike: could not locate the $what.\n');
-  stderr.writeln('Pass it explicitly:');
-  stderr.writeln(
-    '  dart run tool/spike/gam_cre_tlk_spike.dart <saveSlotDir> <gameDir>\n',
-  );
-  stderr.writeln('or set \$$envVar.\n');
-  stderr.writeln('Looked in:');
+  stderr
+    ..writeln('spike: could not locate the $what.\n')
+    ..writeln('Pass it explicitly:')
+    ..writeln(
+      '  dart run tool/spike/gam_cre_tlk_spike.dart <saveSlotDir> <gameDir>\n',
+    )
+    ..writeln('or set \$$envVar.\n')
+    ..writeln('Looked in:');
   for (final t in tried) {
     stderr.writeln('  $t');
   }
@@ -125,9 +139,11 @@ Never _bail(String what, String envVar, List<String> tried) {
 // ---------------------------------------------------------------------------
 
 class Reader {
+  Reader(this.b) : d = ByteData.sublistView(b);
+
   final ByteData d;
   final Uint8List b;
-  Reader(this.b) : d = ByteData.sublistView(b);
+
   int u8(int o) => d.getUint8(o);
   int u16(int o) => d.getUint16(o, Endian.little);
   int i16(int o) => d.getInt16(o, Endian.little);
@@ -141,14 +157,18 @@ class Reader {
 
 /// Minimal TLK: lazy index, strings fetched on demand (dialog.tlk is ~30 MB).
 class Tlk {
-  final RandomAccessFile f;
-  final int count, strBase;
   Tlk._(this.f, this.count, this.strBase);
+
+  final RandomAccessFile f;
+  final int count;
+  final int strBase;
 
   static Future<Tlk> open(String path) async {
     final f = await File(path).open();
     final h = Reader(await f.read(18));
-    if (h.str(0, 4) != 'TLK') throw 'not a TLK: ${h.str(0, 4)}';
+    if (h.str(0, 4) != 'TLK') {
+      throw FormatException('not a TLK: ${h.str(0, 4)}', path);
+    }
     return Tlk._(f, h.u32(10), h.u32(14));
   }
 
@@ -156,7 +176,8 @@ class Tlk {
     if (strref < 0 || strref >= count) return '<invalid $strref>';
     await f.setPosition(18 + strref * 26);
     final e = Reader(await f.read(26));
-    final off = e.u32(18), len = e.u32(22);
+    final off = e.u32(18);
+    final len = e.u32(22);
     if (len == 0) return '';
     await f.setPosition(strBase + off);
     return String.fromCharCodes(await f.read(len));
@@ -198,29 +219,33 @@ Future<void> main(List<String> args) async {
     );
   }
 
-  print('game dir       : $gameDir');
-  print('save slot      : $saveDir');
-  print('');
+  stdout
+    ..writeln('game dir       : $gameDir')
+    ..writeln('save slot      : $saveDir')
+    ..writeln();
 
   final g = Reader(await File('$saveDir/BALDUR.gam').readAsBytes());
-  print('signature      : ${g.str(0, 4)} ${g.str(4, 4)}');
-  print(
-    'game time      : ${g.u32(8)} (${(g.u32(8) / 300).toStringAsFixed(1)} h)',
-  );
-  print('party gold     : ${g.u32(0x18)}');
-  print('reputation     : ${g.u32(0x54) / 10}');
-  print('current area   : ${g.str(0x58, 8)}');
+  stdout
+    ..writeln('signature      : ${g.str(0, 4)} ${g.str(4, 4)}')
+    ..writeln(
+      'game time      : ${g.u32(8)} (${(g.u32(8) / 300).toStringAsFixed(1)} h)',
+    )
+    ..writeln('party gold     : ${g.u32(0x18)}')
+    ..writeln('reputation     : ${g.u32(0x54) / 10}')
+    ..writeln('current area   : ${g.str(0x58, 8)}');
 
-  final partyOff = g.u32(0x20), partyCnt = g.u32(0x24);
+  final partyOff = g.u32(0x20);
+  final partyCnt = g.u32(0x24);
   final invOff = g.u32(0x28);
   final varCnt = g.u32(0x3c);
   final jrnlCnt = g.u32(0x4c);
   final stride = partyCnt > 0 ? (invOff - partyOff) ~/ partyCnt : 0;
-  print(
-    'party          : $partyCnt members @ 0x${partyOff.toRadixString(16)} '
-    'stride=$stride bytes',
-  );
-  print('globals        : $varCnt   journal entries: $jrnlCnt');
+  stdout
+    ..writeln(
+      'party          : $partyCnt members @ 0x${partyOff.toRadixString(16)} '
+      'stride=$stride bytes',
+    )
+    ..writeln('globals        : $varCnt   journal entries: $jrnlCnt');
 
   Tlk? tlk;
   final langRoot = Directory('$gameDir/lang');
@@ -229,7 +254,7 @@ Future<void> main(List<String> args) async {
       final p = '${l.path}/dialog.tlk';
       if (File(p).existsSync()) {
         tlk = await Tlk.open(p);
-        print(
+        stdout.writeln(
           'dialog.tlk     : ${l.path.split(Platform.pathSeparator).last}, '
           '${tlk.count} strings',
         );
@@ -238,43 +263,48 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  print('\n${'=' * 74}');
+  stdout.writeln('\n${'=' * 74}');
   for (var i = 0; i < partyCnt; i++) {
     final n = partyOff + i * stride;
-    final creOff = g.u32(n + 4), creSize = g.u32(n + 8);
+    final creOff = g.u32(n + 4);
+    final creSize = g.u32(n + 8);
     final label = g.str(n + 192, 32);
     final resref = g.str(n + 12, 8);
+    final creAt = creOff.toRadixString(16);
 
-    print(
-      '\n[$i] "$label"  (CRE $resref, $creSize bytes @ 0x${creOff.toRadixString(16)})',
-    );
+    stdout.writeln('\n[$i] "$label"  (CRE $resref, $creSize bytes @ 0x$creAt)');
     if (creOff == 0 || creOff + creSize > g.b.length) {
-      print('    <no embedded CRE>');
+      stdout.writeln('    <no embedded CRE>');
       continue;
     }
     final c = Reader(Uint8List.sublistView(g.b, creOff, creOff + creSize));
     if (c.str(0, 4) != 'CRE') {
-      print('    <unexpected signature ${c.str(0, 4)}>');
+      stdout.writeln('    <unexpected signature ${c.str(0, 4)}>');
       continue;
     }
     const o = 8; // CRE body starts after 'CRE ' + 'V1.0'
     final nameRef = c.u32(o + 0);
     final name = tlk != null ? await tlk.get(nameRef) : '<no tlk>';
-    print('    version      : ${c.str(4, 4)}');
-    print('    name         : "$name"  (strref $nameRef)');
-    print('    XP           : ${c.u32(o + 16)}      gold: ${c.u32(o + 20)}');
-    print('    HP           : ${c.i16(o + 28)} / ${c.i16(o + 30)}');
-    print('    reputation   : ${c.u8(o + 60)}       THAC0: ${c.u8(o + 74)}');
-    print(
-      '    levels       : ${c.u8(o + 556)}/${c.u8(o + 557)}/${c.u8(o + 558)}',
-    );
-    print(
-      '    STR ${c.u8(o + 560)}(${c.u8(o + 561)})  INT ${c.u8(o + 562)}  '
-      'WIS ${c.u8(o + 563)}  DEX ${c.u8(o + 564)}  CON ${c.u8(o + 565)}  '
-      'CHA ${c.u8(o + 566)}',
-    );
+    stdout
+      ..writeln('    version      : ${c.str(4, 4)}')
+      ..writeln('    name         : "$name"  (strref $nameRef)')
+      ..writeln(
+        '    XP           : ${c.u32(o + 16)}      gold: ${c.u32(o + 20)}',
+      )
+      ..writeln('    HP           : ${c.i16(o + 28)} / ${c.i16(o + 30)}')
+      ..writeln(
+        '    reputation   : ${c.u8(o + 60)}       THAC0: ${c.u8(o + 74)}',
+      )
+      ..writeln(
+        '    levels       : ${c.u8(o + 556)}/${c.u8(o + 557)}/${c.u8(o + 558)}',
+      )
+      ..writeln(
+        '    STR ${c.u8(o + 560)}(${c.u8(o + 561)})  INT ${c.u8(o + 562)}  '
+        'WIS ${c.u8(o + 563)}  DEX ${c.u8(o + 564)}  CON ${c.u8(o + 565)}  '
+        'CHA ${c.u8(o + 566)}',
+      );
   }
-  print('\n${'=' * 74}');
+  stdout.writeln('\n${'=' * 74}');
 
   // Round-trip check: re-serialising untouched bytes must be identical.
   final orig = await File('$saveDir/BALDUR.gam').readAsBytes();
@@ -282,5 +312,5 @@ Future<void> main(List<String> args) async {
   for (var i = 0; same && i < orig.length; i++) {
     if (orig[i] != g.b[i]) same = false;
   }
-  print('round-trip (no edits) byte-identical: $same');
+  stdout.writeln('round-trip (no edits) byte-identical: $same');
 }
