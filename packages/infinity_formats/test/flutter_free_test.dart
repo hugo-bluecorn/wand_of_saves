@@ -16,8 +16,9 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
-/// The architecture rule that has to hold from file one: `infinity_formats` is pure
-/// Dart and never imports Flutter. Running this suite under `dart test` already
+/// The architecture rule that has to hold from file one: `infinity_formats` is
+/// pure Dart and never imports Flutter. Running this suite under `dart test`
+/// already
 /// makes a `package:flutter` import a compile error, but only for files the
 /// suite actually reaches. This walks every source file so the rule covers the
 /// whole package, including code no test imports yet.
@@ -48,7 +49,8 @@ void main() {
       offenders,
       isEmpty,
       reason:
-          'infinity_formats must stay Flutter-free; offending imports: $offenders',
+          'infinity_formats must stay Flutter-free; '
+          'offending imports: $offenders',
     );
   });
 }
