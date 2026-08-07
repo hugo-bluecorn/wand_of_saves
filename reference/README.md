@@ -32,6 +32,7 @@ extend it rather than hardcoding a path.
 | `../iesdp` | [Gibberlings3/iesdp](https://github.com/Gibberlings3/iesdp) — the Infinity Engine Structures Description Project. | **Primary specification source.** Everything is written from this. |
 | `../NearInfinity` | [Argent77/NearInfinity](https://github.com/Argent77/NearInfinity), branch `devel`. Java/Swing IE browser+editor, **LGPL-2.1**, ~297k LOC. | **Black-box oracle only.** Its Java is not read while writing codecs — see `planning/using-nearinfinity.md`. |
 | `../EEKeeper` | EE Keeper 1.0.4.0 binary + `bgEEEffects.dat` + `lang/*.dll`. Proprietary, © 2012–2017 Troodon80. | The feature target. Reverse-engineered — see `docs/findings/`. Also the only oracle for its derived behaviours, via Wine. |
+| Haeravon's *BG:EE FAQ/Walkthrough* (GameFAQs, plain text) | A player's guide carrying the AD&D 2e rules tables in prose — abilities, hit points, THAC0 and armour class by class and level. Copyright its author. | **Cross-check only, never a source.** Facts may be taken from it and expression may not (D1): the numbers are TSR's rules, not the author's writing. Where it and a 2DA disagree, the 2DA wins — it is the game's own data. |
 
 Get them with:
 
@@ -50,6 +51,11 @@ git clone --depth 1 -b devel https://github.com/Argent77/NearInfinity.git NearIn
   definitions (`offset`, `type`, `length`, `desc`). GAM and CRE are HTML only.
 - `_opcodes/*.html` — 911 files with YAML front-matter (`n`, `opname`, `param1`, `param2`, per-game
   applicability). Source for the effects database (Phase 6).
+- **`files/2da/2da_bgee/` — 198 BG:EE 2DA files carrying real `2DA V1.0` payloads**, not
+  descriptions of them: `hpconbon` (Constitution → hit points), `dexmod` (Dexterity → armour
+  class), `strmod` / `strmodex`, `thac0`, `hpclass`. Found 2026-08-07, and it moves work earlier
+  than planned: **the game-rules tables need no KEY/BIFF reader**, so derived values do not wait
+  for Phase 3. Generate from these; do not transcribe.
 
 ## Game data
 

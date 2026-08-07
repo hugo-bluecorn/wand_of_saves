@@ -189,9 +189,22 @@ deferred (see below). What exists:
     game shows `8/9`. Found by reading the game's own HUD overlay baked into the portrait, which
     makes those BMPs a **fourth oracle**. The UI labels the field "Hit points (base)". Suspect the
     same of AC and THAC0; both unchecked.
-- ⬅️ **Here: Phase 2, stat editing with write-back.** Edit commands, undo/redo, atomic save. That
-  is the Phase 2 gate: an edited save that loads in-game with the change applied and nothing else
-  altered.
+- ✅ **The Phase 2 gate is met** (2026-08-07) — stats are editable and write back. Sealed
+  `EditCommand`s over a curated `CharacterStat` table, undo/redo on immutable savegame snapshots,
+  atomic write with a `.bak`. **An edited save loaded in BG:EE with Strength 19 and THAC0 15
+  applied and every other value intact.** `Gam.withCreatureField` changes exactly one byte of the
+  real 95,968-byte fixture.
+  - **THAC0 is a base, like hit points** — the game showed `15` − 3 (Strength) + 2 (Proficiencies).
+  - **The Constitution finding is confirmed by the engine itself**, which prints
+    "Bonus Hit Points/Level: +2".
+  - ⚠️ **Armour class is unsettled.** Writing natural AC (`0x46`) had no visible effect, and the
+    observed base of 10 is ambiguous — it is both the untouched `0x48` and the unarmoured default.
+    Both fields are editable pending one decisive in-game run. See
+    `docs/findings/verified-format-offsets.md` §Armour class is not settled.
+- ⬅️ **Here: the rules layer.** `../iesdp/files/2da/2da_bgee/` holds **198 BG:EE 2DA files**
+  (`hpconbon`, `dexmod`, `strmod`, `thac0`, `hpclass`) carrying real `2DA V1.0` payloads — so
+  derived values need **no KEY/BIFF reader** and can be *generated* rather than transcribed. Show
+  derived beside stored throughout.
 
 ### Phase 1 is deliberately deferred, and that is not an oversight
 

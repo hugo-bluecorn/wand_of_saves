@@ -168,6 +168,45 @@ Prefer IESDP's absolute form in new code and convert once at the boundary.
 Confirmed live: `STR 18(100) INT 18 WIS 9 DEX 17 CON 16 CHA 9`, XP 325, HP 6/7, THAC0 20 —
 plausible BG1 level-1 protagonist values.
 
+### Stored vs displayed — measured in game 2026-08-07
+
+Four fields were edited on `000000099-wandtest`, the save written, and the result loaded in BG:EE.
+**The save loaded and every unedited value was intact** — Dex 17, Con 16, Int 18, Wis 9, Cha 9,
+reputation 11, Fighter/Mage, party gold 12345. That is the Phase 2 gate.
+
+| Edit | Result | What it settles |
+|---|---|---|
+| Strength 18 → **19** | **Holds.** Record screen reads 19. | Ability scores are stored and authoritative. |
+| THAC0 20 → **15** | **Holds.** "Base THAC0: **15**". | THAC0 is *not* recomputed from class and level. It is a **base**, like hit points: the game showed `15` − 3 (Strength) + 2 (Proficiencies) → 12 main hand / 14 off hand. |
+| Armour class **natural** (`0x46`) 10 → **8** | **No visible effect.** Game showed base armour class 10. | Writing `0x46` alone does not move what the game displays. |
+| Current hit points 6 → **20** | Clamped. Game showed **9/9**. | Current hit points are clamped to maximum on load. |
+
+**The Constitution finding is now confirmed by the engine in its own words.** The inventory screen
+prints `Class Hit Points/Level: +7` and `Bonus Hit Points/Level: **+2**`, and shows `9/9` from a
+stored maximum of `7`. That is the third independent agreement, after the portrait overlay and
+`hpconbon.2da`.
+
+#### Armour class is not settled, and the observed value is ambiguous
+
+The game showed a base armour class of **10** with `Dexterity: −3` → 7. But `10` is *both* the
+value the untouched **effective** field (`0x48`) already held *and* the unarmoured default, so two
+hypotheses fit equally: the engine reads `0x48`, or the engine recomputes armour class from
+equipment and ignores both stored fields.
+
+**Writing a value that cannot arise naturally separates them.** Set `0x48` to something like `6`
+with nothing worn: if the game shows a base of 6, it reads the field; if it shows 10, it
+recomputes. Both armour-class fields are editable meanwhile — a field is not withheld on a guess
+about behaviour there is an oracle for.
+
+#### Two more facts nobody was looking for
+
+- **Multi-class experience is split per class on display.** The record screen showed
+  `Fighter: Experience 162` and `Mage: Experience 162` against a stored `0x18` of **325**. The CRE
+  holds the total; the engine divides it. (325 ÷ 2 = 162 each, losing one point to rounding.)
+- **Carried gold and the party purse are genuinely different numbers**, as `0x1c`'s
+  documentation implies: the creature record read `0` while the game showed **12345**, which is
+  the GAM header's `partyGold` from the earlier write-path proof.
+
 ### ⚠️ Hit points are stored WITHOUT the Constitution bonus. Verified 2026-08-07
 
 **The savegame's hit-point fields are not the numbers the player sees.** Falsified by the game's
@@ -436,6 +475,20 @@ mechanism.
 header**, so nothing moved. Offset recalculation — the thing that actually causes save corruption,
 where a resized section shifts every offset after it — was never exercised. This de-risks the
 *mechanism*, not the *algorithm*. The writer is not done.
+
+### Extended 2026-08-07 — a field *inside* an embedded creature record
+
+The gate above only ever patched the GAM header, at a fixed offset. Editing a character means
+writing inside a CRE located through the party array, which is the harder claim. Now covered both
+ways:
+
+- **In test:** `Gam.withCreatureField` on the real 95,968-byte fixture changes **exactly one
+  byte**, at `creOffset + field.offset`, with all 95,967 others provably identical
+  (`test/gam/gam_edit_test.dart`).
+- **In game:** Strength and THAC0 written through that path both survive a load, with nothing
+  else disturbed. See §Stored vs displayed.
+
+Still fixed-width, so still no layout pass. Phase 1 remains the untouched half.
 
 ## Oracles
 
