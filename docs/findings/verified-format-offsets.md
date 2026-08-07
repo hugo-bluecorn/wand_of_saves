@@ -254,6 +254,36 @@ in place so Phase 0 fixes them properly:
 Additionally: CRE `+60` reads **110** where the GAM party reputation is 11.0, suggesting CRE
 reputation is also stored ×10. **Unverified** — confirm against the oracle before relying on it.
 
+## Write path — confirmed in-game 2026-08-07
+
+**The game loads a patched save.** The first end-to-end proof that this project can edit a real
+savegame without corrupting it.
+
+What was done: a copy of `000000022-last` had **four bytes at `0x18` rewritten** (party gold,
+161 → 12345) by patching a copy of the original buffer, written via temp-file + rename with a
+`.bak`, and installed as a new slot `000000099-wandtest`. Nothing else in the file was touched, and
+none of the existing saves were opened for writing.
+
+| Check | Result |
+|---|---|
+| Bytes differing from the source (`cmp -l`) | **2**, at `0x18` and `0x19` — both inside the gold field. The field's upper two bytes were `00` before and after. |
+| File length | Unchanged, 95,968 |
+| `.bak` | Byte-identical to the pre-edit file |
+| Existing saves `000000020`–`22` | Byte-identical to copies taken beforehand |
+| **In game** | **Loads. Party gold reads 12345.** |
+
+### What this proves, and what it does not
+
+**Proved:** GAM V2.0 carries no checksum or integrity field that patching invalidates; the engine
+accepts a file edited in place; retaining the original buffer and patching a copy of it produces
+something the game treats as a valid save; and temp-file + rename + `.bak` works as a write
+mechanism.
+
+**Not proved — and this is the important half.** Party gold is a **fixed-width field in the
+header**, so nothing moved. Offset recalculation — the thing that actually causes save corruption,
+where a resized section shifts every offset after it — was never exercised. This de-risks the
+*mechanism*, not the *algorithm*. The writer is not done.
+
 ## Oracles
 
 Prefer verification over reasoning from a spec. Three are available, with different standing:

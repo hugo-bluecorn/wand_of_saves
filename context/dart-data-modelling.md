@@ -53,6 +53,18 @@ enum GamNpcField implements FormatField {
 | Enums are implicitly **sealed** and automatically extend `Enum` | `language/enums.md:17-26` |
 | Class modifiers **do not apply to `enum`** — so `sealed enum` / `final enum` are not valid | `language/class-modifiers.md:35-37` |
 
+⚠️ **`.name` cannot satisfy an interface. Found by compiling, 2026-08-07.** An interface declaring
+`String get name` looks like it should be free for enums — it is not, and
+`enum X implements ThatInterface` fails with *"Missing concrete implementation of
+'getter …name'"*. `dart:core` declares it as `extension EnumName on Enum`, and the SDK states the
+reason in place (`lib/core/enum.dart:134-137`): it is an extension *"instead of an instance method
+in order to allow enum values to have the name `name`"*. So `.name` works when the static type is
+the enum, but discharges no interface obligation.
+
+**[judgement]** Consequence adopted here: `FormatField` declares only `offset` and `length`, and
+diagnostics use `toString()` — which for an enum yields `GamHeaderField.partyGold`, a better label
+than the bare identifier anyway.
+
 **Why this over a class of `static const int`** *(the shape rejected in D6)* **[judgement]:** because
 `values` is iterable, the table's own consistency becomes a *test* rather than a review item — no
 overlapping fields, everything inside `structSize`, and the last field ending exactly at
