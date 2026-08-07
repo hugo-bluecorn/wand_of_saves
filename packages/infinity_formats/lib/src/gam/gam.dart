@@ -14,6 +14,8 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/exceptions.dart';
+import 'package:infinity_formats/src/gam/gam_npc.dart';
 import 'package:infinity_formats/src/spec/gam_v2_0.dart';
 
 /// A parsed BG:EE savegame — `BALDUR.gam`.
@@ -51,8 +53,47 @@ final class Gam {
   /// Prefer [hasPartyInventory] over comparing this to zero — see its note.
   int get partyInventoryOffset => _u32(GamHeaderField.partyInventoryOffset);
 
+  /// Absolute offset to the non-party NPC struct array.
+  int get nonPartyNpcOffset => _u32(GamHeaderField.nonPartyNpcOffset);
+
   /// Number of non-party NPC structs.
   int get nonPartyNpcCount => _u32(GamHeaderField.nonPartyNpcCount);
+
+  /// The party, in array order.
+  List<GamNpc> get partyMembers => _npcsAt(
+    partyNpcOffset,
+    partyNpcCount,
+    'party',
+  );
+
+  /// Characters tracked by the save but not in the party.
+  ///
+  /// 36 of them on every BG1EE save examined — the recruitable companions.
+  /// This array is the project's best stride test on real data: read at the
+  /// documented 352-byte stride, all 36 embedded CRE blobs chain without a
+  /// gap, and a wrong stride breaks the chain at the first link.
+  List<GamNpc> get nonPartyMembers => _npcsAt(
+    nonPartyNpcOffset,
+    nonPartyNpcCount,
+    'non-party',
+  );
+
+  List<GamNpc> _npcsAt(int offset, int count, String what) {
+    final end = offset + count * GamNpcField.structSize;
+    if (count < 0 || end > bytes.length) {
+      // A corrupt count would otherwise be read as characters out of whatever
+      // happens to follow in the buffer.
+      throw InfinityFormatException.truncated(
+        what: '$what NPC array ($count structs at $offset)',
+        expected: end,
+        actual: bytes.length,
+      );
+    }
+    return [
+      for (var i = 0; i < count; i++)
+        GamNpc.at(bytes, offset + i * GamNpcField.structSize),
+    ];
+  }
 
   /// Whether this save has a shared party inventory section at all.
   ///

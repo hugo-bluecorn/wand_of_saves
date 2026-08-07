@@ -22,6 +22,7 @@ library;
 export 'src/exceptions.dart';
 export 'src/gam/gam.dart';
 export 'src/gam/gam_codec.dart';
+export 'src/gam/gam_npc.dart';
 export 'src/io/atomic_file.dart';
 export 'src/spec/format_field.dart';
 export 'src/spec/gam_v2_0.dart';

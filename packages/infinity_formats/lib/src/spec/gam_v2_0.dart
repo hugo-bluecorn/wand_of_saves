@@ -85,3 +85,151 @@ enum GamHeaderField implements FormatField {
   @override
   final int length;
 }
+
+/// GAM V2.0 NPC struct layout — data only, no logic (D6).
+///
+/// The same 352-byte struct serves both party and non-party characters.
+///
+/// Source: IESDP `file_formats/ie_formats/gam_v2.0.htm`, "GAME V2.0 NPCs".
+/// Unlike [GamHeaderField], this table is **complete**: IESDP documents the
+/// struct in 58 contiguous fields with no gaps, so the layout check runs with
+/// [structSize] and the table becomes self-checking — any mistranscribed
+/// offset or size leaves a gap or an overlap that the invariant catches.
+///
+/// Two departures from IESDP's wording, both for clarity:
+///
+/// * IESDP calls `0x0c` "Character Name"; it holds the **CRE resref**
+///   (`*HARBASE` on the fixture), so it is [creResref] here. The player-visible
+///   name is [displayName] at `0xc0`.
+/// * IESDP lists 24 consecutive dwords at `0x2c`, every one of them named
+///   "NumTimesInteracted NPC count (unused)". They are recorded here as the
+///   single span [unusedInteractionCounts]: it accounts for the same bytes,
+///   and 24 identical names would carry no more information.
+enum GamNpcField implements FormatField {
+  /// Character selection state (`0x8000` means dead).
+  selection(0x00, 2),
+
+  /// Party order; `0xFFFF` means not in the party.
+  partyOrder(0x02, 2),
+
+  /// **Absolute** offset, from the start of the GAM, to this character's CRE.
+  creOffset(0x04, 4),
+
+  /// Size in bytes of this character's embedded CRE.
+  creLength(0x08, 4),
+
+  /// The CRE resref. IESDP calls this "Character Name"; it is not the name.
+  creResref(0x0c, 8),
+
+  /// Character orientation.
+  orientation(0x14, 4),
+
+  /// Resref of the area the character is in.
+  currentArea(0x18, 8),
+
+  /// Character X coordinate.
+  x(0x20, 2),
+
+  /// Character Y coordinate.
+  y(0x22, 2),
+
+  /// Viewing rectangle X coordinate.
+  viewportX(0x24, 2),
+
+  /// Viewing rectangle Y coordinate.
+  viewportY(0x26, 2),
+
+  /// Modal action.
+  modalAction(0x28, 2),
+
+  /// Happiness.
+  happiness(0x2a, 2),
+
+  /// 24 dwords IESDP marks unused, recorded as one span. See the class note.
+  unusedInteractionCounts(0x2c, 96),
+
+  /// Index into `slots.ids` for quick weapon 1; `0xFFFF` is none.
+  quickWeaponSlot1(0x8c, 2),
+
+  /// Index into `slots.ids` for quick weapon 2; `0xFFFF` is none.
+  quickWeaponSlot2(0x8e, 2),
+
+  /// Index into `slots.ids` for quick weapon 3; `0xFFFF` is none.
+  quickWeaponSlot3(0x90, 2),
+
+  /// Index into `slots.ids` for quick weapon 4; `0xFFFF` is none.
+  quickWeaponSlot4(0x92, 2),
+
+  /// Quick weapon 1 slot ability; `-1` is disabled.
+  quickWeaponAbility1(0x94, 2),
+
+  /// Quick weapon 2 slot ability; `-1` is disabled.
+  quickWeaponAbility2(0x96, 2),
+
+  /// Quick weapon 3 slot ability; `-1` is disabled.
+  quickWeaponAbility3(0x98, 2),
+
+  /// Quick weapon 4 slot ability; `-1` is disabled.
+  quickWeaponAbility4(0x9a, 2),
+
+  /// Quick spell 1 resref.
+  quickSpell1(0x9c, 8),
+
+  /// Quick spell 2 resref.
+  quickSpell2(0xa4, 8),
+
+  /// Quick spell 3 resref.
+  quickSpell3(0xac, 8),
+
+  /// Index into `slots.ids` for quick item 1; `0xFFFF` is none.
+  quickItemSlot1(0xb4, 2),
+
+  /// Index into `slots.ids` for quick item 2; `0xFFFF` is none.
+  quickItemSlot2(0xb6, 2),
+
+  /// Index into `slots.ids` for quick item 3; `0xFFFF` is none.
+  quickItemSlot3(0xb8, 2),
+
+  /// Quick item 1 slot ability; `-1` is disabled.
+  quickItemAbility1(0xba, 2),
+
+  /// Quick item 2 slot ability; `-1` is disabled.
+  quickItemAbility2(0xbc, 2),
+
+  /// Quick item 3 slot ability; `-1` is disabled.
+  quickItemAbility3(0xbe, 2),
+
+  /// The player-visible character name, plain text.
+  ///
+  /// This is where a displayed name comes from when the CRE's name strref is
+  /// `-1`, which is the protagonist's case.
+  displayName(0xc0, 32),
+
+  /// Number of times talked to.
+  talkCount(0xe0, 4),
+
+  /// The embedded character-stats sub-struct (kill statistics and the like).
+  ///
+  /// Recorded as one span; open it into its own table when something needs a
+  /// field inside it.
+  characterStats(0xe4, 116),
+
+  /// Voice set — the last field, ending exactly at [structSize].
+  voiceSet(0x158, 8);
+
+  const GamNpcField(this.offset, this.length);
+
+  /// Total size of the struct in bytes.
+  ///
+  /// **Read this; never infer it from the distance between two section
+  /// offsets.** Verified three ways — IESDP's last field ending here, the
+  /// party array landing on its CRE, and 36 non-party structs chaining
+  /// perfectly. See `docs/findings/verified-format-offsets.md`.
+  static const int structSize = 352;
+
+  @override
+  final int offset;
+
+  @override
+  final int length;
+}

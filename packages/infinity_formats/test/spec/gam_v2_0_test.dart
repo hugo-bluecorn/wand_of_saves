@@ -61,4 +61,46 @@ void main() {
       }
     });
   });
+
+  group('GamNpcField', () {
+    test('accounts for exactly the 352 bytes of the struct', () {
+      // The first real use of the exact-fit branch, and the reason D6 chose
+      // enums. IESDP documents this struct in 58 contiguous fields with no
+      // gaps, so the table is dense — which makes it self-checking: any one
+      // mistranscribed offset or size necessarily leaves a gap or an overlap,
+      // and this catches it.
+      //
+      // It is also the assertion whose absence caused the stride bug. A struct
+      // believed to be 352 bytes whose fields only reach 344 would read every
+      // element of an array after the first at the wrong place.
+      expect(
+        layoutProblems(GamNpcField.values, structSize: GamNpcField.structSize),
+        isEmpty,
+      );
+    });
+
+    test('declares the struct size verified three ways in the findings', () {
+      expect(GamNpcField.structSize, 352);
+    });
+
+    test('carries the offsets the codec depends on', () {
+      expect(GamNpcField.creOffset.offset, 0x04);
+      expect(GamNpcField.creLength.offset, 0x08);
+      expect(GamNpcField.creResref.offset, 0x0c);
+      expect(GamNpcField.creResref.length, 8);
+      expect(GamNpcField.displayName.offset, 0xc0);
+      expect(GamNpcField.displayName.length, 32);
+      expect(GamNpcField.voiceSet.offset, 0x158);
+      expect(GamNpcField.voiceSet.length, 8);
+    });
+
+    test('records the unused interaction block as one span, not 24', () {
+      // IESDP lists 24 consecutive dwords all named "NumTimesInteracted NPC
+      // count (unused)". Recording them individually would add 24 identical
+      // names and no information; one honestly-labelled span accounts for the
+      // same bytes. Deliberate — see the plan and D6.
+      expect(GamNpcField.unusedInteractionCounts.offset, 0x2c);
+      expect(GamNpcField.unusedInteractionCounts.length, 24 * 4);
+    });
+  });
 }
