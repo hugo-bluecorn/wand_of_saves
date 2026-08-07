@@ -110,6 +110,147 @@ void main() {
     });
   });
 
+  /// Creates `<tmp>/userdata/save/000000022-last/BALDUR.gam` and returns the
+  /// save root, so the settings file can be placed beside it as the game does.
+  String makeUserData({String? language}) {
+    final separator = Platform.pathSeparator;
+    final userData = makeDir('userdata');
+    final root = makeDir('userdata${separator}save');
+    touch(
+      makeDir('userdata${separator}save${separator}000000022-last'),
+      'BALDUR.gam',
+    );
+    if (language != null) {
+      File('$userData${separator}Baldur.lua').writeAsStringSync(
+        "SetPrivateProfileString('Window','Full Screen','1')\n"
+        "SetPrivateProfileString('Language','Text','$language')\n"
+        "SetPrivateProfileString('Program Options','Volume Music','60')\n",
+      );
+    }
+    return root;
+  }
+
+  /// Creates a game directory with `lang/<code>/dialog.tlk` for each code.
+  String makeGameWithLocales(List<String> locales) {
+    final separator = Platform.pathSeparator;
+    final game = makeDir('game');
+    touch(game, 'chitin.key');
+    for (final locale in locales) {
+      touch(
+        makeDir('game${separator}lang$separator$locale'),
+        'dialog.tlk',
+      );
+    }
+    return game;
+  }
+
+  group('findLanguage', () {
+    test('reads the language the player configured in Baldur.lua', () {
+      // The settings file sits beside the save root, in the user data
+      // directory -- not in the game installation.
+      final root = makeUserData(language: 'de_DE');
+      final service = GameProfileService(saveCandidates: [root]);
+
+      expect(service.findLanguage(), 'de_DE');
+    });
+
+    test('falls back to en_US when there is no settings file', () {
+      final root = makeUserData();
+      final service = GameProfileService(saveCandidates: [root]);
+
+      expect(service.findLanguage(), GameProfileService.defaultLanguage);
+    });
+
+    test('falls back to en_US when no save directory was found at all', () {
+      const service = GameProfileService(saveCandidates: ['/nope']);
+
+      expect(service.findLanguage(), GameProfileService.defaultLanguage);
+    });
+
+    test('an environment override wins over the settings file', () {
+      final root = makeUserData(language: 'de_DE');
+      final service = GameProfileService(
+        saveCandidates: [root],
+        environment: {GameProfileService.languageVariable: 'ru_RU'},
+      );
+
+      expect(service.findLanguage(), 'ru_RU');
+    });
+
+    test('rejects a value that is not a locale code', () {
+      // The value becomes a path segment, so a settings file carrying
+      // '../../etc' must not be able to steer the search out of lang/.
+      final root = makeUserData(language: '../../etc');
+      final service = GameProfileService(saveCandidates: [root]);
+
+      expect(service.findLanguage(), GameProfileService.defaultLanguage);
+    });
+  });
+
+  group('findDialogTlk', () {
+    test('resolves the talk table for the configured language', () {
+      // This is the fix for the spike's arbitrary locale selection: it took
+      // whatever lang/* listSync() happened to return first -- pt_BR on this
+      // machine -- while Baldur.lua says en_US.
+      final root = makeUserData(language: 'de_DE');
+      final game = makeGameWithLocales(['de_DE', 'en_US', 'pt_BR']);
+      final service = GameProfileService(
+        gameCandidates: [game],
+        saveCandidates: [root],
+      );
+
+      expect(
+        service.findDialogTlk(),
+        '$game${Platform.pathSeparator}lang'
+        '${Platform.pathSeparator}de_DE'
+        '${Platform.pathSeparator}dialog.tlk',
+      );
+    });
+
+    test(
+      'falls back to en_US when the configured language is not installed',
+      () {
+        final root = makeUserData(language: 'ja_JP');
+        final game = makeGameWithLocales(['en_US']);
+        final service = GameProfileService(
+          gameCandidates: [game],
+          saveCandidates: [root],
+        );
+
+        expect(
+          service.findDialogTlk(),
+          endsWith(
+            'en_US'
+            '${Platform.pathSeparator}dialog.tlk',
+          ),
+        );
+      },
+    );
+
+    test('is null when no talk table exists at all', () {
+      final root = makeUserData();
+      final game = makeGameWithLocales([]);
+      final service = GameProfileService(
+        gameCandidates: [game],
+        saveCandidates: [root],
+      );
+
+      expect(service.findDialogTlk(), isNull);
+    });
+
+    test('is null when the game installation was not found', () {
+      // The app has to open on a machine with saves but no game -- there is
+      // simply no text to resolve strrefs against.
+      final root = makeUserData();
+      final service = GameProfileService(
+        gameCandidates: ['/nope'],
+        saveCandidates: [root],
+      );
+
+      expect(service.findDialogTlk(), isNull);
+    });
+  });
+
   _realMachine();
 }
 
@@ -123,6 +264,7 @@ extension on String {
 void _realMachine() {
   const service = GameProfileService();
   final saveRoot = service.findSaveRoot();
+  final gameDirectory = service.findGameDirectory();
 
   group('against this machine', () {
     test(
@@ -132,6 +274,21 @@ void _realMachine() {
         expect(service.slotsIn(saveRoot!), isNotEmpty);
       },
       skip: saveRoot == null ? 'no BG:EE save directory on this machine' : null,
+    );
+
+    test(
+      'the real Baldur.lua and installation agree on a readable talk table',
+      () {
+        // The unit tests above all inject their own directories, so none of
+        // them would notice the real settings file moving or changing shape.
+        final tlk = service.findDialogTlk();
+        expect(tlk, isNotNull);
+        expect(File(tlk!).existsSync(), isTrue);
+        expect(tlk, contains(service.findLanguage()));
+      },
+      skip: saveRoot == null || gameDirectory == null
+          ? 'no BG:EE installation on this machine'
+          : null,
     );
   });
 }
