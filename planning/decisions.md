@@ -304,6 +304,28 @@ tool regardless.
 
 **If a rule ever proves genuinely unsatisfiable, reopen this decision.** Do not silence the rule.
 
+### Amended 2026-08-07 — scoped to hand-written code
+
+**D8 as written and D9 could not both hold.** `dart_mappable` emits five `ignore_for_file` lines
+into every generated file (`dart_mappable_builder/lib/src/builders/mappable_builder.dart:112-118`),
+unconditionally, with no option to disable them. Generated files also cannot be edited.
+
+**The invariant is now: zero suppressions in code this project writes.** Generated `*.mapper.dart`
+files are excluded from analysis and from the check:
+
+```bash
+grep -rn 'ignore_for_file\|// ignore:' --include='*.dart' . | grep -v '\.mapper\.dart'
+# must return nothing
+```
+
+This preserves what D8 was actually for — stopping *us* silencing a rule instead of fixing the
+code. A suppression we cannot remove, in code we did not write and must not edit, is a different
+thing entirely. **Everything else stands:** no `exclude:` covering hand-written code, no rule
+carve-outs, no `// ignore` we author. If a rule bites our own code, fix the code or reopen this.
+
+Generated output **is committed**. There is no CI, so a fresh clone must build without anyone
+remembering to run `build_runner` first.
+
 ### The cost, paid on adoption
 
 49 `info`-level issues across both packages, all fixed rather than suppressed. The ones worth

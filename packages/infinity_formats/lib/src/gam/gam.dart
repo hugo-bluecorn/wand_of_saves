@@ -17,6 +17,7 @@ import 'dart:typed_data';
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/gam/gam_npc.dart';
 import 'package:infinity_formats/src/spec/gam_v2_0.dart';
+import 'package:infinity_formats/src/text/fixed_field.dart';
 
 /// A parsed BG:EE savegame — `BALDUR.gam`.
 ///
@@ -38,6 +39,19 @@ final class Gam {
 
   int _u32(GamHeaderField field) =>
       ByteData.sublistView(bytes).getUint32(field.offset, Endian.little);
+
+  /// Elapsed game time. 300 units is one in-game hour.
+  int get gameTime => _u32(GamHeaderField.gameTime);
+
+  /// Resref of the area the party is standing in, e.g. `AR2600`.
+  String get currentArea => decodeFixedString(
+    bytes,
+    GamHeaderField.currentArea.offset,
+    GamHeaderField.currentArea.length,
+  );
+
+  /// Party reputation, as displayed — the stored value divided by ten.
+  double get reputation => _u32(GamHeaderField.reputation) / 10;
 
   /// Shared party gold.
   int get partyGold => _u32(GamHeaderField.partyGold);

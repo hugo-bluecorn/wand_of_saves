@@ -8,3 +8,11 @@
 # wherever it bites is a weaker ruleset with extra steps. If a rule is
 # genuinely unsatisfiable, fix the code or reopen D8 — do not silence it.
 include: package:very_good_analysis/analysis_options.yaml
+
+# Generated mappers carry ignore_for_file headers that dart_mappable emits
+# unconditionally and we cannot edit. D8 is amended to scope its zero-suppression
+# invariant to hand-written code; this is the only exclusion, and it must never
+# be extended to cover code we author.
+analyzer:
+  exclude:
+    - '**/*.mapper.dart'
