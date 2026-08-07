@@ -31,6 +31,12 @@ each such pair defines one feature.
 (item and spell names) at once. That merge belongs in a **use-case** or the ViewModel — never in a
 repository reaching sideways.
 
+**Resolved 2026-08-07: it is in the ViewModel, and there is no use-case layer yet.**
+`PartyViewModel` reads both repositories and fills in the names the savegame does not carry. The
+canon allows either home for cross-repository logic, and `ViewModel : Repository` is many-to-many,
+so the smaller of the two is the honest choice while exactly one ViewModel needs it. It moves to a
+use-case when a second one does — which is likely at the item and spell pickers.
+
 ## Package split
 
 ```
@@ -216,8 +222,12 @@ behind an LRU; do not load 34,000 strings into memory.
 Per `context/flutter-ai-rules.md`. None of this is built yet — it lands in Phase 2 — but the
 choices are made here so they are not improvised.
 
-- **Routing: `go_router`**, added as a dependency when Phase 2 begins. Not currently in
-  `pubspec.yaml`.
+- **Routing: `go_router` 17.4.0** — added 2026-08-07 with the second screen. `lib/config/router.dart`
+  declares `/` (the save browser) with the party shell as a **child route**, `save/:slot`. Child
+  rather than sibling deliberately: `go` then builds a stack of [browser, party], so the party shell
+  gets a working back button instead of being a dead end, and D4's editor categories nest one level
+  further in. The route carries the slot **directory name**, not its path — nothing to escape, and
+  the repository resolves it from scratch, so a reload lands on the same save.
 - **Theming:** a centralised `ThemeData` built with `ColorScheme.fromSeed`, with both `theme` and
   `darkTheme` supplied. `ui/core/` owns it; no widget defines its own colours.
 - **Accessibility, as gates rather than aspirations:** text contrast at least **4.5:1**; `Semantics`

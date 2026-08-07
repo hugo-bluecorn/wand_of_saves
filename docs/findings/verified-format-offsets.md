@@ -23,8 +23,29 @@ A save slot is a **directory**, not a file:
 | `BALDUR.gam` | The savegame. **Uncompressed** — party, globals, journal all live here. |
 | `BALDUR.SAV` | Archive of area files. Header `SAV V1.0`, then per-entry: name, uncompressed length, compressed length, **zlib** stream. |
 | `BALDUR.bmp` | Save screenshot. |
-| `PORTRT*.bmp` | Party portraits. |
+| `PORTRT<n>.bmp` | Party portraits, one per party slot. **54×84, 24-bit, `BI_RGB`** — measured 2026-08-07. |
 | `*.tot` / `*.toh` | **Save-local string overrides.** Player-chosen character names live here, not in the CRE. |
+
+### `PORTRT<n>.bmp` — measured 2026-08-07, and IESDP does not document it
+
+Header on all four fixture slots: width `0x36` (54), height `0x54` (84), 1 plane, `0x18` bpp,
+compression `0`. File size 13,830 = 54-byte header + 84 rows × 164 bytes (54 × 3 padded to a
+4-byte boundary). `dart:ui` decodes it with no decoder of our own, exactly as it already does for
+`BALDUR.bmp` — so **the party rail shows the player's real portraits without the BIFF index
+(Phase 3) or the BAM decoder (Phase 5)**.
+
+⚠️ **The index mapping is UNVERIFIED.** Every fixture on this machine holds a *one-character*
+party, where party order and array index are both `0` and therefore indistinguishable — the same
+blind spot that hid the spike's stride of −180. The app keys on **party order** and treats a
+missing file as "no portrait" rather than an error, so a wrong reading costs a picture and nothing
+else. Settling it needs a save with 2+ party members.
+
+### The portraits are a second oracle, and nobody had noticed
+
+`PORTRT<n>.bmp` is not a clean portrait: **the game bakes its own HUD overlay into it**, including
+the character's hit points in green. That makes each save carry a picture of what the engine
+believed at the moment it wrote the file — an oracle sitting inside the fixture, free, needing no
+emulator and no NearInfinity. It is what falsified our hit-point reading below. See §Oracles.
 
 **This is the single most important structural finding for scope:** on BG:EE, party editing needs
 only `BALDUR.gam`. `BALDUR.SAV` matters solely for area-embedded creatures, so it can be deferred
@@ -146,6 +167,63 @@ Prefer IESDP's absolute form in new code and convert once at the boundary.
 
 Confirmed live: `STR 18(100) INT 18 WIS 9 DEX 17 CON 16 CHA 9`, XP 325, HP 6/7, THAC0 20 —
 plausible BG1 level-1 protagonist values.
+
+### ⚠️ Hit points are stored WITHOUT the Constitution bonus. Verified 2026-08-07
+
+**The savegame's hit-point fields are not the numbers the player sees.** Falsified by the game's
+own portrait overlay (see §Save directory layout), which renders the engine's view of the same
+moment:
+
+| Save | Stored `+28`/`+30` | Game renders | Constitution |
+|---|---|---|---|
+| `000000020-start` | 7 / 7 | **9 / 9** | 16 |
+| `000000022-last` | 6 / 7 | **8 / 9** | 16 |
+
+A constant **+2** on both current and maximum, at a constant Constitution of 16 — which is the
+warrior Constitution-16 bonus of +2 HP per level, at level 1. The engine stores the base and adds
+the modifier when it displays.
+
+**Consequences.** The offsets and IESDP's names (`0x0024` "Current Hit Points", `0x0026` "Maximum
+Hit Points") are correct and are not the problem; an editor should read and write exactly these
+fields. But a screen showing `6 / 7` beside a game showing `8 / 9` reads as a bug, so the UI
+labels it **"Hit points (base)"** and says why. Computing the displayed value needs `HPCONBON.2DA`
+out of the BIFF archives (Phase 3) plus the class rules, which is the same territory as EE
+Keeper's deferred "Update Bonus Stats".
+
+**Suspect the same of every other derived stat** — armour class and THAC0 are the obvious
+candidates, and both are unchecked. The portrait overlay only reports hit points.
+
+### Signedness — two fields corrected 2026-08-07
+
+IESDP's type column distinguishes signed from unsigned, and it matters:
+
+| Field | IESDP type | Why it matters |
+|---|---|---|
+| `0x0046` / `0x0048` Armour class | **2 (signed word)** | Plate and shield reaches AC −2, which an unsigned read renders as **65534**. |
+| `0x0052` THAC0 | 1 (byte), range 1-25 | Genuinely unsigned — checked rather than assumed, since the AC fields two rows above are not. |
+| `0x0008` Long name | strref | Read **signed**, so the engine's "no string" sentinel arrives as `-1` rather than `4294967295`. `Tlk.get` documents its contract in terms of a negative strref, so the unsigned reading satisfied it only by accident of the bounds check. |
+
+**No fixture catches the armour-class case**: all 37 creatures in the save sit at AC 10, where
+signed and unsigned agree. It is covered by a synthetic test instead
+(`test/cre/cre_codec_test.dart`, group `signedness`).
+
+`0x0044` Reputation is listed by IESDP as a **signed** byte, but it is stored ×10 over a 0-20
+range, so real values reach **200** and only an *unsigned* read produces them. Read unsigned; the
+annotation and the documented range cannot both be right.
+
+### Where a displayed name comes from — both legs occur in real data
+
+Dumped from `000000022-last` on 2026-08-07:
+
+| | GAM struct `0xc0` display name | CRE `0x0008` name strref |
+|---|---|---|
+| Party member (protagonist) | `"Aard"` | **−1** |
+| All 36 non-party companions | **empty** | valid (`*INSC` → 9501, `*ORDAI` → 10733, …) |
+
+So the resolution order is **GAM display name if non-empty → `dialog.tlk` by strref → the CRE
+resref**. Neither leg alone is sufficient, and each is the *only* source for one of the two
+groups. This is the proper fix for the display half of spike bug #2; name *editing* still needs
+the `.tot`/`.toh` pair.
 
 ### Header size and sections — verified 2026-08-07 against all 37 creatures in a save
 
@@ -304,6 +382,10 @@ in place so Phase 0 fixes them properly:
 2. **`strref = -1` is unhandled.** The protagonist's CRE name strref is `0xFFFFFFFF`. The displayed
    name comes from the GAM NPC struct `+192` (`"Aard"` on the fixture) or from the save-local
    `.tot`/`.toh` pair. Name *editing* will need the `.tot`/`.toh` path.
+
+   ✅ **Display half FIXED 2026-08-07.** `Cre.longNameStrref` now reads **signed**, so the sentinel
+   arrives as `-1`; the app resolves names GAM → TLK → resref (see §Where a displayed name comes
+   from). Name *editing* remains open and still needs `.tot`/`.toh`.
 3. **The round-trip check is tautological.** It re-reads the file and compares it to the buffer it
    already read. A real round-trip requires a writer; it arrives in Phase 1.
 4. **Locale selection is arbitrary.** It takes the first `lang/*` directory `listSync()` happens to
@@ -313,6 +395,13 @@ in place so Phase 0 fixes them properly:
    performs no discovery; locale resolution belongs to `GameProfileService` in the app layer, not
    to `infinity_formats` — "where is the game installed" is a fact about this machine, not about a
    file format.
+
+   ✅ **FIXED 2026-08-07**, structurally as described. `GameProfileService.findLanguage()` reads
+   `Baldur.lua` — which lives in the **user data directory beside `save/`**, not in the
+   installation — and `findDialogTlk()` resolves `<game>/lang/<code>/dialog.tlk`, falling back to
+   `en_US`. The language value is validated against `^[a-z]{2}_[A-Z]{2}$` before it becomes a path
+   segment. A test that runs against the real installation covers the defaults, which no injected
+   fixture would.
 
 Additionally: CRE `+60` (IESDP `0x44`) reads **110** where the GAM party reputation is 11.0.
 **CONFIRMED 2026-08-07 — CRE reputation is stored ×10.** BG1 reputation ranges 0–20, so 110 cannot
@@ -350,8 +439,14 @@ where a resized section shifts every offset after it — was never exercised. Th
 
 ## Oracles
 
-Prefer verification over reasoning from a spec. Three are available, with different standing:
+Prefer verification over reasoning from a spec. Four are available, with different standing:
 
+0. **The save's own `PORTRT<n>.bmp`.** Cheapest of the four and the only one needing nothing but
+   the fixture: the game bakes its HUD overlay into the portrait, so every save ships a picture of
+   what the engine believed when it wrote the file. It cost one `PIL` resize to read and it
+   immediately falsified our hit-point reading (§Hit points are stored WITHOUT the Constitution
+   bonus) — a discrepancy no amount of reading IESDP would have surfaced, because the offsets were
+   never wrong. Limited to what the HUD draws, which today means hit points.
 1. **NearInfinity, run as a black-box oracle.** Open the same file, compare field values. Running
    it creates no derivative work, so this is available regardless of how D1 lands. Note from the
    previous project's measurement: NI **cannot run headless** — `AppOption.java:369` calls

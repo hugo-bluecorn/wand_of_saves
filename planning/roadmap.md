@@ -41,9 +41,12 @@ The hard phase. See `planning/architecture.md` §Offset recalculation.
 
 ## Phase 2 — first useful app · **here**
 
-- Flutter shell: save browser → party → stats/gold/XP/HP editing.
-- MVVM wiring per `architecture.md`; D2 (state management) must be settled here.
-- Edit commands + undo/redo.
+- ✅ Flutter shell: save browser → party. Both screens, `go_router`, full MVVM per
+  `architecture.md`; D2 settled.
+- ⬅️ Stats/gold/XP/HP **editing**: edit commands + undo/redo, atomic write with a `.bak`.
+
+Everything editable in this phase is **fixed-width**, so Phase 1's layout pass stays deferred —
+the existing patch-a-copy writer already covers it, proven in-game.
 
 **Gate:** an edited save loads in-game with the change applied and nothing else altered.
 

@@ -177,8 +177,21 @@ deferred (see below). What exists:
 - ✅ **The Flutter app has a window** — save browser with real save screenshots, full MVVM
   (`GameProfileService` → `SaveGameRepository` → `SaveBrowserViewModel` → view), Material 3 theme.
   `lib/` is no longer a stub.
-- ⬅️ **Here: Phase 2, the app.** Editor shell with the party portrait rail, then stat editing with
-  write-back.
+- ✅ **The editor shell opens a save** (2026-08-07) — `go_router`, the party as a portrait rail,
+  and a read-only character pane showing HP, XP, gold, THAC0, AC, reputation and the six ability
+  scores. `Character`/`AbilityScores` domain models via `dart_mappable`, `StringRepository` over
+  `dialog.tlk`, and `PartyViewModel` merging the two repositories. Two recorded spike bugs closed:
+  **#4 (arbitrary locale)** and the display half of **#2 (`strref = -1`)**.
+  - **Party portraits come free.** Every save slot carries `PORTRT<n>.bmp` (54×84, 24-bit), which
+    `dart:ui` decodes — no BIFF index, no BAM decoder. Its *index mapping* is unverified: every
+    fixture here is a one-character party.
+  - ⚠️ **Hit points are stored without the Constitution bonus** — the save says `6/7` where the
+    game shows `8/9`. Found by reading the game's own HUD overlay baked into the portrait, which
+    makes those BMPs a **fourth oracle**. The UI labels the field "Hit points (base)". Suspect the
+    same of AC and THAC0; both unchecked.
+- ⬅️ **Here: Phase 2, stat editing with write-back.** Edit commands, undo/redo, atomic save. That
+  is the Phase 2 gate: an edited save that loads in-game with the change applied and nothing else
+  altered.
 
 ### Phase 1 is deliberately deferred, and that is not an oversight
 
@@ -203,9 +216,6 @@ over** — see `docs/findings/verified-format-offsets.md` §Known bugs.
 ⚠️ **TLK strings are UTF-8, not cp1252.** Earlier notes throughout this repo said cp1252; that was
 falsified against the shipped game data on 2026-08-07 and is corrected everywhere. cp1252 is real
 for the *classic* engine, which D3 puts out of scope.
-
-`lib/` is still Flutter's empty stub and is expected to be replaced. The MVVM folder layout and
-the provider graph come from `planning/architecture.md`, not from improvisation on the scaffold.
 
 See `planning/roadmap.md` for Phases 1–7.
 
