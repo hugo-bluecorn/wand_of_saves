@@ -144,7 +144,8 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phase 0, in progress.** The first codec has landed; the groundwork below it is complete:
+**Phase 2 — the app has a window.** Phase 0's read path is complete and Phase 1 is deliberately
+deferred (see below). What exists:
 
 - ✅ Flutter scaffold (`flutter create --empty --platforms=linux,macos,windows`), SDK pinned,
   dependencies brought to latest with `pub upgrade --major-versions`.
