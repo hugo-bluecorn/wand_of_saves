@@ -19,6 +19,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
+import 'package:wand_of_saves/domain/character.dart';
+
+import '../../support/synthetic_save.dart';
 
 void main() {
   late Directory tmp;
@@ -162,5 +165,159 @@ void main() {
       (await repository.listSlots()).single,
       (await repository.listSlots()).single,
     );
+  });
+
+  group('slotNamed', () {
+    test('resolves a slot from its directory name', () async {
+      // This is what the route parameter carries: the directory name survives
+      // a reload, where an in-memory object would not.
+      makeSlot('000000020-start');
+      makeSlot('000000022-last');
+
+      final slot = await repositoryOver(saveRoot()).slotNamed(
+        '000000022-last',
+      );
+
+      expect(slot, isNotNull);
+      expect(slot!.label, 'last');
+      expect(slot.gold, 161);
+    });
+
+    test('is null for a name that is not there', () async {
+      makeSlot('000000022-last');
+
+      expect(
+        await repositoryOver(saveRoot()).slotNamed('000000099-gone'),
+        isNull,
+      );
+    });
+
+    test('is null when there is no save directory at all', () async {
+      expect(
+        await repositoryOver('/definitely/not/here').slotNamed('anything'),
+        isNull,
+      );
+    });
+  });
+
+  group('party', () {
+    Future<List<Character>> partyOf(
+      List<SyntheticCharacter> characters, {
+      List<int> portraits = const [],
+    }) async {
+      final separator = Platform.pathSeparator;
+      writeSaveSlot(
+        Directory('${tmp.path}${separator}save')..createSync(recursive: true),
+        '000000022-last',
+        gam: buildSave(party: characters),
+        portraits: portraits,
+      );
+      final repository = repositoryOver(saveRoot());
+      final slot = (await repository.listSlots()).single;
+      return repository.party(slot);
+    }
+
+    test('reads one character per party struct', () async {
+      // Two members, because every real fixture has exactly one -- the blind
+      // spot that hid the spike's stride of -180. A wrong stride reads the
+      // second character out of the middle of the first.
+      final party = await partyOf(const [
+        SyntheticCharacter(),
+        SyntheticCharacter(
+          resref: '*INSC',
+          displayName: '',
+          nameStrref: 9501,
+          partyOrder: 1,
+          experience: 36293,
+        ),
+      ]);
+
+      expect(party, hasLength(2));
+      expect(party[0].creResref, '*HARBASE');
+      expect(party[1].creResref, '*INSC');
+      expect(party[1].experience, 36293);
+      expect(party[1].partyOrder, 1);
+    });
+
+    test('reads the stats out of the embedded creature record', () async {
+      final character = (await partyOf(const [SyntheticCharacter()])).single;
+
+      expect(character.currentHitPoints, 6);
+      expect(character.maximumHitPoints, 7);
+      expect(character.experience, 325);
+      expect(character.thac0, 20);
+      expect(character.armorClass, 10);
+      expect(character.levelLabel, '1/1');
+      expect(character.reputation, 11.0);
+      expect(character.abilities.strength, 18);
+      expect(character.abilities.strengthLabel, '18/00');
+      expect(character.abilities.dexterity, 17);
+      expect(character.abilities.constitution, 16);
+      expect(character.abilities.intelligence, 18);
+      expect(character.abilities.wisdom, 9);
+      expect(character.abilities.charisma, 9);
+    });
+
+    test('reads a negative armour class as negative', () async {
+      // Plate and shield. Read unsigned this is 65534, and no real fixture
+      // would catch it -- every creature in the save sits at AC 10.
+      final party = await partyOf(const [SyntheticCharacter(armorClass: -2)]);
+
+      expect(party.single.armorClass, -2);
+    });
+
+    test('carries the byte identity an edit will need', () async {
+      // A character is addressed by where they are in the file. Two party
+      // members may legitimately share a name.
+      final character = (await partyOf(const [SyntheticCharacter()])).single;
+
+      expect(character.structOffset, syntheticPartyOffset);
+      expect(character.creOffset, greaterThan(character.structOffset));
+      expect(character.creLength, 724);
+    });
+
+    test('leaves the name empty when the save carries none', () async {
+      // The 36 companions waiting to be recruited are stored this way.
+      // Resolving the strref needs the talk table, which is a different
+      // repository -- so that merge happens above this layer, not here.
+      final party = await partyOf(const [
+        SyntheticCharacter(displayName: '', nameStrref: 9501),
+      ]);
+
+      expect(party.single.name, isEmpty);
+      expect(party.single.nameStrref, 9501);
+    });
+
+    test("takes the protagonist's name from the savegame", () async {
+      final character = (await partyOf(const [SyntheticCharacter()])).single;
+
+      expect(character.name, 'Aard');
+      expect(character.nameStrref, -1);
+    });
+
+    test('finds the portrait the game wrote beside the savegame', () async {
+      final party = await partyOf(
+        const [SyntheticCharacter(), SyntheticCharacter(partyOrder: 1)],
+        portraits: [0, 1],
+      );
+
+      expect(party[0].portraitPath, endsWith('PORTRT0.bmp'));
+      expect(party[1].portraitPath, endsWith('PORTRT1.bmp'));
+    });
+
+    test('reports a missing portrait as null rather than a bad path', () async {
+      final party = await partyOf(const [SyntheticCharacter()]);
+
+      expect(party.single.portraitPath, isNull);
+    });
+
+    test('a damaged creature record fails loudly', () async {
+      // Unlike listing, where a broken save is skipped: the user chose to open
+      // this one, so silence would be worse than an error.
+      expect(
+        partyOf(const [SyntheticCharacter(creSignature: 'XXXX')]),
+        throwsA(isA<InfinityFormatException>()),
+      );
+    });
   });
 }

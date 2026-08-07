@@ -16,53 +16,22 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
-import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
-import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/ui/saves/save_browser_viewmodel.dart';
 
-SaveSlot slot(String label) => SaveSlot(
-  directoryName: '000000022-$label',
-  path: '/tmp/$label',
-  area: 'AR2600',
-  gameTime: 4791,
-  partySize: 1,
-  gold: 161,
-  modified: DateTime(2026),
-);
-
-/// Substituted for the real repository through a ProviderScope override —
-/// the seam the architecture exists to provide.
-class _FakeRepository implements SaveGameRepository {
-  _FakeRepository({this.slots = const [], this.failure});
-
-  List<SaveSlot> slots;
-  Exception? failure;
-  int listCalls = 0;
-
-  @override
-  Future<List<SaveSlot>> listSlots() async {
-    listCalls++;
-    if (failure != null) throw failure!;
-    return slots;
-  }
-
-  @override
-  Future<Gam> load(SaveSlot slot) => throw UnimplementedError();
-}
+import '../../support/fakes.dart';
 
 void main() {
   // ProviderContainer.test disposes itself via addTearDown; disposing a plain
   // container by hand raced the in-flight build and hung the error test.
-  ProviderContainer containerWith(_FakeRepository repository) =>
+  ProviderContainer containerWith(FakeSaveGameRepository repository) =>
       ProviderContainer.test(
         overrides: [saveGameRepositoryProvider.overrideWithValue(repository)],
       );
 
   test('exposes the slots the repository returns', () async {
     final container = containerWith(
-      _FakeRepository(slots: [slot('last'), slot('start')]),
+      FakeSaveGameRepository(slots: [fakeSlot('last'), fakeSlot('start')]),
     );
 
     final slots = await container.read(saveBrowserProvider.future);
@@ -71,7 +40,7 @@ void main() {
   });
 
   test('has no slots when the save directory is empty', () async {
-    final container = containerWith(_FakeRepository());
+    final container = containerWith(FakeSaveGameRepository());
 
     expect(await container.read(saveBrowserProvider.future), isEmpty);
   });
@@ -81,7 +50,7 @@ void main() {
     // machine where the game is not installed, and the screen has to say so
     // rather than throwing into the widget tree.
     final container = containerWith(
-      _FakeRepository(failure: const FileSystemException('nope')),
+      FakeSaveGameRepository(failure: const FileSystemException('nope')),
     );
 
     // Read directly rather than through `.future`: that completes normally on
@@ -107,11 +76,11 @@ void main() {
   test('refresh re-reads the directory', () async {
     // The game is very likely running while this app is open, so the first
     // read cannot be assumed to stay true.
-    final repository = _FakeRepository(slots: [slot('last')]);
+    final repository = FakeSaveGameRepository(slots: [fakeSlot('last')]);
     final container = containerWith(repository);
     await container.read(saveBrowserProvider.future);
 
-    repository.slots = [slot('last'), slot('newer')];
+    repository.slots = [fakeSlot('last'), fakeSlot('newer')];
     await container.read(saveBrowserProvider.notifier).refresh();
 
     expect(repository.listCalls, 2);
