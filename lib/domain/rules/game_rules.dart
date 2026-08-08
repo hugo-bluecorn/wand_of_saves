@@ -59,6 +59,13 @@ abstract interface class GameRules {
   /// [kitIdentifier] as English, e.g. `Necromancer`, or `null` for no kit.
   String? kitName(int stored);
 
+  /// The `weapprof.2da` column that governs a character's pip ceilings.
+  ///
+  /// That table's columns are `CLASS.IDS` and kit identifiers, so this is a
+  /// **lookup key, not a rendering** — `Fighter / Mage` finds nothing where
+  /// `FIGHTER_MAGE` finds the column. `null` when the class cannot be named.
+  String? proficiencyColumn({required int classId, required int kitId});
+
   /// Whether class [id] uses the warrior column of the hit-point table.
   bool isWarrior(int id);
 
@@ -137,15 +144,35 @@ class GeneratedGameRules implements GameRules {
 
   @override
   String? kitName(int stored) {
-    final identifier = kitIdentifier(stored);
     // Two encodings mean the same thing. Aard and Montaron store 0x40000000,
     // Imoen stores 0, and the game shows no kit for any of the three.
+    final bare = _kitColumn(stored);
+    return bare == null ? null : _words(bare).join(' ');
+  }
+
+  /// The kit identifier as `weapprof.2da` spells it, or `null` for no kit.
+  ///
+  /// The same `MAGESCHOOL_` strip [kitName] does, because the table's column
+  /// is `NECROMANCER` where `KIT.IDS` says `MAGESCHOOL_NECROMANCER`.
+  String? _kitColumn(int stored) {
+    final identifier = kitIdentifier(stored);
+    // Both encodings of "no kit" — TRUECLASS and plain zero — must fall
+    // through to the class. Reading either as a column looks up a heading no
+    // table has and caps every proficiency at nothing.
     if (identifier == null || identifier == noKitIdentifier) return null;
-    final bare = identifier.startsWith(schoolPrefix)
+    return identifier.startsWith(schoolPrefix)
         ? identifier.substring(schoolPrefix.length)
         : identifier;
-    return _words(bare).join(' ');
   }
+
+  /// The kit's column if there is one, otherwise the class's.
+  ///
+  /// **A kit replaces the class here exactly as it replaces the name.** That
+  /// is what kits are for in this table: their ceilings differ from the base
+  /// class's, which is the whole reason the column exists.
+  @override
+  String? proficiencyColumn({required int classId, required int kitId}) =>
+      _kitColumn(kitId) ?? classIdentifier(classId);
 
   @override
   int? classCount(int id) {

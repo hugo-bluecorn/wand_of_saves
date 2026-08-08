@@ -55,6 +55,33 @@ void main() {
       }
     });
 
+    test('no label is long enough to be cut off on a tile', () {
+      // ⚠️ **This has gone wrong twice, and both times only a human looking
+      // at the screen noticed.** A tile width of 148 truncated "Exceptional
+      // strength" and left two tiles both reading "Armour class"; 190
+      // truncated "Paralysis / Poison / De…".
+      //
+      // Rendering the panel and measuring cannot check this: `flutter test`
+      // draws with a font whose every glyph is a full em square, so it calls
+      // labels too long that fit perfectly well. What is portable is a budget
+      // on the *strings*, calibrated against what the 222-point tile fits —
+      // "Paralysis / Poison / Death" is the longest that does, at 26.
+      //
+      // It cannot catch a narrowed tile. It does catch the likelier change:
+      // someone adding a label longer than any that exists today.
+      const longest = 26;
+
+      for (final stat in CharacterStat.values) {
+        expect(
+          stat.label.length,
+          lessThanOrEqualTo(longest),
+          reason:
+              '"${stat.label}" is ${stat.label.length} characters and will '
+              'render with an ellipsis',
+        );
+      }
+    });
+
     test('quotes the ranges IESDP documents', () {
       // Where IESDP states a range it is taken verbatim; where it does not,
       // the field's own width is the range. No numbers are invented here.

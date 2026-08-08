@@ -87,49 +87,68 @@ void main() {
     ),
   ];
 
-  /// What the player's own `weapprof.2da` calls the party's proficiencies.
+  /// The party's proficiencies as the player's own `weapprof.2da` holds them.
   ///
-  /// Names as the talk table resolves them, and ceilings as the table states
-  /// them — a Fighter/Mage caps at 3 in Two-Weapon Style, which is why Aard
-  /// at 2 has one pip left to give.
-  const proficiencyNames = ProficiencyCatalogue({
+  /// **Strrefs, not names, deliberately** — this is what the resource
+  /// repository produces, and resolving them through the talk table is the
+  /// merge D11 is about. A fixture that carried the finished names would skip
+  /// the very step that goes wrong.
+  ///
+  /// The ceilings are the table's own: a Fighter/Mage caps at 3 in Two-Weapon
+  /// Style, which is why Aard at 2 has exactly one pip left to give.
+  const proficiencyTable = ProficiencyCatalogue({
     114: ProficiencyEntry(
       id: 114,
       identifier: '2WEAPON',
-      name: 'Two-Weapon Style',
+      nameStrref: 25023,
       maximumByColumn: {'FIGHTER_MAGE': 3},
     ),
     100: ProficiencyEntry(
       id: 100,
       identifier: 'FLAILMORNINGSTAR',
-      name: 'Flail / Morning Star',
+      nameStrref: 25012,
       maximumByColumn: {'FIGHTER_MAGE': 2},
     ),
     91: ProficiencyEntry(
       id: 91,
       identifier: 'SHORTSWORD',
-      name: 'Short Sword',
+      nameStrref: 25002,
       maximumByColumn: {'THIEF': 1, 'FIGHTER_THIEF': 2},
     ),
     105: ProficiencyEntry(
       id: 105,
       identifier: 'SHORTBOW',
-      name: 'Shortbow',
+      nameStrref: 25017,
       maximumByColumn: {'THIEF': 1},
     ),
     107: ProficiencyEntry(
       id: 107,
       identifier: 'SLING',
-      name: 'Sling',
+      nameStrref: 25019,
       maximumByColumn: {'FIGHTER_THIEF': 2},
     ),
     96: ProficiencyEntry(
+      // No strref, so this one must fall back to its identifier — the step
+      // a machine with no talk table takes, on the same screen as the rest.
       id: 96,
       identifier: 'DAGGER',
-      name: 'Dagger',
       maximumByColumn: {'NECROMANCER': 1},
     ),
   });
+
+  /// The strings the player's talk table holds for [proficiencyTable].
+  ///
+  /// The real numbers, read off this machine's `dialog.tlk`. IESDP's copy of
+  /// `weapprof.2da` points at 31138 for Two-Weapon Style, which resolves in a
+  /// BG:EE table to a paragraph about temples — that is D11, and these
+  /// strrefs are the other half of it.
+  const proficiencyStrings = {
+    25023: 'Two-Weapon Style',
+    25012: 'Flail / Morning Star',
+    25002: 'Short Sword',
+    25017: 'Shortbow',
+    25019: 'Sling',
+  };
 
   ProviderContainer containerWith(List<SyntheticCharacter> members) =>
       ProviderContainer.test(
@@ -140,23 +159,32 @@ void main() {
               gam: GamCodec.decode(buildSave(party: members)),
             ),
           ),
-          // Every member here is named in the GAM struct, so no strref is
-          // ever resolved and the table can be empty.
-          stringRepositoryProvider.overrideWithValue(FakeStringRepository()),
+          // Every member here is named in the GAM struct, so the only strrefs
+          // resolved are the proficiencies'.
+          stringRepositoryProvider.overrideWithValue(
+            FakeStringRepository(proficiencyStrings),
+          ),
           // ⚠️ **Not optional.** Left to the real one, this reads the
           // machine's own `chitin.key` and a 30 MB archive, and `pumpAndSettle`
           // does not await real file I/O — the widget never settles and the
           // whole file times out rather than failing on an assertion.
           resourceRepositoryProvider.overrideWithValue(
-            const FakeResourceRepository(proficiencyNames),
+            const FakeResourceRepository(proficiencyTable),
           ),
         ],
       );
 
-  /// Pumps the party shell on a surface big enough for the rail and the pane.
+  /// Pumps the party shell on a surface big enough for the whole sheet.
+  ///
+  /// **Tall on purpose.** The pane is a `ListView`, so anything below the
+  /// viewport is never built and `find.text` cannot see it — widening the stat
+  /// tiles from 190 to 222 was enough to push the last group off a 1200-point
+  /// surface and make a passing test start failing. A surface that fits the
+  /// sheet keeps these tests about what the panel renders rather than about
+  /// where the fold happens to fall.
   Future<void> showParty(WidgetTester tester) async {
     tester.view
-      ..physicalSize = const Size(1600, 1200)
+      ..physicalSize = const Size(1600, 2200)
       ..devicePixelRatio = 1;
     addTearDown(tester.view.reset);
 
@@ -246,6 +274,140 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('Mage'), findsNothing);
+  });
+
+  group('the rest of the sheet', () {
+    testWidgets('shows the saving throws the record screen printed', (
+      tester,
+    ) async {
+      // Xzar's, read off BG:EE on 2026-08-08 as 14/11/13/15/12. The labels are
+      // the game's own wording, so a player can put the two screens side by
+      // side without translating.
+      await showParty(tester);
+      await select(tester, 'Xzar');
+
+      for (final label in [
+        'Paralysis / Poison / Death',
+        'Rod / Staff / Wand',
+        'Petrification / Polymorph',
+        'Breath Weapon',
+        'Spell',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: '$label is missing');
+      }
+    });
+
+    testWidgets('calls the thief skills what they are', (tester) async {
+      // ⚠️ The one thing this group must not do is present a base as the
+      // skill. Imoen stores Move Silently 15 and the game shows 35, so the
+      // heading has to say so — it is the same trap that made 6/7 look wrong
+      // beside the game's 8/9.
+      await showParty(tester);
+      await select(tester, 'Imoen');
+
+      expect(
+        find.text('Skills — points allocated, not what the game shows'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('resistances stay folded away when they are all zero', (
+      tester,
+    ) async {
+      // Which is every character in every fixture. Eleven zeroes would be
+      // noise on a screen that has to stay readable.
+      await showParty(tester);
+
+      expect(find.text('Resistances'), findsOneWidget);
+      expect(find.text('Fire'), findsNothing);
+
+      await tester.tap(find.text('Show'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Fire'), findsOneWidget);
+      expect(find.text('Missile'), findsOneWidget);
+    });
+
+    testWidgets("names each proficiency from the player's own table", (
+      tester,
+    ) async {
+      // ⚠️ **D11 on screen.** These names come from the installation's
+      // weapprof.2da resolved through its talk table. IESDP's copy of that
+      // file would have labelled this tile with a paragraph about temples.
+      await showParty(tester);
+
+      expect(find.text('Two-Weapon Style'), findsOneWidget);
+      expect(find.text('Flail / Morning Star'), findsOneWidget);
+    });
+
+    testWidgets('shows only the proficiencies a character actually has', (
+      tester,
+    ) async {
+      // Not a row per weapon in the game. A character with no effect for a
+      // weapon cannot be given one without resizing the record, so offering
+      // the field would be offering an edit this build cannot make.
+      await showParty(tester);
+      await select(tester, 'Xzar');
+
+      // `DAGGER`, not `Dagger`: this row has no strref in the fixture, so the
+      // label falls back to the table's own identifier. Ugly and honest, and
+      // the step a machine with no talk table takes for every row.
+      expect(find.text('DAGGER'), findsOneWidget);
+      expect(find.text('Two-Weapon Style'), findsNothing);
+      expect(find.text('Short Sword'), findsNothing);
+    });
+
+    testWidgets('a pip edit reaches the savegame and marks it dirty', (
+      tester,
+    ) async {
+      // The second half of the owed in-game run, as far as a test can take
+      // it: Aard's Two-Weapon Style from 2 to 3, which is a dword patched
+      // inside an effect rather than a header byte.
+      await showParty(tester);
+
+      await tester.enterText(
+        find.ancestor(
+          of: find.text('Two-Weapon Style'),
+          matching: find.byType(TextField),
+        ),
+        '3',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.widgetWithText(AppBar, 'last •'),
+        findsOneWidget,
+        reason: 'the dot is how the shell says there is something to save',
+      );
+    });
+
+    testWidgets('refuses a pip count above what the class allows', (
+      tester,
+    ) async {
+      // A Fighter/Mage caps at 3 in Two-Weapon Style, and the ceiling is the
+      // game's own table rather than a number invented here. Refuse rather
+      // than clamp: quietly turning 5 into 3 is what makes an editor
+      // untrustworthy.
+      await showParty(tester);
+
+      await tester.enterText(
+        find.ancestor(
+          of: find.text('Two-Weapon Style'),
+          matching: find.byType(TextField),
+        ),
+        '5',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.text('0–3'), findsOneWidget);
+      expect(
+        find.widgetWithText(AppBar, 'last •'),
+        findsNothing,
+        reason: 'a refused value must not reach the savegame',
+      );
+    });
   });
 
   testWidgets('no character is ever labelled a generalist mage', (

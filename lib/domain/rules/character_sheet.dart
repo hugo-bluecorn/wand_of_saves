@@ -14,6 +14,7 @@
 
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 
 /// A character as the *game* would show them, rather than as the file holds
@@ -30,13 +31,21 @@ import 'package:wand_of_saves/domain/rules/game_rules.dart';
 /// sit side by side and the difference stops looking like a bug.
 class CharacterSheet {
   /// Views [character] through [rules].
-  const CharacterSheet({required this.character, required this.rules});
+  const CharacterSheet({
+    required this.character,
+    required this.rules,
+    this.proficiencies = ProficiencyCatalogue.empty,
+  });
 
   /// The character as the savegame holds them.
   final Character character;
 
   /// The game's own tables.
   final GameRules rules;
+
+  /// What the player's `weapprof.2da` calls each proficiency, and how many
+  /// pips it allows. Empty on a machine with no game installed.
+  final ProficiencyCatalogue proficiencies;
 
   /// Class, race and alignment, the way the record screen writes them.
   ///
@@ -114,6 +123,35 @@ class CharacterSheet {
   /// as ordinary.
   bool isWithinBounds(CharacterStat stat, int value) =>
       value >= lowerBoundFor(stat) && value <= upperBoundFor(stat);
+
+  /// The `weapprof.2da` column that governs this character's pip ceilings.
+  ///
+  /// A lookup key, not a rendering — `FIGHTER_MAGE`, never `Fighter / Mage`.
+  String? get proficiencyColumn => rules.proficiencyColumn(
+    classId: character.classId,
+    kitId: character.kitId,
+  );
+
+  /// The most pips [proficiencyId] allows **this character**, or `null`.
+  ///
+  /// **`null` rather than `0` when nothing is known**, and the difference
+  /// matters: an editor that capped at zero without a game installed would
+  /// refuse every proficiency edit and look broken rather than degraded.
+  ///
+  /// This is the only source there is. IESDP states no range for opcode 233's
+  /// Amount, so the ceiling is the game's own table or nothing.
+  int? maximumPipsFor(int proficiencyId) =>
+      proficiencies[proficiencyId]?.maximumFor(proficiencyColumn);
+
+  /// What to call [proficiencyId] on screen.
+  ///
+  /// Degrades in steps, each one a little less informative and none of them
+  /// invented: the talk table's name, else the rules table's own identifier,
+  /// else the number. A blank tile would be the only worse answer.
+  String proficiencyLabel(int proficiencyId) {
+    final entry = proficiencies[proficiencyId];
+    return entry?.name ?? entry?.identifier ?? 'Proficiency $proficiencyId';
+  }
 
   /// What Dexterity does to armour class, or `null` off the table.
   int? get armourClassModifier =>

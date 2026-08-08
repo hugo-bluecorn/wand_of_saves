@@ -22,6 +22,7 @@ import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
 
@@ -129,6 +130,7 @@ class _PartyShell extends StatelessWidget {
         Expanded(
           child: _CharacterSummary(
             character: state.members[state.selectedIndex],
+            proficiencies: state.proficiencies,
             slotDirectoryName: slotDirectoryName,
           ),
         ),
@@ -273,10 +275,12 @@ class _NoPortrait extends StatelessWidget {
 class _CharacterSummary extends ConsumerWidget {
   const _CharacterSummary({
     required this.character,
+    required this.proficiencies,
     required this.slotDirectoryName,
   });
 
   final Character character;
+  final ProficiencyCatalogue proficiencies;
   final String slotDirectoryName;
 
   @override
@@ -285,6 +289,7 @@ class _CharacterSummary extends ConsumerWidget {
     final sheet = CharacterSheet(
       character: character,
       rules: ref.watch(gameRulesProvider),
+      proficiencies: proficiencies,
     );
 
     void set(CharacterStat stat, int value) => ref
@@ -448,8 +453,103 @@ class _CharacterSummary extends ConsumerWidget {
               ),
           ],
         ),
+        const SizedBox(height: 24),
+        _StatGroup(
+          title: 'Combat',
+          children: [
+            for (final (stat, value) in _combat(character))
+              _StatField(
+                character: character,
+                sheet: sheet,
+                stat: stat,
+                value: value,
+                label: stat.label,
+                onCommitted: set,
+                hint: stat == CharacterStat.saveVersusDeath
+                    ? 'The five saving throws are stored exactly as the game '
+                          'prints them — nothing is added before display, '
+                          'unlike hit points and THAC0. Lower is better.'
+                    : null,
+              ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _ProficiencyGroup(
+          character: character,
+          sheet: sheet,
+          slotDirectoryName: slotDirectoryName,
+        ),
+        const SizedBox(height: 24),
+        _StatGroup(
+          // Named for what they are, because every one of them is a base and
+          // the game shows something larger. Saying so once in the title beats
+          // repeating "(base)" on nine tiles.
+          title: 'Skills — points allocated, not what the game shows',
+          children: [
+            for (final (stat, value) in _skills(character))
+              _StatField(
+                character: character,
+                sheet: sheet,
+                stat: stat,
+                value: value,
+                label: stat.label,
+                onCommitted: set,
+                hint: stat == CharacterStat.moveSilently
+                    ? 'Measured: a thief storing 15 here has the game show '
+                          '35, and two characters both storing Lore 3 show 10 '
+                          'and 15. The engine adds class, race and Dexterity '
+                          'bonuses. Working the shown figure out needs tables '
+                          'this build does not read, so only the stored base '
+                          'is offered.'
+                    : null,
+              ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _ResistanceGroup(character: character, sheet: sheet, onCommitted: set),
+        const SizedBox(height: 24),
       ],
     );
+  }
+
+  /// The Combat group, in the order the record screen stacks it.
+  List<(CharacterStat, int)> _combat(Character character) {
+    final saves = character.savingThrows;
+    final modifiers = character.armorClassModifiers;
+    return [
+      (CharacterStat.saveVersusDeath, saves.death),
+      (CharacterStat.saveVersusWands, saves.wands),
+      (CharacterStat.saveVersusPolymorph, saves.polymorph),
+      (CharacterStat.saveVersusBreath, saves.breath),
+      (CharacterStat.saveVersusSpells, saves.spells),
+      (CharacterStat.numberOfAttacks, character.numberOfAttacks),
+      (CharacterStat.armorClassCrushing, modifiers.crushing),
+      (CharacterStat.armorClassMissile, modifiers.missile),
+      (CharacterStat.armorClassPiercing, modifiers.piercing),
+      (CharacterStat.armorClassSlashing, modifiers.slashing),
+      (CharacterStat.morale, character.morale),
+      (CharacterStat.moraleBreak, character.moraleBreak),
+      (CharacterStat.luck, character.luck),
+    ];
+  }
+
+  /// The Skills group. Every one of these is a base; see the group's title.
+  List<(CharacterStat, int)> _skills(Character character) {
+    final skills = character.thiefSkills;
+    return [
+      (CharacterStat.lore, skills.lore),
+      (CharacterStat.lockpicking, skills.lockpicking),
+      (CharacterStat.findTraps, skills.findTraps),
+      (CharacterStat.pickPockets, skills.pickPockets),
+      (CharacterStat.moveSilently, skills.moveSilently),
+      (CharacterStat.hideInShadows, skills.hideInShadows),
+      (CharacterStat.detectIllusion, skills.detectIllusion),
+      (CharacterStat.setTraps, skills.setTraps),
+      (CharacterStat.turnUndeadLevel, character.turnUndeadLevel),
+      (CharacterStat.trackingSkill, character.trackingSkill),
+      (CharacterStat.fatigue, character.fatigue),
+      (CharacterStat.intoxication, character.intoxication),
+    ];
   }
 
   /// A stat's label with the modifier the game's tables give it.
@@ -480,6 +580,141 @@ class _CharacterSummary extends ConsumerWidget {
   ];
 }
 
+/// The weapons and fighting styles this character has pips in.
+///
+/// **Only the ones they already have.** Every pip here patches a dword inside
+/// an effect the record already holds, which is fixed-width and safe. Granting
+/// a proficiency from nothing would add a 264-byte effect and move every
+/// offset after it — the layout pass, deliberately deferred — so there is no
+/// "add" control, and its absence is explained rather than left to look like
+/// an oversight.
+class _ProficiencyGroup extends ConsumerWidget {
+  const _ProficiencyGroup({
+    required this.character,
+    required this.sheet,
+    required this.slotDirectoryName,
+  });
+
+  final Character character;
+  final CharacterSheet sheet;
+  final String slotDirectoryName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (character.proficiencies.isEmpty) return const SizedBox.shrink();
+
+    return _StatGroup(
+      title: 'Proficiencies',
+      children: [
+        for (final proficiency in character.proficiencies)
+          _PipField(
+            key: ValueKey('${character.creOffset}:prof:${proficiency.id}'),
+            label: sheet.proficiencyLabel(proficiency.id),
+            pips: proficiency.pips,
+            maximum: sheet.maximumPipsFor(proficiency.id),
+            onCommitted: (pips) => ref
+                .read(partyProvider(slotDirectoryName).notifier)
+                .edit(
+                  SetProficiency(
+                    creOffset: character.creOffset,
+                    effectOffset: proficiency.effectOffset,
+                    proficiencyId: proficiency.id,
+                    pips: pips,
+                  ),
+                ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The eleven resistances, folded away when they are all zero.
+///
+/// Which is every character in every fixture — eleven zeroes is noise on a
+/// screen that has to stay readable, and the ones who *do* resist something
+/// are exactly the ones worth showing without being asked.
+class _ResistanceGroup extends StatefulWidget {
+  const _ResistanceGroup({
+    required this.character,
+    required this.sheet,
+    required this.onCommitted,
+  });
+
+  final Character character;
+  final CharacterSheet sheet;
+  final void Function(CharacterStat, int) onCommitted;
+
+  @override
+  State<_ResistanceGroup> createState() => _ResistanceGroupState();
+}
+
+class _ResistanceGroupState extends State<_ResistanceGroup> {
+  bool _expanded = false;
+
+  List<(CharacterStat, int)> get _values {
+    final resists = widget.character.resistances;
+    return [
+      (CharacterStat.resistFire, resists.fire),
+      (CharacterStat.resistCold, resists.cold),
+      (CharacterStat.resistElectricity, resists.electricity),
+      (CharacterStat.resistAcid, resists.acid),
+      (CharacterStat.resistMagic, resists.magic),
+      (CharacterStat.resistMagicFire, resists.magicFire),
+      (CharacterStat.resistMagicCold, resists.magicCold),
+      (CharacterStat.resistSlashing, resists.slashing),
+      (CharacterStat.resistCrushing, resists.crushing),
+      (CharacterStat.resistPiercing, resists.piercing),
+      (CharacterStat.resistMissile, resists.missile),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // A character who resists something is shown it without being asked.
+    final show = _expanded || !widget.character.resistances.isEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Resistances',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            TextButton(
+              onPressed: () => setState(() => _expanded = !show),
+              child: Text(show ? 'Hide' : 'Show'),
+            ),
+          ],
+        ),
+        if (show) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final (stat, value) in _values)
+                _StatField(
+                  character: widget.character,
+                  sheet: widget.sheet,
+                  stat: stat,
+                  value: value,
+                  label: stat.label,
+                  onCommitted: widget.onCommitted,
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _StatGroup extends StatelessWidget {
   const _StatGroup({required this.title, required this.children});
 
@@ -507,12 +742,20 @@ class _StatGroup extends StatelessWidget {
 
 /// Width every stat tile shares, editable or not, so they line up.
 ///
-/// Wide enough for the longest label this screen uses. The first attempt was
-/// 148 and truncated "Exceptional strength" and "Armour class (worn)" to
-/// ellipses — which mattered more than it sounds, because the two armour-class
+/// Wide enough for the longest label this screen uses, and it has now been
+/// too narrow twice — each time caught by looking at the screen rather than by
+/// reading the code.
+///
+/// The first attempt was 148 and truncated "Exceptional strength" and "Armour
+/// class (worn)", which mattered more than it sounds: the two armour-class
 /// tiles then both read "Armour class" and nothing distinguished the one you
 /// can edit from the one the engine computes.
-const double _tileWidth = 190;
+///
+/// 190 then truncated **"Paralysis / Poison / Death"** to
+/// "Paralysis / Poison / De…". The saving throws are deliberately labelled in
+/// BG:EE's own words so a player can hold the two screens side by side, and a
+/// label cut off mid-word is exactly the thing that stops working.
+const double _tileWidth = 222;
 
 /// A number the savegame stores and this build does not offer to change.
 ///
@@ -712,6 +955,130 @@ class _StatFieldState extends State<_StatField> {
 
     final hint = widget.hint;
     return hint == null ? field : Tooltip(message: hint, child: field);
+  }
+}
+
+/// One proficiency's pip count.
+///
+/// Its own widget rather than a [_StatField] because a pip is not a header
+/// field and has no [CharacterStat]: it is parameter 1 of an opcode 233
+/// effect, and its ceiling comes from the player's own `weapprof.2da` rather
+/// than from IESDP. Everything else — commit on Enter and on blur, refuse
+/// rather than clamp — is deliberately identical, because two number fields on
+/// one screen behaving differently is its own kind of bug.
+class _PipField extends StatefulWidget {
+  const _PipField({
+    required this.label,
+    required this.pips,
+    required this.onCommitted,
+    this.maximum,
+    super.key,
+  });
+
+  final String label;
+  final int pips;
+
+  /// The most this character may have, or `null` when the table cannot say.
+  ///
+  /// `null` on a machine with no game installed. The field then accepts what
+  /// the record can physically hold, which is the honest bound rather than a
+  /// zero that would refuse everything.
+  final int? maximum;
+
+  final void Function(int) onCommitted;
+
+  @override
+  State<_PipField> createState() => _PipFieldState();
+}
+
+class _PipFieldState extends State<_PipField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: '${widget.pips}',
+  );
+  final FocusNode _focus = FocusNode();
+  String? _error;
+
+  /// Pips cannot be negative: the record stores them in an unsigned dword.
+  static const int _minimum = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (!_focus.hasFocus) _commit();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _PipField old) {
+    super.didUpdateWidget(old);
+    if (widget.pips != old.pips && !_focus.hasFocus) {
+      _controller.text = '${widget.pips}';
+      _error = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  bool _accepts(int value) {
+    if (value < _minimum) return false;
+    final maximum = widget.maximum;
+    return maximum == null || value <= maximum;
+  }
+
+  String get _range {
+    final maximum = widget.maximum;
+    return maximum == null ? '$_minimum or more' : '$_minimum–$maximum';
+  }
+
+  void _commit() {
+    final typed = int.tryParse(_controller.text.trim());
+    if (typed == null || !_accepts(typed)) {
+      setState(() => _error = _range);
+      return;
+    }
+    setState(() => _error = null);
+    if (typed != widget.pips) widget.onCommitted(typed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maximum = widget.maximum;
+    final hint = maximum == null
+        ? 'Pips in this weapon or style. The game caps them per class, but '
+              'that table lives in the game files and none were found on this '
+              'machine — so no ceiling is enforced here.'
+        : 'Pips in this weapon or style. The game allows this character at '
+              'most $maximum, which is what their own weapprof.2da says for '
+              'their class. Only a proficiency they already have can be '
+              'changed — granting a new one resizes the record, which this '
+              'build does not do yet.';
+
+    return Tooltip(
+      message: hint,
+      child: _FieldShell(
+        label: widget.label,
+        hasHint: true,
+        child: TextField(
+          controller: _controller,
+          focusNode: _focus,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _commit(),
+          decoration: _statDecoration(
+            context,
+            label: widget.label,
+            hasHint: true,
+            error: _error ?? (_accepts(widget.pips) ? null : _range),
+          ),
+        ),
+      ),
+    );
   }
 }
 

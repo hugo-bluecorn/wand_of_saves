@@ -14,6 +14,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 
@@ -299,6 +300,87 @@ void main() {
 
     test('an unnameable class with no kit still shows nothing', () {
       expect(sheetOf(classId: 173).identity, 'Male · Elf · Neutral Good');
+    });
+  });
+
+  group('proficiencies', () {
+    test('a plain character is governed by their class column', () {
+      // weapprof.2da's columns are CLASS.IDS identifiers, so this is a
+      // lookup and not a rendering — 'Fighter / Mage' would find nothing.
+      expect(sheetOf().proficiencyColumn, 'FIGHTER_MAGE');
+      expect(sheetOf(classId: 4).proficiencyColumn, 'THIEF');
+    });
+
+    test('a kit replaces the class column, as it replaces the name', () {
+      // The same rule the record screen follows: a Necromancer is a
+      // Necromancer, not a Mage who is also a Necromancer. Kits exist in this
+      // table precisely because their ceilings differ from the base class's.
+      expect(sheetOf(kitId: 0x10000000).proficiencyColumn, 'NECROMANCER');
+    });
+
+    test('both spellings of "no kit" fall back to the class', () {
+      // 0x40000000 is KIT.IDS's TRUECLASS and plain 0 is the other encoding.
+      // Neither is a column, and reading either as one would look up
+      // 'TRUECLASS' and cap every proficiency at nothing.
+      expect(sheetOf().proficiencyColumn, 'FIGHTER_MAGE');
+      expect(sheetOf(kitId: 0).proficiencyColumn, 'FIGHTER_MAGE');
+    });
+
+    test('a class the tables cannot name has no column', () {
+      expect(sheetOf(classId: 173).proficiencyColumn, isNull);
+    });
+
+    test('the ceiling comes from the table, for this character', () {
+      // A Fighter/Mage caps at 3 in Two-Weapon Style where a Fighter caps at
+      // 3 and a Mage at 0. Aard is the first, has 2, and so has one pip left
+      // — which is exactly the edit the in-game run makes.
+      final sheet = CharacterSheet(
+        character: fakeCharacter(),
+        rules: const GeneratedGameRules(),
+        proficiencies: const ProficiencyCatalogue({
+          114: ProficiencyEntry(
+            id: 114,
+            identifier: '2WEAPON',
+            name: 'Two-Weapon Style',
+            maximumByColumn: {'FIGHTER_MAGE': 3, 'FIGHTER': 3, 'MAGE': 0},
+          ),
+        }),
+      );
+
+      expect(sheet.maximumPipsFor(114), 3);
+    });
+
+    test('no catalogue means no ceiling, not a ceiling of zero', () {
+      // A machine with no game installed. Capping at zero would silently
+      // refuse every proficiency edit and look like a broken field.
+      expect(sheetOf().maximumPipsFor(114), isNull);
+    });
+
+    test('names what the catalogue names, and numbers what it does not', () {
+      final sheet = CharacterSheet(
+        character: fakeCharacter(),
+        rules: const GeneratedGameRules(),
+        proficiencies: const ProficiencyCatalogue({
+          114: ProficiencyEntry(
+            id: 114,
+            identifier: '2WEAPON',
+            name: 'Two-Weapon Style',
+            maximumByColumn: {},
+          ),
+          100: ProficiencyEntry(
+            id: 100,
+            identifier: 'FLAILMORNINGSTAR',
+            maximumByColumn: {},
+          ),
+        }),
+      );
+
+      expect(sheet.proficiencyLabel(114), 'Two-Weapon Style');
+      // No talk table, so the table's own row label — which is information,
+      // where invented text would not be.
+      expect(sheet.proficiencyLabel(100), 'FLAILMORNINGSTAR');
+      // Nothing at all known: the number, rather than a blank tile.
+      expect(sheet.proficiencyLabel(96), 'Proficiency 96');
     });
   });
 
