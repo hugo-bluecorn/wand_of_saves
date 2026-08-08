@@ -166,44 +166,49 @@ Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seve
 
 > ### 🔶 Where the last session stopped, 2026-08-08
 >
-> **The format layer for the character sheet is complete, tested and committed. The app side is
-> not started.** Three commits are on `main` **and not yet pushed**.
+> **The character sheet is finished — format layer, domain, editing and panel — and every check
+> is green.** 207 app tests, 186 format tests, `analyze` clean, no suppressions.
 >
-> `packages/infinity_formats` can now read every remaining character attribute — saving throws,
-> resistances, thief skills, proficiencies, inventory — and patch any of them, all fixed-width.
-> Nothing of it reaches the screen yet.
+> The panel now shows and edits saving throws, resistances, the eight thief skills and Lore,
+> armour class modifiers, attacks, morale, luck, fatigue, intoxication, turn undead, tracking,
+> **and proficiencies** — the last of which are opcode 233 effects patched in place, named from
+> the player's own `weapprof.2da` through their own `dialog.tlk` (D11's reader, now built).
 >
-> **Next session picks up at the app side**, in this order:
+> **The one thing still owed is the in-game run, and it is the phase gate.** Set Xzar's
+> Save vs. Spell 12 → 5 and raise Aard's Two-Weapon Style 2 → 3, then read the record screen:
+> a plain header byte and a patched effect, both visible at once, and Aard gaining a pip should
+> also move his off-hand THAC0. Nothing here is *verified* until that comes back. `BALDUR.gam.bak`
+> is written automatically.
 >
-> 1. `Character` carries the new values. Follow the `AbilityScores` precedent — small
->    `@MappableClass` value objects (`SavingThrows`, `ThiefSkills`, `Resistances`) rather than
->    thirty loose fields; needs `fvm dart run build_runner build`.
-> 2. New `CharacterStat` entries. **`applyEdit` needs no change** — anything carrying a
->    `CreHeaderField` already routes through `SetCharacterStat` → `Gam.withCreatureField`.
-> 3. A `SetProficiency` command over `Gam.withEffectField`, which exists and is tested.
-> 4. Panel groups: Combat, Skills (**labelled as bases**), Proficiencies, Resistances.
+> **What is deliberately not done**, and why, in the order a next session would want them:
 >
-> Proficiency *names* need `KeyIndex` + `BifArchive` + `Tlk` at runtime, not the generator — D11.
-> The plan is `~/.claude/plans/rustling-churning-truffle.md`.
->
-> **Owed to the user: one in-game run.** Set Xzar's Save vs. Spell 12 → 5 and raise Aard's
-> Two-Weapon Style 2 → 3, then read the record screen. A header byte and a patched effect, both
-> visible on one screen.
+> 1. **Granting a proficiency the character lacks** — adds an effect, resizes the CRE, moves
+>    every GAM offset after it. That is Phase 1's layout pass, and inventory wants it too.
+> 2. **Derived skill and Lore values.** Showing Imoen's 35 beside her stored 15 needs
+>    `skilldex.2da` and the class tables. The reader for those now exists — `ResourceRepository`
+>    — so this is a small slice rather than a new capability.
+> 3. **The panel is long.** Six groups stacked, and the plan says tab it *when* it grows
+>    unwieldy rather than pre-emptively. It has now grown; that judgement is due.
 
 ### What exists
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 183 tests.
+  one table serves reader and writer and they cannot disagree. 186 tests.
   - **The whole character sheet reads**: saving throws, resistances, thief skills, attacks,
     armour class modifiers, morale, fatigue, luck. Homogeneous groups come back as **records**.
   - **`Effect`** — enough of the 264-byte v2 record to find proficiencies, which on BG:EE are
     opcode 233 effects and **not** header bytes. `Gam.withEffectField` patches one.
   - **`KeyIndex` + `BifArchive`** — `chitin.key` and the uncompressed archives, so the app can
     read the player's own tables. Why that is necessary at all: **D11**.
-- **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. Stats are editable
-  and write back: sealed `EditCommand`s over a curated `CharacterStat` table, undo/redo on
-  immutable savegame snapshots, atomic write leaving a `.bak`. 163 tests.
+- **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. **The whole
+  character sheet is editable** and writes back: sealed `EditCommand`s over a curated
+  `CharacterStat` table of 49 fields, plus `SetProficiency` for the pips that live in effects;
+  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 207 tests.
+  - **`ResourceRepository`** reads rules tables out of the player's own installation —
+    `chitin.key` → BIFF → `2DA` — which is what D11 requires for anything carrying a strref.
+    Names are left as strrefs there and merged with the talk table in `PartyViewModel`, because
+    **repositories must never be aware of each other**.
 - **A rules layer** — `lib/domain/rules/`, generated from IESDP's copies of the game's own `2DA`
   and `IDS` tables. Turns stored numbers into what the game displays. Two traps, both paid for:
   - ⚠️ **`IDS` files repeat keys** — `KIT.IDS` numbers `0x4000` twice — so `IdsMap` keeps the
@@ -212,6 +217,11 @@ Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seve
   - ⚠️ **IESDP's 2DA copies are per-game, and its `weapprof.2da` is the BG2:EE one.** Numeric
     tables survived that and are confirmed in game; **anything carrying a strref must come from
     the player's installation** or you ship tutorial prose as a proficiency name. **D11.**
+    Confirmed against the real install 2026-08-08: proficiency 114 is `2WEAPON`, strref **25023**,
+    "Two-Weapon Style". IESDP's copy says 31138 — a paragraph about temples.
+  - ⚠️ **A `2DA` row label is not a key either.** BG:EE's `weapprof.2da` labels two rows `AXE` and
+    two `SPEAR` — the obsolete BG1 proficiencies and the live ones — so the `ID` column is the
+    key. `Table2da` keeps the displaced rows in `shadowed`, the same fix `IdsMap` needed.
 - Party portraits come from `PORTRT<n>.bmp` beside each save; `dart:ui` decodes them, so no BIFF
   index or BAM decoder is involved. `PORTRT<n>` is the n-th **party slot**, settled 2026-08-08.
 
@@ -256,6 +266,16 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | Kit encoding | **Closed 2026-08-08.** `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and `0x4000` (`TRUECLASS`) both mean no kit. ⚠️ A kit **replaces** the class name — the game writes `Necromancer`, never `Mage (Necromancer)`. |
 | `hpconbon` warrior column | **Closed 2026-08-08.** Raised to Constitution 18 and loaded: the engine printed `Bonus Hit Points/Level: +4`, the warrior row, on a **Fighter/Mage**. `warriorRoots` was right, and the rule is *containment* — half a fighter is a warrior. |
 | Multi-class hit-point multiplier | **The only one still open, and deferred on purpose — D10.** The bonus is *not* divided among classes and *not* softened for a half-mage, both measured. Whether it multiplies by the highest class level or averages needs a multi-class character **above level 1**. ⚠️ **Do not edit a level to find out** — that pulls the whole recalculation layer forward. It answers itself when the protagonist's total experience is between **4000 and 5000** (Fighter 2 / Mage 1). |
+
+⚠️ **Seeing the screen is still the only way some defects surface.** The panel's stat tiles have
+now been too narrow **twice** — 148 truncated "Exceptional strength", 222 was needed for
+"Paralysis / Poison / Death" — and both times the suite, the analyzer and code review all passed.
+Rendering and measuring in a test does not help: `flutter test` draws with a font whose every
+glyph is a full em square, so it reports labels as overflowing that fit perfectly well. What is
+in the suite is a budget on the label *strings*. **Look at a capture after any panel change.**
+On this machine the app is a Wayland window and XTEST cannot reach it, so driving it by
+synthetic clicks does not work; rendering the widget tree to a PNG with a real font loaded via
+`FontLoader` does.
 
 ⚠️ **All three of the closed ones were open only because the fixtures were too plain.** Two needed
 a party of more than one; the third needed one number above 16. A save with four members and a
