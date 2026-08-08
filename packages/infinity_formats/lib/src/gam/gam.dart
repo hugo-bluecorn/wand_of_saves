@@ -14,6 +14,7 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/gam/gam_npc.dart';
 import 'package:infinity_formats/src/spec/cre_v1_0.dart';
@@ -158,11 +159,53 @@ final class Gam {
     required int creOffset,
     required CreHeaderField field,
     required int value,
+  }) => _withField(
+    base: creOffset,
+    field: field,
+    value: value,
+    what: '$field of the creature at $creOffset',
+  );
+
+  /// Writes [value] into [field] of the effect at [effectStart] inside the
+  /// creature record at [creOffset].
+  ///
+  /// The counterpart to [withCreatureField] one level deeper. Proficiencies
+  /// live here rather than in the creature header on BG:EE — see
+  /// `Cre.proficiencies` — so raising a pip means patching a dword inside an
+  /// effect record. Still **fixed-width**: nothing moves, and the layout pass
+  /// is not involved.
+  ///
+  /// [effectStart] is relative to the creature, as `Effect.start` reports it,
+  /// and [creOffset] is absolute, as `GamNpc.creOffset` does. Adding them here
+  /// rather than at the call site keeps the two conventions from being mixed
+  /// by whoever calls next.
+  Gam withEffectField({
+    required int creOffset,
+    required int effectStart,
+    required EffectV2Field field,
+    required int value,
+  }) => _withField(
+    base: creOffset + effectStart,
+    field: field,
+    value: value,
+    what: '$field of the effect at $effectStart in the creature at $creOffset',
+  );
+
+  /// One patch routine for every fixed-width field, whatever declares it.
+  ///
+  /// Keyed on [FormatField] so width and signedness always come from the
+  /// layout table (D6) and never from the call site. Two copies of this
+  /// `switch` would be two chances to disagree with the reader.
+  Gam _withField({
+    required int base,
+    required FormatField field,
+    required int value,
+    required String what,
   }) {
-    final at = creOffset + field.offset;
-    if (creOffset < 0 || at + field.length > bytes.length) {
+    final at = base + field.offset;
+    if (base < 0 || at + field.length > bytes.length) {
       throw InfinityFormatException.truncated(
-        what: '$field of the creature at $creOffset',
+        what: what,
         expected: at + field.length,
         actual: bytes.length,
         offset: at,

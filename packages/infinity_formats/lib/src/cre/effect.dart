@@ -14,6 +14,8 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/spec/format_field.dart';
+
 /// Fields of a `V2` effect **as a creature record embeds it**.
 ///
 /// ⚠️ **These are not IESDP's offsets, and the difference is eight bytes.**
@@ -26,7 +28,7 @@ import 'dart:typed_data';
 /// The first eight bytes are the signature and version, which IESDP says are
 /// "zeroed out" for an embedded effect — and are, on all 42 effects in the
 /// four-member fixture.
-enum EffectV2Field {
+enum EffectV2Field implements FormatField {
   /// Signature. Zeroed when embedded.
   signature(0x00, 4),
 
@@ -54,10 +56,18 @@ enum EffectV2Field {
   const EffectV2Field(this.offset, this.length);
 
   /// Byte offset from the start of the embedded record.
+  @override
   final int offset;
 
   /// Width in bytes.
+  @override
   final int length;
+
+  /// No field read here is signed. Opcodes, parameters and timing modes are
+  /// all counts or identifiers; a pip count below zero is not a state the
+  /// engine has. It becomes a constructor parameter the day one turns up.
+  @override
+  bool get signed => false;
 }
 
 /// One effect attached to a creature — a **view** over the record's bytes.

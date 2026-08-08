@@ -353,6 +353,46 @@ void main() {
     );
 
     test(
+      'a pip can be raised in place, moving exactly one byte',
+      () {
+        // Changing a proficiency is a fixed-width edit: parameter 1 is a
+        // dword already sitting in the record, so 2 -> 3 touches its low byte
+        // and nothing else. No layout pass, no resize. Only *granting* a
+        // proficiency the character lacks adds an effect.
+        final gam = gamOf();
+        final npc = gam.partyMembers.first;
+        final before = CreCodec.decode(npc.creBytes, source: npc.creResref);
+        final twoWeapon = before.effects.firstWhere(
+          (e) => e.isProficiency && e.parameter2 == 114,
+        );
+
+        final after = gam.withEffectField(
+          creOffset: npc.creOffset,
+          effectStart: twoWeapon.start,
+          field: EffectV2Field.parameter1,
+          value: 3,
+        );
+
+        expect(after.bytes, hasLength(gam.bytes.length));
+        expect(
+          [
+            for (var i = 0; i < gam.bytes.length; i++)
+              if (gam.bytes[i] != after.bytes[i]) i,
+          ],
+          hasLength(1),
+          reason: 'one byte of one dword',
+        );
+
+        final reread = CreCodec.decode(
+          after.partyMembers.first.creBytes,
+          source: npc.creResref,
+        );
+        expect(reread.proficiencies, {114: 3, 100: 2});
+      },
+      skip: skip,
+    );
+
+    test(
       'a pip count is never zero or absurd',
       () {
         // BG:EE allows at most five pips, and an effect granting none would
