@@ -266,6 +266,18 @@ void main() {
 
         expect(aard.numberOfAttacks, 1);
         expect(aard.fatigue, 3);
+        // Morale sits at 0x23f, immediately after Charisma and immediately
+        // before the break point. IESDP: "default value is 10 (capped 0-20)".
+        //
+        // The break point is the interesting one: it is 0 here and 4, 4 and 5
+        // on the three recruited companions, whose recovery time is 60 against
+        // the protagonist's 1. That is the same asymmetry as the class-level
+        // slots -- **the player's own record is not shaped like a shipped
+        // NPC's** -- and it is why these are read from the party rather than
+        // from whichever creature came first.
+        expect(aard.morale, 10);
+        expect(aard.moraleBreak, 0);
+        expect(creaturesOf()[3].moraleBreak, 5);
         // Nobody in this party resists anything, and no armour class modifier
         // is set -- but a wrong offset would read the saving throws, which
         // are not zero.
@@ -324,7 +336,9 @@ void main() {
       'each member is proficient in what they are actually carrying',
       () {
         // Opcode 233 carries the pip count in parameter 1 and a STATS.IDS
-        // index in parameter 2 -- 89-108 weapons, 111-115 fighting styles.
+        // index in parameter 2; the player's own weapprof.2da says which
+        // indices are proficiencies, and on BG:EE that is 89-107 and 115 for
+        // weapons, 111-114 for the fighting styles.
         // Four characters, four different answers, and every one of them
         // matches the weapon in that character's hand:
         //

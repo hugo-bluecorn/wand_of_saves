@@ -82,8 +82,15 @@ final class Effect {
 
   /// The opcode that grants weapon and fighting-style proficiencies.
   ///
-  /// Parameter 1 is the pip count; parameter 2 is a `STATS.IDS` index, where
-  /// 89-108 are weapons and 111-115 the fighting styles.
+  /// Parameter 1 is the pip count; parameter 2 is a `STATS.IDS` index.
+  ///
+  /// ⚠️ **Which indices are proficiencies is a per-game fact, so it is not
+  /// stated here.** An earlier note said "89-108 weapons, 111-115 styles";
+  /// the player's own `weapprof.2da` says otherwise on both ends — BG:EE
+  /// numbers the weapons 89-107 **and 115** (`PROFICIENCYCLUB`, which BG2:EE
+  /// calls `EXTRAPROFICIENCY1`), the styles 111-114, and gives 109 and 110 to
+  /// things that are not proficiencies at all. The table is the authority;
+  /// a hardcoded range would be wrong on the next game and silently so.
   static const int proficiencyOpcode = 233;
 
   final Uint8List _cre;

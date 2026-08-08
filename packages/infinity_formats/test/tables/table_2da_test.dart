@@ -117,5 +117,64 @@ FIGHTER      20  19  18
       expect(table.columns, isEmpty);
       expect(table.rowLabels, isEmpty);
     });
+
+    group('a row label that repeats', () {
+      /// The shape of the player's own `weapprof.2da`, cut to three columns.
+      ///
+      /// **Not hypothetical.** BG:EE's file labels two rows `AXE` and two
+      /// `SPEAR` — the obsolete BG1 proficiencies 6 and 3, then the ones the
+      /// engine actually uses, 92 and 98. The label is not the key; the `ID`
+      /// column is.
+      const weapprof = '''
+2DA V1.0
+0
+                 ID   NAME_REF FIGHTER
+LARGE_SWORD      0    0        0
+SPEAR            3    0        0
+AXE              6    0        0
+BASTARDSWORD     89   25000    5
+AXE              92   25003    5
+SPEAR            98   25010    5
+''';
+
+      test('keeps the last row under the label, as the engine reads it', () {
+        // Last-wins is right here and it is measured, not a convention: the
+        // rows BG:EE uses are the *second* of each pair, and its own opcode
+        // 233 type list starts at 89.
+        final table = Table2da.parse(weapprof);
+
+        expect(table.number('AXE', 'ID'), 92);
+        expect(table.number('SPEAR', 'ID'), 98);
+      });
+
+      test('keeps the displaced rows rather than dropping them', () {
+        // The whole point. A caller keyed on the ID column — which is what
+        // proficiencies need — cannot see rows 3 and 6 through `rows` at all,
+        // and losing a row silently is exactly what made KIT.IDS's duplicate
+        // key look like an undecodable kit encoding.
+        final table = Table2da.parse(weapprof);
+
+        expect(table.shadowed, hasLength(2));
+        // In the order the file displaced them: `AXE 92` is read before
+        // `SPEAR 98`, so `AXE 6` is the first row to lose its label.
+        expect(table.shadowed.map((row) => row.label), ['AXE', 'SPEAR']);
+        expect(table.shadowed.map((row) => row.cells.first), ['6', '3']);
+      });
+
+      test('reports every row once, displaced ones included', () {
+        // So a consumer keying on a column never has to know that `rows` and
+        // `shadowed` are two halves of one file.
+        //
+        // Unordered, and deliberately: a repeated label keeps its *first*
+        // position in `rows` while holding its *last* value, so the winners
+        // are not in file order and nothing should be written as if they were.
+        final table = Table2da.parse(weapprof);
+
+        expect(
+          table.allRows.map((row) => row.cells.first),
+          unorderedEquals(['0', '3', '6', '89', '92', '98']),
+        );
+      });
+    });
   });
 }

@@ -209,6 +209,9 @@ final class Cre {
   /// Tracking skill (0-100).
   int get trackingSkill => _read(CreHeaderField.trackingSkill);
 
+  /// Morale. IESDP: "default value is 10 (capped 0-20)".
+  int get morale => _read(CreHeaderField.morale);
+
   /// The morale at which this creature panics.
   int get moraleBreak => _read(CreHeaderField.moraleBreak);
 
@@ -317,7 +320,10 @@ final class Cre {
       Effect.at(bytes, effectsOffset + i * effectLength),
   ];
 
-  /// Proficiency pips by `STATS.IDS` index — 89-108 weapons, 111-115 styles.
+  /// Proficiency pips by `STATS.IDS` index.
+  ///
+  /// Which indices exist is the player's `weapprof.2da` to say, not this
+  /// codec's — see [Effect.proficiencyOpcode].
   ///
   /// ⚠️ **Proficiencies are not header bytes on BG:EE.** IESDP documents them
   /// at `0x6e`-`0x81`, and those bytes are zero on every character in a save

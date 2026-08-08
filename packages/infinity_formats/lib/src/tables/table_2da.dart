@@ -26,15 +26,28 @@
 /// Constitution 16 is +2 hit points per level. Both were confirmed against
 /// what BG:EE printed on screen.
 ///
+/// One row of a [Table2da] — its label, and the cells after it.
+///
+/// A record rather than a class: it is two fields with no behaviour, and the
+/// names are what carry the meaning (D-note in `context/dart-data-modelling.md`
+/// §records).
+typedef TableRow = ({String label, List<String> cells});
+
 /// Row labels and column headers are both just strings, because the two axes
 /// swap roles between tables: `dexmod` has ability scores down the side, while
 /// `thac0` has class names down the side and *levels* across the top.
+///
+/// ⚠️ **A row label can repeat, and both rows are real.** BG:EE's own
+/// `weapprof.2da` labels two rows `AXE` and two `SPEAR`. The last wins, and
+/// the losers are kept in [shadowed] — see [allRows] for why that matters and
+/// why "last" here where `IdsMap` takes the first.
 final class Table2da {
-  /// Wraps parsed contents directly.
+  /// Wraps parsed contents directly, with the duplicate rows [shadowed].
   const Table2da({
     required this.defaultValue,
     required this.columns,
     required this.rows,
+    this.shadowed = const [],
   });
 
   /// Reads a `2DA` table from [text].
@@ -60,15 +73,21 @@ final class Table2da {
     }
 
     final rows = <String, List<String>>{};
+    final shadowed = <TableRow>[];
     for (final line in body.skip(2)) {
       final cells = line.trim().split(RegExp(r'\s+'));
-      rows[cells.first] = cells.skip(1).toList();
+      final label = cells.first;
+      final values = cells.skip(1).toList();
+      final displaced = rows[label];
+      if (displaced != null) shadowed.add((label: label, cells: displaced));
+      rows[label] = values;
     }
 
     return Table2da(
       defaultValue: body[0].trim(),
       columns: body[1].trim().split(RegExp(r'\s+')),
       rows: rows,
+      shadowed: shadowed,
     );
   }
 
@@ -86,11 +105,39 @@ final class Table2da {
   /// Column headers, in file order.
   final List<String> columns;
 
-  /// Cells by row label, in file order.
+  /// Cells by row label. **Last row per label wins**; see [shadowed].
+  ///
+  /// Ordered by where each label *first* appeared, which is file order for
+  /// every table without a repeat and subtly not for the ones with. Do not
+  /// read position here as position in the file.
   final Map<String, List<String>> rows;
 
-  /// Row labels, in file order.
+  /// The rows a repeated label displaced, in the order the file listed them.
+  ///
+  /// **Last-wins is measured, not a convention** — the opposite of `IdsMap`,
+  /// and for a reason the data gives. `weapprof.2da` lists `AXE` as the
+  /// obsolete BG1 proficiency 6 and *then* as 92, and 92 is the one BG:EE's
+  /// opcode 233 uses; its type list does not start until 89. The later row is
+  /// the live one.
+  ///
+  /// Keeping the losers is what stops that being a silent choice: a caller
+  /// keyed on a *column* rather than on the label needs every row, and the
+  /// equivalent loss in `IdsMap` is what left the kit encoding recorded as
+  /// undecodable for want of a `TRUECLASS` row nothing had noticed was gone.
+  final List<TableRow> shadowed;
+
+  /// Every distinct row label. A label the file repeats appears once.
   Iterable<String> get rowLabels => rows.keys;
+
+  /// Every row the file holds, [shadowed] ones included.
+  ///
+  /// What to walk when the key is a column — a proficiency's `ID`, say —
+  /// rather than the label, so a consumer never has to know that [rows] and
+  /// [shadowed] are two halves of one file.
+  Iterable<TableRow> get allRows => [
+    for (final entry in rows.entries) (label: entry.key, cells: entry.value),
+    ...shadowed,
+  ];
 
   /// The cell at [row] and [column], or `null` if either is not in the table.
   ///
