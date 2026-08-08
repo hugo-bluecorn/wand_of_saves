@@ -450,7 +450,84 @@ the identifier on `_` and counting is the rule. Reading it off the bytes instead
 **"Level 1/1/1" on a plain Thief** in the character panel, and the defect survived review because
 every one-character fixture was the player's own record, where the two rules agree.
 
-#### ⚠️ The first byte of a CRE resref is overwritten with `*` — 2026-08-08
+#### The rest of the character sheet — added 2026-08-08
+
+Everything the record screen shows and the app did not, all **fixed-width header bytes**, so the
+patch-a-copy writer covers them:
+
+| Block | Offsets |
+|---|---|
+| Saving throws ×5 | `0x54`–`0x58` — death, wands, polymorph, breath, spells |
+| Resistances ×11 | `0x59`–`0x63` — fire … missile |
+| Thief skills ×8 | `0x45` hide, then `0x64`–`0x6a` — detect illusion, set traps, **lore**, locks, move silently, find traps, pick pockets |
+| Attacks per round | `0x53` |
+| Armour class modifiers ×4 | `0x4a`–`0x50`, **signed** — crushing, missile, piercing, slashing |
+| Fatigue, intoxication, luck | `0x6b`–`0x6d` |
+| Morale break, racial enemy, recovery | `0x240`, `0x241`, `0x242` |
+| Turn undead, tracking | `0x82`, `0x83` |
+
+**Saving throws are stored exactly as displayed** — the one block in this format that is not a
+base. Xzar holds `14/11/13/15/12` and his record screen printed Paralysis/Poison/Death **14**,
+Rod/Staff/Wand **11**, Petrification/Polymorph **13**, Breath **15**, Spell **12**.
+
+⚠️ **Thief skills and Lore are not.** They are the points *allocated*; the engine adds class, race
+and Dexterity bonuses before display. Imoen stores Move Silently **15** and the game shows **35**;
+she stores Lore **3** and shows **10**; Xzar stores Lore **3** and shows **15**. Same hazard as hit
+points and THAC0 — label them, and do not invent a derived figure until the tables are in.
+
+### ⚠️ Proficiencies are effects, not header bytes — 2026-08-08
+
+IESDP documents BG1 weapon proficiencies at `0x6e`–`0x81`. **Those bytes are zero on all four
+party members** of a save where the game plainly shows pips, so they are deliberately absent from
+`CreHeaderField` rather than recorded as meaningful zeroes.
+
+They are stored as **opcode 233 effects** in the creature's own effects section, with the pip
+count in *parameter 1* and a `STATS.IDS` index in *parameter 2* — 89–108 the weapons, 111–115 the
+fighting styles.
+
+Two facts about the record, each of which cost a wrong guess:
+
+- **Effects here are v2 at 264 bytes, not the 48 of a v1 record.** `effectVersion == 1` means v2.
+  Confirmed by the section chain dividing exactly: Aard's effects run 1340 → 6884, and
+  5544 = 21 × 264.
+- ⚠️ **An embedded effect is the EFF *body alone*, so IESDP's body offsets are eight bytes too
+  high.** IESDP numbers the body from `0x08`; what it calls body `0x08` is byte 0 of the stored
+  record. Reading with IESDP's numbers puts the opcode eight bytes early and returns **zero for
+  every effect in the file** — which looks like "this creature has no effects" rather than like a
+  bug. `EffectV2Field` carries the corrected table.
+
+**It cross-validates four ways, which is what makes it a measurement.** Every member is proficient
+in the weapon actually in their hand:
+
+| Member | Proficiencies | Carrying |
+|---|---|---|
+| Aard | Two-Weapon Style 2, Flail/Morning Star 2 | Battle Axe + `BLUN03` **Flail +1** off-hand, "Attacks per Round: 2", separate off-hand THAC0 |
+| Imoen | Short Sword 1, Shortbow 1 | `BOW05` Shortbow and 37 arrows |
+| Montaron | Short Sword 2, Sling 2 | `SW1H07` Short Sword |
+| Xzar | Dagger 1 | `DAGG01`, and his record screen reads "Proficiencies: Dagger +" |
+
+A wrong offset or stride gives every character the same answer, usually an empty one.
+
+**Raising a pip is a fixed-width edit** — parameter 1 is a dword already in the record, so 2 → 3
+changes *one byte* of the 101,352-byte save. Only **granting** a proficiency a character lacks adds
+an effect, and that resizes.
+
+### Inventory — read cleanly 2026-08-08, and mostly editable without a layout pass
+
+Item records are **20 bytes** (`0x00` resref, `0x08` expiration, `0x0a`/`0x0c`/`0x0e` quantities,
+`0x10` flags). The slot table is **fixed at 80 bytes** — 40 words, each `0xFFFF` or an index into
+the items table, in the BG order: helmet, armour, shield, gloves, two rings, amulet, belt, boots,
+four weapons, four quivers, cloak, three quick items, sixteen pack slots, magic weapon, then
+"selected weapon" and "selected weapon ability".
+
+**Because the slot table is fixed, quantities, charges and the identified/stolen/undroppable flags
+are all fixed-width edits.** Only adding or removing an item resizes the items table — and removing
+also shifts every slot index above the one removed.
+
+No item record in the fixture is unreferenced by a slot, so the engine keeps the table tight;
+writing an orphan would be novel behaviour rather than something it already tolerates.
+
+### ⚠️ The first byte of a CRE resref is overwritten with `*` — 2026-08-08
 
 `CHARBASE` → `*HARBASE`, `IMOEN1` → `*MOEN1`, `XZAR` → `*ZAR`. **Replacement, not a prefix**:
 `*ZAR` occupies four bytes where a prefix would need five, and `*HARBASE` is eight where a prefix
@@ -786,6 +863,45 @@ ways:
   else disturbed. See §Stored vs displayed.
 
 Still fixed-width, so still no layout pass. Phase 1 remains the untouched half.
+
+## `chitin.key` and the BIFF archives — measured 2026-08-08
+
+The resource index turned out to be one of the cheapest things in this project, not one of the
+most expensive. Phase 3's difficulty is icons and pickers, not this.
+
+| Fact | Value |
+|---|---|
+| Header | 24 bytes: signature, version, archive count, resource count, two table offsets |
+| Archive entry | 12 bytes: length, name offset, name length, location |
+| Resource entry | **14 bytes**: 8 resref, 2 type, 4 locator |
+| BG:EE install | **83 archives, 37,342 resources**, 1,530 of them items |
+| Locator packing | archive `>> 20 & 0xFFF`, tileset `>> 14 & 0x3F`, file `& 0x3FFF` |
+| Cost | ~22 ms to index every resource |
+
+**The resource table closes exactly at the file length** — 2405 + 37,342 × 14 = 525,193 — the same
+kind of invariant that gives confidence in the GAM layout, and it is asserted.
+
+**All 83 archives are plain uncompressed `BIFFV1  `.** No decompressor is needed for this game;
+the compressed variants belong to titles D3 puts out of scope. A test walks all 83 and says so, so
+an install carrying `BIFC` fails by name rather than deeper down.
+
+### ⚠️ IESDP's 2DA copies are per-game, and the strref ones are wrong here
+
+**This is the trap.** IESDP ships the **BG2:EE** `weapprof.2da`. Its `NAME_REF` column points into
+BG2's talk table, so generating proficiency names from it produces *tutorial prose*: IESDP gives
+strref 31138 for what should be "Two-Weapon Style", and 31138 in this game reads *"While in
+temples, talk to the priests as you would an innkeeper…"*.
+
+The player's own `weapprof.2da` gives **25023**, which reads **"Two-Weapon Style"**.
+
+The lesson is narrower than "IESDP is unreliable", and worth stating precisely:
+
+- **Tables of pure numbers survived**, and are confirmed in game — `dexmod` row 17 → −3 and
+  `hpconbon` 16 → +2 and 18 → +4 were all read off the record screen.
+- **Anything carrying a strref must come from the installation.** A strref is an index into a talk
+  table, and the talk table is per-game.
+
+That is why the app reads `chitin.key` at all, and it is recorded as **D11**.
 
 ## Oracles
 

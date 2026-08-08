@@ -89,14 +89,32 @@ with `hpconbon.2da` and with the game's own portrait overlay.
 
 ---
 
-## Phase 3 — resource index
+## Phase 3 — resource index · **partly done 2026-08-08**
 
 KEY/BIFF reader in an isolate; 2DA/IDS tables; item and spell pickers.
 **Gate:** 37,815 resources indexed in under a second, UI never blocks.
 
+- ✅ **`KeyIndex` and `BifArchive`.** Not planned for this phase — D11 forced them early, because
+  IESDP's `weapprof.2da` is the BG2:EE one and its strrefs name the wrong strings. Measured: 83
+  archives, 37,342 resources, the resource table closing exactly at the file length, all archives
+  plain uncompressed `BIFFV1`, **~22 ms to index the lot**.
+- ⬅️ **The gate is not in doubt but is not yet proved in the app** — nothing runs it off the UI
+  thread yet, because nothing in the app calls it yet.
+- ⬅️ **Item and spell pickers**, and reading the player's `2DA`s in place of the generated ones.
+- ⬅️ **The rules-based hit-point cap**, which needs the per-class dice tables IESDP does not ship.
+
 ## Phase 4 — inventory, spells, proficiencies
 
-Needs Phase 3's pickers. Inventory slot records are 20 bytes (from EE Keeper's disassembly).
+**Cheaper than this entry assumed.** Measured 2026-08-08:
+
+- **Inventory already reads** with the existing `CreCodec`. Item records are 20 bytes and the slot
+  table is **fixed at 80**, so quantities, charges and the identified/stolen/undroppable flags are
+  all *fixed-width* edits needing neither Phase 3 nor Phase 1. Only adding or removing an item
+  resizes.
+- **Proficiencies already read**, and a pip is a one-byte patch. Only *granting* one a character
+  lacks adds an effect and resizes.
+- Item **names** need Phase 3's index — proven end to end: `AX1H03` resolves to "Battle Axe of
+  Mauletar +2", matching the game's own inventory screen.
 
 ## Phase 5 — graphics
 

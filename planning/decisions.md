@@ -440,3 +440,49 @@ experience is between 4000 and 5000.
 
 **This decision is about sequencing, not about the feature.** Level editing is in scope for the
 application; it arrives with the recalculation layer, not before it.
+
+---
+
+## D11 — Rules data: generated from IESDP, **except anything carrying a strref** · CLOSED (2026-08-08)
+
+**Decision: keep the generated rules layer, and read the player's own installation for any table
+whose values are string references.**
+
+### What forced it
+
+D9 and the rules layer rest on IESDP's copies of the game's `2DA` and `IDS` files, which is what
+let Phase 2.5 ship without a KEY/BIFF reader. That holds for tables of pure numbers and it does
+not hold in general.
+
+IESDP ships the **BG2:EE** `weapprof.2da`. Its `NAME_REF` column is a strref, strrefs index a talk
+table, and the talk table is per game. Generating proficiency names from it would have shipped
+`31138` — *"While in temples, talk to the priests as you would an innkeeper…"* — as the name of
+Two-Weapon Style. The player's own file gives `25023`, which reads "Two-Weapon Style".
+
+Nothing about that was visible in the data. Both files parse, both have a `NAME_REF` column, both
+give a plausible integer. **Only resolving the strref shows which one is wrong**, which is why
+this is a decision rather than a note: the failure mode is silent and the check is not obvious.
+
+### The rule
+
+| Table content | Source |
+|---|---|
+| Numbers only — `dexmod`, `hpconbon`, `CLASS.IDS`, `RACE.IDS` | **IESDP**, generated and committed. Confirmed in game. |
+| Anything with a strref — `weapprof.2da`'s `NAME_REF`, item and spell names | **The player's installation**, via `KeyIndex` + `BifArchive` + `Tlk`. |
+
+### What it costs, which is less than it looks
+
+The reader is small. `chitin.key` is a flat table that closes exactly at the file's length; all 83
+BG:EE archives are plain uncompressed `BIFFV1  `, so no decompressor is needed; and indexing every
+one of the 37,342 resources takes about 22 ms. Measurements are in
+`docs/findings/verified-format-offsets.md`.
+
+**It also settles a question Phase 3 was carrying.** `GameRules`' own doc comment already
+anticipated this — *"Phase 3's resource index can implement this over the player's actual files
+with nothing above it changing"*. That is now the plan of record for names, not an aspiration.
+
+### What it does not change
+
+The generated tables stay. Regenerating from IESDP remains correct for numeric rules, and a fresh
+clone still builds without the game installed — an absent installation degrades to showing a
+resref rather than failing, the same way an absent `dialog.tlk` already degrades.

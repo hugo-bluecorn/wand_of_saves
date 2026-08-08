@@ -161,21 +161,57 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phases 0, 2 and 2.5 are done and merged to `main` (PR #3, 2026-08-08). Phase 3 is next.**
+**Phases 0, 2 and 2.5 are done and merged. Work in progress: finishing the character sheet.**
 Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases.
+
+> ### 🔶 Where the last session stopped, 2026-08-08
+>
+> **The format layer for the character sheet is complete, tested and committed. The app side is
+> not started.** Three commits are on `main` **and not yet pushed**.
+>
+> `packages/infinity_formats` can now read every remaining character attribute — saving throws,
+> resistances, thief skills, proficiencies, inventory — and patch any of them, all fixed-width.
+> Nothing of it reaches the screen yet.
+>
+> **Next session picks up at the app side**, in this order:
+>
+> 1. `Character` carries the new values. Follow the `AbilityScores` precedent — small
+>    `@MappableClass` value objects (`SavingThrows`, `ThiefSkills`, `Resistances`) rather than
+>    thirty loose fields; needs `fvm dart run build_runner build`.
+> 2. New `CharacterStat` entries. **`applyEdit` needs no change** — anything carrying a
+>    `CreHeaderField` already routes through `SetCharacterStat` → `Gam.withCreatureField`.
+> 3. A `SetProficiency` command over `Gam.withEffectField`, which exists and is tested.
+> 4. Panel groups: Combat, Skills (**labelled as bases**), Proficiencies, Resistances.
+>
+> Proficiency *names* need `KeyIndex` + `BifArchive` + `Tlk` at runtime, not the generator — D11.
+> The plan is `~/.claude/plans/rustling-churning-truffle.md`.
+>
+> **Owed to the user: one in-game run.** Set Xzar's Save vs. Spell 12 → 5 and raise Aard's
+> Two-Weapon Style 2 → 3, then read the record screen. A header byte and a patched effect, both
+> visible on one screen.
 
 ### What exists
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 153 tests.
+  one table serves reader and writer and they cannot disagree. 183 tests.
+  - **The whole character sheet reads**: saving throws, resistances, thief skills, attacks,
+    armour class modifiers, morale, fatigue, luck. Homogeneous groups come back as **records**.
+  - **`Effect`** — enough of the 264-byte v2 record to find proficiencies, which on BG:EE are
+    opcode 233 effects and **not** header bytes. `Gam.withEffectField` patches one.
+  - **`KeyIndex` + `BifArchive`** — `chitin.key` and the uncompressed archives, so the app can
+    read the player's own tables. Why that is necessary at all: **D11**.
 - **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. Stats are editable
   and write back: sealed `EditCommand`s over a curated `CharacterStat` table, undo/redo on
-  immutable savegame snapshots, atomic write leaving a `.bak`. 162 tests.
+  immutable savegame snapshots, atomic write leaving a `.bak`. 163 tests.
 - **A rules layer** — `lib/domain/rules/`, generated from IESDP's copies of the game's own `2DA`
-  and `IDS` tables. Turns stored numbers into what the game displays. ⚠️ **`IDS` files repeat
-  keys** — `KIT.IDS` numbers `0x4000` twice — so `IdsMap` keeps the *first* name and records the
-  displaced ones; last-wins is what made the kit encoding look undecodable.
+  and `IDS` tables. Turns stored numbers into what the game displays. Two traps, both paid for:
+  - ⚠️ **`IDS` files repeat keys** — `KIT.IDS` numbers `0x4000` twice — so `IdsMap` keeps the
+    *first* name and records the displaced ones; last-wins is what made the kit encoding look
+    undecodable.
+  - ⚠️ **IESDP's 2DA copies are per-game, and its `weapprof.2da` is the BG2:EE one.** Numeric
+    tables survived that and are confirmed in game; **anything carrying a strref must come from
+    the player's installation** or you ship tutorial prose as a proficiency name. **D11.**
 - Party portraits come from `PORTRT<n>.bmp` beside each save; `dart:ui` decodes them, so no BIFF
   index or BAM decoder is involved. `PORTRT<n>` is the n-th **party slot**, settled 2026-08-08.
 
