@@ -128,6 +128,24 @@ final class Cre {
   /// Charisma (1-25).
   int get charisma => _read(CreHeaderField.charisma);
 
+  /// Class, as a `CLASS.IDS` number. `7` is `FIGHTER_MAGE`.
+  ///
+  /// Reported as the number it is: naming it needs `CLASS.IDS`, which is game
+  /// data rather than file layout, so it belongs above a codec.
+  int get classId => _read(CreHeaderField.characterClass);
+
+  /// Race, as a `RACE.IDS` number. `2` is `ELF`.
+  int get raceId => _read(CreHeaderField.race);
+
+  /// Alignment, as an `ALIGNMEN.IDS` number. `0x21` is `NEUTRAL_GOOD`.
+  int get alignmentId => _read(CreHeaderField.alignment);
+
+  /// Gender, as a `GENDER.IDS` number. `1` is `MALE`.
+  int get genderId => _read(CreHeaderField.gender);
+
+  /// The kit dword. `0x40000000` means no kit.
+  int get kitId => _read(CreHeaderField.kit);
+
   /// Resref of this creature's dialogue file.
   String get dialogFile => decodeFixedString(
     bytes,

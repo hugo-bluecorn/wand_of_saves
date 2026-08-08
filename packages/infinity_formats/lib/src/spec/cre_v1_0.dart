@@ -138,6 +138,30 @@ enum CreHeaderField implements FormatField {
   /// Morale.
   morale(0x23f, 1),
 
+  /// Kit, as a dword. `0x40000000` is what a character with no kit carries.
+  ///
+  /// Not a `KIT.IDS` key as stored — the relationship between the two is not
+  /// understood, so this is reported raw.
+  kit(0x244, 4),
+
+  /// Race (`RACE.IDS`). `2` is `ELF`.
+  race(0x272, 1),
+
+  /// Class (`CLASS.IDS`). `7` is `FIGHTER_MAGE`.
+  ///
+  /// Named `characterClass` because `class` is a Dart keyword and cannot be an
+  /// identifier. The IESDP row is simply "Class".
+  characterClass(0x273, 1),
+
+  /// Gender (`GENDER.IDS`). `1` is `MALE`.
+  gender(0x275, 1),
+
+  /// Alignment (`ALIGNMEN.IDS`). `0x21` is `NEUTRAL_GOOD`.
+  ///
+  /// The identifier table for this one is written in **hex**, unlike
+  /// `CLASS.IDS` and `RACE.IDS` — the stored byte 33 is `0x21`.
+  alignment(0x27b, 1),
+
   /// Offset to the known-spells section, relative to the start of the CRE.
   knownSpellsOffset(0x2a0, 4),
 

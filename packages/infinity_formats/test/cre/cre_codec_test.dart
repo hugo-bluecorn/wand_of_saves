@@ -101,6 +101,21 @@ void main() {
     });
   });
 
+  group('identity', () {
+    test('reads the class, race and alignment bytes', () {
+      final bytes = bareCre();
+      bytes[CreHeaderField.characterClass.offset] = 7;
+      bytes[CreHeaderField.race.offset] = 2;
+      bytes[CreHeaderField.alignment.offset] = 0x21;
+
+      final cre = CreCodec.decode(bytes);
+
+      expect(cre.classId, 7);
+      expect(cre.raceId, 2);
+      expect(cre.alignmentId, 0x21);
+    });
+  });
+
   group('signedness', () {
     // Every creature in the real save sits at armour class 10 and belongs to
     // the party, so neither of these can be caught by the fixture: both fields
@@ -334,6 +349,23 @@ void main() {
         // field reads 110 where the game shows 11.0, and BG1 reputation only
         // ranges 0-20, so 110 cannot be a raw value.
         expect(CreCodec.decode(everyone().first.creBytes).reputation, 11.0);
+      },
+      skip: skip,
+    );
+
+    test(
+      'the protagonist is a Fighter/Mage elf of neutral good',
+      () {
+        // Confirmed against BG:EE's own record screen, which reads
+        // "Fighter / Mage", "Elf" and "Neutral Good" for this character.
+        // Turning these numbers into those words is CLASS.IDS, RACE.IDS and
+        // ALIGNMEN.IDS, which belong to the app layer -- a codec reports what
+        // the file says and does not name things.
+        final cre = CreCodec.decode(everyone().first.creBytes);
+
+        expect(cre.classId, 7);
+        expect(cre.raceId, 2);
+        expect(cre.alignmentId, 0x21);
       },
       skip: skip,
     );
