@@ -17,10 +17,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
+import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
 
 /// The editor shell for one savegame: the party down the left, the selected
@@ -181,6 +183,13 @@ class _PortraitRail extends ConsumerWidget {
 /// `dart:ui` decodes BMP natively — so these are the player's real portraits
 /// with no decoder and no resource index behind them. Three states: present,
 /// absent, unreadable.
+///
+/// **The game bakes its own HUD into the picture**, hit points included, so a
+/// portrait keeps showing the numbers from the moment the file was saved and
+/// will disagree with the pane as soon as anything is edited. That is not a
+/// staleness bug to fix — it cannot be repainted, the pixels are the game's —
+/// but it does need saying, which is what the tooltip is for. Those same baked
+/// numbers are how the Constitution bonus was discovered.
 class _Portrait extends StatelessWidget {
   const _Portrait({required this.path, this.selected = false});
 
@@ -206,6 +215,15 @@ class _Portrait extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final path = this.path;
 
+    return Tooltip(
+      message:
+          'The picture the game saved with this file. The hit points drawn on '
+          'it are from that moment and do not follow your edits.',
+      child: _frame(colors, path),
+    );
+  }
+
+  Widget _frame(ColorScheme colors, String? path) {
     return Container(
       width: width,
       height: height,
@@ -264,6 +282,10 @@ class _CharacterSummary extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final sheet = CharacterSheet(
+      character: character,
+      rules: ref.watch(gameRulesProvider),
+    );
 
     void set(CharacterStat stat, int value) => ref
         .read(partyProvider(slotDirectoryName).notifier)
@@ -281,7 +303,11 @@ class _CharacterSummary extends ConsumerWidget {
         Text(character.name, style: theme.textTheme.headlineSmall),
         const SizedBox(height: 4),
         Text(
-          'Level ${character.levelLabel}',
+          // What BG:EE's own record screen says, in its order.
+          [
+            'Level ${character.levelLabel}',
+            if (sheet.identity.isNotEmpty) sheet.identity,
+          ].join(' · '),
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -292,22 +318,19 @@ class _CharacterSummary extends ConsumerWidget {
           children: [
             _StatField(
               character: character,
+              sheet: sheet,
               stat: CharacterStat.currentHitPoints,
               value: character.currentHitPoints,
-              label: 'Hit points (base)',
+              label: 'Current hit points',
               onCommitted: set,
-              // Verified against the game's own portrait overlay: it renders
-              // 8/9 where the savegame stores 6/7, and 9/9 where it stores
-              // 7/7, at a constant Constitution of 16. The stored field is
-              // what an editor edits; saying "base" stops the difference
-              // reading as a bug.
               hint:
-                  'The savegame stores hit points without the Constitution '
-                  'bonus. The game adds that bonus when it displays them, so '
-                  'this number is lower than the one on your character sheet.',
+                  'What the savegame stores, and what you edit. The game adds '
+                  'the Constitution bonus before showing it, and clamps to '
+                  'the maximum — the "in game" tile does the same arithmetic.',
             ),
             _StatField(
               character: character,
+              sheet: sheet,
               stat: CharacterStat.maximumHitPoints,
               value: character.maximumHitPoints,
               label: 'Maximum hit points',
@@ -315,6 +338,7 @@ class _CharacterSummary extends ConsumerWidget {
             ),
             _StatField(
               character: character,
+              sheet: sheet,
               stat: CharacterStat.experience,
               value: character.experience,
               label: 'Experience',
@@ -322,6 +346,7 @@ class _CharacterSummary extends ConsumerWidget {
             ),
             _StatField(
               character: character,
+              sheet: sheet,
               stat: CharacterStat.gold,
               value: character.gold,
               label: 'Gold (carried)',
@@ -332,6 +357,7 @@ class _CharacterSummary extends ConsumerWidget {
             ),
             _StatField(
               character: character,
+              sheet: sheet,
               stat: CharacterStat.thac0,
               value: character.thac0,
               label: 'THAC0',
@@ -339,6 +365,7 @@ class _CharacterSummary extends ConsumerWidget {
             ),
             _StatField(
               character: character,
+              sheet: sheet,
               stat: CharacterStat.armorClassNatural,
               value: character.armorClassNatural,
               label: 'Armour class (natural)',
@@ -350,6 +377,7 @@ class _CharacterSummary extends ConsumerWidget {
             ),
             _StatField(
               character: character,
+              sheet: sheet,
               stat: CharacterStat.armorClassEffective,
               value: character.armorClass,
               label: 'Armour class (effective)',
@@ -359,6 +387,27 @@ class _CharacterSummary extends ConsumerWidget {
                   'Which of the two armour-class fields the game actually '
                   'reads is still being measured.',
             ),
+            if (sheet.maximumHitPointsInGame != null)
+              _ReadOnlyStat(
+                label: 'Hit points (in game)',
+                value:
+                    '${sheet.currentHitPointsInGame} / '
+                    '${sheet.maximumHitPointsInGame}',
+                hint:
+                    'Stored hit points plus '
+                    '${sheet.hitPointBonusPerLevel} per level from '
+                    'Constitution ${character.abilities.constitution}, which '
+                    'is what the game shows on the character sheet.',
+              ),
+            if (sheet.armourClassInGame != null)
+              _ReadOnlyStat(
+                label: 'Armour class (in game)',
+                value: sheet.armourClassInGame.toString(),
+                hint:
+                    'Armour class plus ${sheet.armourClassModifier} from '
+                    'Dexterity ${character.abilities.dexterity}. Equipment '
+                    'moves it further, and that needs the item records.',
+              ),
             _ReadOnlyStat(
               label: 'Reputation',
               value: character.reputation.toStringAsFixed(1),
@@ -377,9 +426,12 @@ class _CharacterSummary extends ConsumerWidget {
             for (final (stat, value) in _abilities(character.abilities))
               _StatField(
                 character: character,
+                sheet: sheet,
                 stat: stat,
                 value: value,
-                label: stat.label,
+                // The modifier goes in the label, so what a score is *worth*
+                // sits beside the score instead of only in a tooltip.
+                label: _abilityLabel(stat, sheet),
                 onCommitted: set,
                 // Percentile strength is only meaningful at Strength 18,
                 // which is the one place the engine consults it.
@@ -391,6 +443,23 @@ class _CharacterSummary extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// A stat's label with the modifier the game's tables give it.
+  ///
+  /// Only the two that this build can look up say anything: Constitution's
+  /// hit points per level and Dexterity's armour class. The rest are plain,
+  /// rather than implying a modifier of zero where there is simply no table
+  /// read yet.
+  String _abilityLabel(CharacterStat stat, CharacterSheet sheet) {
+    final modifier = switch (stat) {
+      CharacterStat.constitution => sheet.hitPointBonusPerLevel,
+      CharacterStat.dexterity => sheet.armourClassModifier,
+      _ => null,
+    };
+    if (modifier == null || modifier == 0) return stat.label;
+    final sign = modifier > 0 ? '+' : '';
+    return '${stat.label}  $sign$modifier';
   }
 
   List<(CharacterStat, int)> _abilities(AbilityScores abilities) => [
@@ -528,6 +597,7 @@ InputDecoration _statDecoration(
 class _StatField extends StatefulWidget {
   _StatField({
     required this.character,
+    required this.sheet,
     required this.stat,
     required this.value,
     required this.label,
@@ -537,6 +607,10 @@ class _StatField extends StatefulWidget {
   }) : super(key: ValueKey('${character.creOffset}:${stat.name}'));
 
   final Character character;
+
+  /// Where the bounds come from — some depend on another field's value.
+  final CharacterSheet sheet;
+
   final CharacterStat stat;
   final int value;
   final String label;
@@ -581,17 +655,32 @@ class _StatFieldState extends State<_StatField> {
     super.dispose();
   }
 
+  /// The range this field accepts, as the error line phrases it.
+  String get _range =>
+      '${widget.sheet.lowerBoundFor(widget.stat)}–'
+      '${widget.sheet.upperBoundFor(widget.stat)}';
+
   void _commit() {
     final typed = int.tryParse(_controller.text.trim());
-    if (typed == null || !widget.stat.holds(typed)) {
+    if (typed == null || !widget.sheet.isWithinBounds(widget.stat, typed)) {
       // Refuse rather than clamp. Silently turning 300 into 25 is the kind of
       // quiet substitution that makes an editor untrustworthy.
-      setState(() => _error = '${widget.stat.minimum}–${widget.stat.maximum}');
+      setState(() => _error = _range);
       return;
     }
     setState(() => _error = null);
     if (typed != widget.value) widget.onCommitted(widget.stat, typed);
   }
+
+  /// The error to show for the value as it stands, typed or not.
+  ///
+  /// A savegame can arrive already inconsistent — current hit points above the
+  /// maximum, say — and saying so is more use than rendering it as if it were
+  /// ordinary. Silence would leave the player to notice that the game quietly
+  /// discards it.
+  String? get _errorText =>
+      _error ??
+      (widget.sheet.isWithinBounds(widget.stat, widget.value) ? null : _range);
 
   @override
   Widget build(BuildContext context) {
@@ -609,7 +698,7 @@ class _StatFieldState extends State<_StatField> {
           context,
           label: widget.label,
           hasHint: widget.hint != null,
-          error: _error,
+          error: _errorText,
         ),
       ),
     );
