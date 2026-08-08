@@ -42,21 +42,26 @@ class CharacterSheet {
   ///
   /// Anything the tables cannot name is left out rather than shown as a
   /// number — a raw `173` on a character sheet is noise, not information.
-  /// A kit qualifies its class, `Mage (Necromancer)`, so an unnameable class
-  /// takes the kit down with it rather than leaving a parenthesis adrift.
   String get identity => [
     rules.genderName(character.genderId),
     rules.raceName(character.raceId),
-    _classWithKit,
+    _classOrKit,
     rules.alignmentName(character.alignmentId),
   ].nonNulls.join(' · ');
 
-  String? get _classWithKit {
-    final name = rules.className(character.classId);
-    if (name == null) return null;
-    final kit = kitName;
-    return kit == null ? name : '$name ($kit)';
-  }
+  /// The kit if there is one, otherwise the class.
+  ///
+  /// **A kit replaces the class name; it does not qualify it.** Measured
+  /// 2026-08-08 — BG:EE's record screen for a Necromancer reads
+  /// `Necromancer: Level 1` and `Male / Human / Necromancer / Chaotic Evil`,
+  /// with the word "Mage" nowhere on the screen, while the progression
+  /// underneath is still the mage's (`Next Level: 2500`). An earlier pass
+  /// rendered `Mage (Necromancer)`, which nothing in the game does.
+  ///
+  /// Measured on a mage school, which is the only kit any fixture carries.
+  /// BG:EE names the other kits the same way — a kitted fighter reads
+  /// `Berserker` — but that part is convention here until one turns up.
+  String? get _classOrKit => kitName ?? rules.className(character.classId);
 
   /// The character's kit, or `null` when they have none.
   ///

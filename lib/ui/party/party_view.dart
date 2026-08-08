@@ -360,8 +360,15 @@ class _CharacterSummary extends ConsumerWidget {
               sheet: sheet,
               stat: CharacterStat.thac0,
               value: character.thac0,
-              label: 'THAC0',
+              label: 'THAC0 (base)',
               onCommitted: set,
+              hint:
+                  'The game calls this "Base THAC0" and shows a second, lower '
+                  'number beside it — Strength, Dexterity and weapon '
+                  'proficiencies are applied before display, and a Necromancer '
+                  'with 20 here reads 20 while a thief with 20 reads 18. '
+                  'Working the modified value out needs proficiency data this '
+                  'app does not read yet, so only the stored base is shown.',
             ),
             _StatField(
               character: character,

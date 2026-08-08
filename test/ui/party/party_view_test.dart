@@ -158,15 +158,21 @@ void main() {
     );
   });
 
-  testWidgets('a specialist mage is named by his school', (tester) async {
-    // Xzar stores 0x10000000, whose high word is KIT.IDS 0x1000.
+  testWidgets('a specialist mage is named by his school, not his class', (
+    tester,
+  ) async {
+    // Xzar stores 0x10000000, whose high word is KIT.IDS 0x1000. BG:EE's
+    // record screen reads "Necromancer: Level 1" and "Male / Human /
+    // Necromancer / Chaotic Evil" -- the kit stands in for the class, and
+    // "Mage" appears nowhere.
     await showParty(tester);
     await select(tester, 'Xzar');
 
     expect(
-      find.text('Level 1 · Male · Elf · Mage (Necromancer) · Neutral Good'),
+      find.text('Level 1 · Male · Elf · Necromancer · Neutral Good'),
       findsOneWidget,
     );
+    expect(find.textContaining('Mage'), findsNothing);
   });
 
   testWidgets('no character is ever labelled a generalist mage', (

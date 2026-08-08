@@ -350,6 +350,14 @@ Free checks that came with the same two screenshots, all agreeing with what is r
 (the **effective** field `0x48`, and `0x46` still moving nothing at its edited `8`),
 `Reputation: Average (11)` from the GAM's `110`, and party gold `12455`.
 
+⚠️ **The game shows *two* THAC0s and we only hold one.** Its record screen prints `Base THAC0` and
+then a modified figure: Imoen reads `Base THAC0: 20` / `THAC0: 18`, Aard `Base THAC0: 15` /
+`Main Hand THAC0: 12` / `Off-hand THAC0: 14` from `Strength Modification: -3` and
+`Proficiencies: +2`. The stored byte is the **base**, so an editor showing `20` beside a game
+showing `18` reads as a bug the way `6/7` against `8/9` did. The field is therefore labelled
+**"THAC0 (base)"** and says why. Computing the modified value needs proficiency data, which is
+Phase 3 territory — the same place the hit-point cap waits.
+
 One number is new. **Multi-class experience splits exactly**, at a second data point: the CRE holds
 **364** and the record screen shows `Fighter: Experience 182` and `Mage: Experience 182`. The
 earlier run's 325 showed 162 apiece, losing one to rounding, so the engine floors — 364 divides
@@ -369,6 +377,20 @@ Necromancer.
 | Xzar | `MAGE` | `0x10000000` | `0x1000` | `MAGESCHOOL_NECROMANCER` |
 
 **"No kit" has two encodings**, `0x00000000` and `0x40000000`, and both must render as nothing.
+
+⚠️ **A kit REPLACES the class name; it does not qualify it.** BG:EE's record screen for Xzar:
+
+```
+Necromancer: Level 1        <- not "Mage"
+Next Level: 2500            <- but still the mage progression
+Male / Human / Necromancer / Chaotic Evil
+```
+
+The word "Mage" appears nowhere on the screen, while the class byte underneath is still `1`. A
+first pass here rendered `Mage (Necromancer)`, which was ours and not the game's; the screenshot
+that was asked for to confirm the *spelling* corrected the *form* instead. Measured on a mage
+school, the only kit any fixture carries — BG:EE names the other kits the same way, a kitted
+fighter reading `Berserker`, but that part is convention until one turns up.
 
 **Why the earlier note said `KIT.IDS` has no `TRUECLASS` row.** It has one. `KIT.IDS` numbers
 `0x4000` **twice** — `TRUECLASS` first, `MAGESCHOOL_GENERALIST` fourteen rows later — and
@@ -410,12 +432,17 @@ proves duplicate keys are a property of the format rather than one bad row in on
 Only the *player's own* record zeroes the slot it does not use. Every shipped NPC record leaves a
 `1` there:
 
-| Member | Class | `0x0234`–`0x0236` | Slots that mean anything |
-|---|---|---|---|
-| Aard | `FIGHTER_MAGE` | `01 01 00` | 2 |
-| Imoen | `THIEF` | `01 01 01` | **1** |
-| Montaron | `FIGHTER_THIEF` | `01 01 01` | **2** |
-| Xzar | `MAGE` | `01 01 01` | **1** |
+| Member | Class | `0x0234`–`0x0236` | Slots that mean anything | Game shows |
+|---|---|---|---|---|
+| Aard | `FIGHTER_MAGE` | `01 01 00` | 2 | `Multi-Class` · `Fighter: Level 1` · `Mage: Level 1` |
+| Imoen | `THIEF` | `01 01 01` | **1** | `Thief: Level 1` |
+| Montaron | `FIGHTER_THIEF` | `01 01 01` | **2** | — |
+| Xzar | `MAGE` | `01 01 01` | **1** | `Necromancer: Level 1` |
+
+The right-hand column is the engine's own record screen, read 2026-08-08. Imoen and Xzar store
+three levels apiece and the game prints **one line each**; Aard stores two and gets a `Multi-Class`
+heading with a block per class. Nothing in the bytes distinguishes Imoen from Montaron — they are
+byte-identical here — so the class is the only thing that can.
 
 **How many slots are meaningful comes from `CLASS.IDS`, never from the bytes.** Every playable
 class name spells its classes out, so `FIGHTER_MAGE_THIEF` is three and `THIEF` is one; splitting

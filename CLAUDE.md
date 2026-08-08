@@ -217,7 +217,7 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | Question | State |
 |---|---|
 | `PORTRT<n>` index mapping | **Closed 2026-08-08.** `PORTRT<n>` is the n-th party slot, fingerprinted by the hit points the game bakes into each image. |
-| Kit encoding | **Closed 2026-08-08.** `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and `0x4000` (`TRUECLASS`) both mean no kit. |
+| Kit encoding | **Closed 2026-08-08.** `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and `0x4000` (`TRUECLASS`) both mean no kit. ⚠️ A kit **replaces** the class name — the game writes `Necromancer`, never `Mage (Necromancer)`. |
 | `hpconbon` warrior column | **Closed 2026-08-08.** Raised to Constitution 18 and loaded: the engine printed `Bonus Hit Points/Level: +4`, the warrior row, on a **Fighter/Mage**. `warriorRoots` was right, and the rule is *containment* — half a fighter is a warrior. |
 | Multi-class hit-point multiplier | **The only one still open, and deferred on purpose — D10.** The bonus is *not* divided among classes and *not* softened for a half-mage, both measured. Whether it multiplies by the highest class level or averages needs a multi-class character **above level 1**. ⚠️ **Do not edit a level to find out** — that pulls the whole recalculation layer forward. It answers itself when the protagonist's total experience is between **4000 and 5000** (Fighter 2 / Mage 1). |
 

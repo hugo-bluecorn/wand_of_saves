@@ -260,18 +260,23 @@ void main() {
   });
 
   group('kit', () {
-    test('a specialist mage is named, and joins the identity line', () {
+    test('a kit REPLACES the class name — the game showed exactly this', () {
       // Xzar, party[3] of the Party fixture: a MAGE storing 0x10000000, which
-      // shifted right 16 is 0x1000 = MAGESCHOOL_NECROMANCER. He is a
-      // Necromancer, which is what makes the shift a measurement.
+      // shifted right 16 is 0x1000 = MAGESCHOOL_NECROMANCER.
+      //
+      // 2026-08-08, BG:EE's record screen for him:
+      //
+      //   Necromancer: Level 1        <- not "Mage"
+      //   Next Level: 2500            <- still the mage progression
+      //   Male / Human / Necromancer / Chaotic Evil
+      //
+      // So the class byte stays MAGE and only the *name* changes. An earlier
+      // pass rendered "Mage (Necromancer)", which was our invention: nothing
+      // in the game writes the base class beside the kit.
       final xzar = sheetOf(classId: 1, kitId: 0x10000000);
 
       expect(xzar.kitName, 'Necromancer');
-      expect(
-        xzar.identity,
-        'Male · Elf · Mage (Necromancer) · Neutral Good',
-        reason: 'the kit qualifies the class rather than standing beside it',
-      );
+      expect(xzar.identity, 'Male · Elf · Necromancer · Neutral Good');
     });
 
     test('a character with no kit shows none, on either encoding', () {
@@ -282,13 +287,18 @@ void main() {
       expect(sheetOf().identity, 'Male · Elf · Fighter / Mage · Neutral Good');
     });
 
-    test('an unnamed class cannot carry a kit into the identity line', () {
-      // The parenthesis has nothing to attach to, so the kit drops with it
-      // rather than appearing on its own.
+    test('a known kit stands in for a class the tables cannot name', () {
+      // Since the kit replaces the class outright there is nothing for it to
+      // attach to, so an unnameable class is no reason to drop a name we do
+      // have. 173 is a genuine gap in CLASS.IDS.
       expect(
         sheetOf(classId: 173, kitId: 0x10000000).identity,
-        'Male · Elf · Neutral Good',
+        'Male · Elf · Necromancer · Neutral Good',
       );
+    });
+
+    test('an unnameable class with no kit still shows nothing', () {
+      expect(sheetOf(classId: 173).identity, 'Male · Elf · Neutral Good');
     });
   });
 
