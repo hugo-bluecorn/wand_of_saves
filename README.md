@@ -10,11 +10,12 @@ It is a functional successor to [EE Keeper](http://forum.baldursgate.com/discuss
 — the feature set is the target, but the UI and architecture are deliberately different: Material 3
 rather than Win32/MFC, and Flutter MVVM rather than MFC Document/View.
 
-> **Status: Phase 2 — the app has a window.** `infinity_formats` reads GAM, CRE and TLK; a real
-> save has been edited and loaded back in Baldur's Gate. The Flutter app lists your saves with the
-> game's own screenshots. Next: the party editor.
+> **Status: it edits saves.** Pick a save, pick a character, change a stat, save it back — and the
+> result loads in Baldur's Gate with the change applied and nothing else touched. The app shows
+> each character's numbers both as the file stores them and as the game will display them, since
+> the two differ more than you would expect. Next: the resource index, for item and spell pickers.
 >
-> **Phase 1 (the writer's layout pass) is deliberately deferred** — every edit the app needs so far
+> **Phase 1 (the writer's layout pass) is deliberately deferred** — every edit the app makes so far
 > is a fixed-width field, so nothing resizes. That changes when inventory arrives.
 
 ## What's here
@@ -30,19 +31,14 @@ rather than Win32/MFC, and Flutter MVVM rather than MFC Document/View.
 | `context/` | Pinned Flutter/Dart canon (carried over from an earlier experiment). |
 | `reference/README.md` | Pointers to read-only reference trees and game data. |
 | `packages/infinity_formats/` | Pure-Dart format codecs. Must never import `package:flutter` — enforced by `test/flutter_free_test.dart`. |
-
-## Try the spike
-
-```bash
-```
-
-Parses a real BG1EE save: party, embedded creature records, ability scores, and `dialog.tlk`
-strings — in ~120 lines of pure Dart.
+| `tool/gen/` | Generates the game's rules tables from IESDP into `lib/domain/rules/`. |
+| `tool/dev/` | Copies real saves into gitignored test fixtures. |
 
 ## Architecture at a glance
 
 Flutter **MVVM** — View / ViewModel / Repository / Service — with state managed by
-**Riverpod 3.x using manually declared providers, no code generation**. The Infinity Engine format
+**Riverpod 3.x using manually declared providers** (no code generation *for Riverpod*; other
+dependencies decide for themselves, and all generated output is committed). The Infinity Engine format
 codecs live in `packages/infinity_formats`, a pure-Dart package that never imports Flutter, so it
 can be tested without a Flutter host. See [`planning/architecture.md`](planning/architecture.md).
 
@@ -52,6 +48,7 @@ can be tested without a Flutter host. See [`planning/architecture.md`](planning/
 fvm flutter pub get
 fvm flutter run -d linux        # desktop only: linux, macos, windows
 fvm flutter analyze
+fvm flutter test
 
 # The infinity_formats suite is a separate package and runs from its own directory.
 cd packages/infinity_formats && fvm dart test
