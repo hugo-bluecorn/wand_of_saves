@@ -201,10 +201,24 @@ deferred (see below). What exists:
     observed base of 10 is ambiguous — it is both the untouched `0x48` and the unarmoured default.
     Both fields are editable pending one decisive in-game run. See
     `docs/findings/verified-format-offsets.md` §Armour class is not settled.
-- ⬅️ **Here: the rules layer.** `../iesdp/files/2da/2da_bgee/` holds **198 BG:EE 2DA files**
-  (`hpconbon`, `dexmod`, `strmod`, `thac0`, `hpclass`) carrying real `2DA V1.0` payloads — so
-  derived values need **no KEY/BIFF reader** and can be *generated* rather than transcribed. Show
-  derived beside stored throughout.
+- ✅ **Phase 2.5 — the rules layer** (2026-08-08). `Table2da` and `IdsMap` in the package;
+  `tool/gen/generate_rules.dart` turns IESDP's copies of the game's own tables into committed Dart;
+  `GameRules` and `CharacterSheet` above them. **No KEY/BIFF reader was needed** — IESDP ships 198
+  BG:EE `2DA` files and the `IDS` tables as plain data.
+  - The pane now reads `Male · Elf · Fighter / Mage · Neutral Good`, shows hit points and armour
+    class **as the game will show them**, and puts each ability's modifier in its label. Every one
+    of those is asserted against a value BG:EE printed in a screenshot, so the suite is an oracle
+    comparison needing no game installed.
+  - **Bounds can depend on another field.** Current hit points are capped by *maximum* hit points,
+    not by the field's width — the engine discards anything above it. A savegame that arrives
+    inconsistent shows the error rather than rendering as if it were fine.
+  - Three things the tables still cannot answer, all recorded in the findings rather than guessed:
+    the rules-based **hit-point cap** (IESDP ships no per-class dice tables), the **warrior column**
+    (needs a Constitution 17+ character), and the **kit encoding** (the obvious decoding names a kit
+    for every character who has none).
+- ⬅️ **Here: Phase 3, the resource index.** KEY/BIFF in an isolate. It buys the real 2DA/IDS tables
+  from the player's own install — which is what a *modded* game needs, and what settles the three
+  open questions above — plus item and spell pickers.
 
 ### Phase 1 is deliberately deferred, and that is not an oversight
 

@@ -52,7 +52,7 @@ the existing patch-a-copy writer already covers it, proven in-game.
 applied and every other value intact. Measurements in `docs/findings/verified-format-offsets.md`
 §Stored vs displayed.
 
-## Phase 2.5 — the rules layer · **next**
+## Phase 2.5 — the rules layer · **done 2026-08-08**
 
 Derived values, shown beside stored ones. Prompted by finding that a savegame's numbers are not
 the numbers the player sees: hit points and THAC0 are both *bases* the engine modifies.
@@ -61,10 +61,12 @@ the numbers the player sees: hit points and THAC0 are both *bases* the engine mo
 holds 198 BG:EE 2DA files carrying real `2DA V1.0` payloads — `hpconbon` (Constitution → hit
 points), `dexmod` (Dexterity → armour class), `strmod`/`strmodex`, `thac0`, `hpclass`.
 
-- **Generate** the tables from those files; do not hand-write them — the same rule this roadmap
-  already states for Phase 6's opcode database.
-- Needs class detection (warrior vs not) for the Constitution column at 17+.
-- Settles the armour-class question left open by the Phase 2 gate.
+- ✅ **Generated**, not hand-written — `tool/gen/generate_rules.dart`, run by hand, output
+  committed and stamped with the IESDP commit.
+- ✅ Class, race, gender and alignment names; Dexterity → armour class; Constitution → hit points.
+- ⬅️ Still open, and now known to need **Phase 3's real tables**: the rules-based hit-point cap
+  (IESDP ships no per-class dice tables), the warrior column (needs a Constitution 17+ character),
+  the kit encoding, and the armour-class question left by the Phase 2 gate.
 
 Haeravon's BG:EE walkthrough carries the same tables in prose and is useful as a **cross-check**,
 not a source: its §6.3 independently gives Constitution 16 → +2 hit points per level, agreeing

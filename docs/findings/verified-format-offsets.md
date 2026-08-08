@@ -198,6 +198,39 @@ with nothing worn: if the game shows a base of 6, it reads the field; if it show
 recomputes. Both armour-class fields are editable meanwhile — a field is not withheld on a guess
 about behaviour there is an oracle for.
 
+#### The rules tables, and what they still cannot say — 2026-08-08
+
+`../iesdp/files/2da/2da_bgee/` (198 files) and `../iesdp/files/ids/bgee/` carry the game's own
+tables as plain data, so **the rules layer needs no KEY/BIFF reader**. Five lookups were checked
+against the screenshots from the run above and all five matched:
+
+| Source | Reads | Game showed |
+|---|---|---|
+| `CLASS.IDS` 7 | `FIGHTER_MAGE` | Fighter / Mage |
+| `RACE.IDS` 2 | `ELF` | Elf |
+| `ALIGNMEN.IDS` 0x21 | `NEUTRAL_GOOD` | Neutral Good |
+| `GENDER.IDS` 1 | `MALE` | Male |
+| `dexmod.2da` row 17 | `AC −3` | "Dexterity: −3" |
+| `hpconbon.2da` row 16 | `+2` | "Bonus Hit Points/Level: +2" |
+
+**Three things they still cannot answer, each recorded rather than guessed:**
+
+- **What maximum hit points *should* be.** `hpclass.2da` only names the per-class dice tables
+  (`HPWAR`, `HPWIZ`, …); IESDP ships **none of them**, just a template page (`hpx.2da`, shown as
+  `hpmonk.2da`). So the rules-based cap is not computable from IESDP. Phase 3, reading the player's
+  own installation, is where it becomes possible.
+- **The warrior column.** `hpconbon.2da` splits `OTHER` from `WARRIOR` only from Constitution 17
+  up, and the only fixture has 16. Which classes are warriors is taken from the walkthrough
+  ("Fighters, Paladins, Rangers, and their kits") and matched by CLASS.IDS name.
+- **The kit encoding.** A character with no kit stores `0x40000000` at `0x0244`. Shifted right 16
+  that is `0x4000`, which is `KIT.IDS`'s **first entry**, `MAGESCHOOL_GENERALIST` — and `KIT.IDS`
+  has no `TRUECLASS` row at all. The obvious decoding therefore names a kit for every character who
+  has none, so nothing is displayed until this is measured.
+
+⚠️ **`2DA V1.0` is not always spelled that way.** 17 of the 194 BG:EE tables pad the signature —
+`hpclass.2da` writes `2DA        V1.0`. A parser matching the literal string produces a silently
+**empty** table for every one of them, which is the worst way for a rules table to be wrong.
+
 #### Two more facts nobody was looking for
 
 - **Multi-class experience is split per class on display.** The record screen showed
@@ -206,6 +239,16 @@ about behaviour there is an oracle for.
 - **Carried gold and the party purse are genuinely different numbers**, as `0x1c`'s
   documentation implies: the creature record read `0` while the game showed **12345**, which is
   the GAM header's `partyGold` from the earlier write-path proof.
+
+#### Identity fields, added 2026-08-08
+
+| Offset | Size | Field |
+|---|---|---|
+| `0x0244` | 4 | Kit — **not** a `KIT.IDS` key as stored; see above |
+| `0x0272` | 1 | Race (`RACE.IDS`) |
+| `0x0273` | 1 | Class (`CLASS.IDS`) |
+| `0x0275` | 1 | Gender (`GENDER.IDS`) |
+| `0x027b` | 1 | Alignment (`ALIGNMEN.IDS`), whose table is written in **hex** |
 
 ### ⚠️ Hit points are stored WITHOUT the Constitution bonus. Verified 2026-08-07
 
