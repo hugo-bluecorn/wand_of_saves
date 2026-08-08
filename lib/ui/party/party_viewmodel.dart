@@ -26,6 +26,7 @@ import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 part 'party_viewmodel.mapper.dart';
 
@@ -61,6 +62,7 @@ class PartyState with PartyStateMappable {
     required this.members,
     required this.reputation,
     this.proficiencies = ProficiencyCatalogue.empty,
+    this.skills = SkillCatalogue.empty,
     this.selectedIndex = 0,
     this.isDirty = false,
     this.canUndo = false,
@@ -97,6 +99,14 @@ class PartyState with PartyStateMappable {
   /// and their talk table for the text. Empty on a machine with no game
   /// installed, which the panel degrades to numbers for rather than failing.
   final ProficiencyCatalogue proficiencies;
+
+  /// Which thief skills each class may allocate points to.
+  ///
+  /// The player's own `thiefscl.2da`. Empty on a machine with no game
+  /// installed, which the panel reads as "allow everything" rather than
+  /// "forbid everything" — refusing edits on the strength of a table that was
+  /// never read would be a broken screen.
+  final SkillCatalogue skills;
 
   /// Which member the detail pane is showing.
   final int selectedIndex;
@@ -172,6 +182,10 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
   /// the likely trigger, not this.
   ProficiencyCatalogue _proficiencies = ProficiencyCatalogue.empty;
 
+  /// Which thief skills this character's class may allocate, resolved once at
+  /// load. No talk-table merge: `thiefscl.2da` is numbers all the way down.
+  SkillCatalogue _skills = SkillCatalogue.empty;
+
   @override
   Future<PartyState> build() async {
     final saves = ref.watch(saveGameRepositoryProvider);
@@ -196,9 +210,9 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
           await strings.lookup(member.nameStrref) ?? member.creResref;
     }
 
-    final catalogue = await ref
-        .watch(resourceRepositoryProvider)
-        .proficiencies();
+    final resources = ref.watch(resourceRepositoryProvider);
+    _skills = await resources.thiefSkills();
+    final catalogue = await resources.proficiencies();
     _proficiencies = catalogue.withNames({
       for (final entry in catalogue.entries.values)
         if (entry.nameStrref case final int strref)
@@ -290,6 +304,7 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
       ],
       reputation: _working!.reputation,
       proficiencies: _proficiencies,
+      skills: _skills,
       selectedIndex: selectedIndex,
       isDirty: _working != _onDisk,
       canUndo: _undoStack.isNotEmpty,

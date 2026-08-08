@@ -207,11 +207,17 @@ Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seve
 - **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. **The whole
   character sheet is editable** and writes back: sealed `EditCommand`s over a curated
   `CharacterStat` table of 49 fields, plus `SetProficiency` for the pips that live in effects;
-  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 207 tests.
+  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 229 tests.
+  - **Only what the class can actually have is offered.** The seven thief skills are greyed out
+    when the player's `thiefscl.2da` gives that class or kit 0% of them — a Fighter/Mage has none
+    — and proficiency tiles show their ceiling (`max 3`) rather than only refusing a bad value.
+    ⚠️ A field whose *stored* value is non-zero stays editable whatever the table says: an anomaly
+    you cannot touch is one you cannot correct.
   - **`ResourceRepository`** reads rules tables out of the player's own installation —
     `chitin.key` → BIFF → `2DA` — which is what D11 requires for anything carrying a strref.
     Names are left as strrefs there and merged with the talk table in `PartyViewModel`, because
-    **repositories must never be aware of each other**.
+    **repositories must never be aware of each other**. It reads `weapprof.2da` and
+    `thiefscl.2da`, which share a column vocabulary — one kit-then-class resolver serves both.
 - **A rules layer** — `lib/domain/rules/`, generated from IESDP's copies of the game's own `2DA`
   and `IDS` tables. Turns stored numbers into what the game displays. Two traps, both paid for:
   - ⚠️ **`IDS` files repeat keys** — `KIT.IDS` numbers `0x4000` twice — so `IdsMap` keeps the
@@ -289,7 +295,8 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | `PORTRT<n>` index mapping | **Closed 2026-08-08.** `PORTRT<n>` is the n-th party slot, fingerprinted by the hit points the game bakes into each image. |
 | Kit encoding | **Closed 2026-08-08.** `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and `0x4000` (`TRUECLASS`) both mean no kit. ⚠️ A kit **replaces** the class name — the game writes `Necromancer`, never `Mage (Necromancer)`. |
 | `hpconbon` warrior column | **Closed 2026-08-08.** Raised to Constitution 18 and loaded: the engine printed `Bonus Hit Points/Level: +4`, the warrior row, on a **Fighter/Mage**. `warriorRoots` was right, and the rule is *containment* — half a fighter is a warrior. |
-| Multi-class hit-point multiplier | **The only one still open, and deferred on purpose — D10.** The bonus is *not* divided among classes and *not* softened for a half-mage, both measured. Whether it multiplies by the highest class level or averages needs a multi-class character **above level 1**. ⚠️ **Do not edit a level to find out** — that pulls the whole recalculation layer forward. It answers itself when the protagonist's total experience is between **4000 and 5000** (Fighter 2 / Mage 1). |
+| Multi-class hit-point multiplier | **Open, and deferred on purpose — D10.** The bonus is *not* divided among classes and *not* softened for a half-mage, both measured. Whether it multiplies by the highest class level or averages needs a multi-class character **above level 1**. ⚠️ **Do not edit a level to find out** — that pulls the whole recalculation layer forward. It answers itself when the protagonist's total experience is between **4000 and 5000** (Fighter 2 / Mage 1). |
+| Who may Turn Undead, and who may Track | **Open, and deliberately not guessed at — 2026-08-08.** Every other editable field on the panel is now governed by a table: the seven thief skills by `thiefscl.2da`, proficiency pips by `weapprof.2da`. These two are governed by nothing that has been found — `tracking.2da` turns out to be per-area prose — so they stay editable rather than take an invented class rule. Cheap to settle: set Turn Undead on a mage and Tracking on a thief, and see whether BG:EE shows or ignores them. |
 
 ⚠️ **Seeing the screen is still the only way some defects surface.** The panel's stat tiles have
 now been too narrow **twice** — 148 truncated "Exceptional strength", 222 was needed for

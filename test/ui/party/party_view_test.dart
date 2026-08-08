@@ -28,6 +28,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 import 'package:wand_of_saves/ui/party/party_view.dart';
 
 import '../../support/fakes.dart';
@@ -136,6 +137,56 @@ void main() {
     ),
   });
 
+  /// The party's classes as the player's own `thiefscl.2da` sees them.
+  ///
+  /// Aard is `FIGHTER_MAGE` and has none of the seven; Imoen is `THIEF` and
+  /// has all of them; Montaron is `FIGHTER_THIEF` and likewise; Xzar is a
+  /// `NECROMANCER` and has none. Real values, cut to the columns in play.
+  const thiefSkillTable = SkillCatalogue({
+    'PICK_POCKETS': {
+      'FIGHTER_MAGE': 0,
+      'THIEF': 100,
+      'FIGHTER_THIEF': 100,
+      'NECROMANCER': 0,
+    },
+    'OPEN_LOCKS': {
+      'FIGHTER_MAGE': 0,
+      'THIEF': 100,
+      'FIGHTER_THIEF': 100,
+      'NECROMANCER': 0,
+    },
+    'FIND_TRAPS': {
+      'FIGHTER_MAGE': 0,
+      'THIEF': 100,
+      'FIGHTER_THIEF': 100,
+      'NECROMANCER': 0,
+    },
+    'MOVE_SILENTLY': {
+      'FIGHTER_MAGE': 0,
+      'THIEF': 100,
+      'FIGHTER_THIEF': 100,
+      'NECROMANCER': 0,
+    },
+    'HIDE_IN_SHADOWS': {
+      'FIGHTER_MAGE': 0,
+      'THIEF': 100,
+      'FIGHTER_THIEF': 100,
+      'NECROMANCER': 0,
+    },
+    'DETECT_ILLUSION': {
+      'FIGHTER_MAGE': 0,
+      'THIEF': 100,
+      'FIGHTER_THIEF': 100,
+      'NECROMANCER': 0,
+    },
+    'SET_TRAPS': {
+      'FIGHTER_MAGE': 0,
+      'THIEF': 100,
+      'FIGHTER_THIEF': 100,
+      'NECROMANCER': 0,
+    },
+  });
+
   /// The strings the player's talk table holds for [proficiencyTable].
   ///
   /// The real numbers, read off this machine's `dialog.tlk`. IESDP's copy of
@@ -169,7 +220,10 @@ void main() {
           // does not await real file I/O — the widget never settles and the
           // whole file times out rather than failing on an assertion.
           resourceRepositoryProvider.overrideWithValue(
-            const FakeResourceRepository(proficiencyTable),
+            const FakeResourceRepository(
+              proficiencyTable,
+              skills: thiefSkillTable,
+            ),
           ),
         ],
       );
@@ -295,6 +349,85 @@ void main() {
       ]) {
         expect(find.text(label), findsOneWidget, reason: '$label is missing');
       }
+    });
+
+    /// The tile whose label is [label], as the widget tree holds it.
+    TextField fieldFor(WidgetTester tester, String label) =>
+        tester.widget<TextField>(
+          find.ancestor(
+            of: find.text(label),
+            matching: find.byType(TextField),
+          ),
+        );
+
+    testWidgets('only offers the skills the class can actually have', (
+      tester,
+    ) async {
+      // ⚠️ **The defect this slice exists for.** The panel offered Open Locks
+      // to a Fighter/Mage, who cannot allocate a point of it — the game's own
+      // thiefscl.2da gives FIGHTER_MAGE 0 on all seven rows.
+      //
+      // Imoen on the same screen is the control: identical field, identical
+      // group, enabled, because THIEF is 100. One save, two answers.
+      await showParty(tester);
+
+      expect(fieldFor(tester, 'Open Locks').enabled, isFalse);
+      expect(fieldFor(tester, 'Pick Pockets').enabled, isFalse);
+
+      await select(tester, 'Imoen');
+
+      expect(fieldFor(tester, 'Open Locks').enabled, isTrue);
+      expect(fieldFor(tester, 'Pick Pockets').enabled, isTrue);
+    });
+
+    testWidgets('Lore stays editable for everyone', (tester) async {
+      // It has no row in the table because every class has it — confirmed in
+      // game, where a Necromancer's record screen prints Lore 15. Greying it
+      // out along with its neighbours would be the obvious wrong move.
+      await showParty(tester);
+
+      expect(fieldFor(tester, 'Lore').enabled, isTrue);
+
+      await select(tester, 'Xzar');
+
+      expect(fieldFor(tester, 'Lore').enabled, isTrue);
+    });
+
+    testWidgets('a skill the class cannot have stays editable if it is set', (
+      tester,
+    ) async {
+      // Montaron is a Fighter/Thief, so Hide in Shadows is his to allocate;
+      // the interesting case is the reverse. A value already in the record on
+      // a class that cannot have it is an anomaly, and a field you cannot
+      // touch is one you cannot correct — so a non-zero value wins over the
+      // table.
+      await showParty(tester);
+      await select(tester, 'Montaron');
+
+      expect(fieldFor(tester, 'Hide in Shadows').enabled, isTrue);
+    });
+
+    testWidgets('the fields with no governing table stay editable', (
+      tester,
+    ) async {
+      // Turn Undead and Tracking. No table says who may have them, so no rule
+      // is invented — recorded as an open question instead.
+      await showParty(tester);
+
+      expect(fieldFor(tester, 'Turn Undead').enabled, isTrue);
+      expect(fieldFor(tester, 'Tracking').enabled, isTrue);
+    });
+
+    testWidgets('a proficiency shows its ceiling without being asked', (
+      tester,
+    ) async {
+      // The other half of the complaint: the cap was enforced but invisible
+      // until a value was refused. A Fighter/Mage tops out at 3 in Two-Weapon
+      // Style, and the tile now says so up front.
+      await showParty(tester);
+
+      expect(find.text('max 3'), findsOneWidget);
+      expect(find.text('max 2'), findsOneWidget);
     });
 
     testWidgets('calls the thief skills what they are', (tester) async {

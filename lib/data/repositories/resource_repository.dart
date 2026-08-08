@@ -18,6 +18,7 @@ import 'dart:io';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 /// Source of truth for the rules tables that live inside the game's archives.
 ///
@@ -54,6 +55,7 @@ class ResourceRepository {
   final GameProfileService _profile;
 
   ProficiencyCatalogue? _proficiencies;
+  SkillCatalogue? _thiefSkills;
 
   /// Every proficiency the player's `weapprof.2da` names.
   ///
@@ -67,6 +69,15 @@ class ResourceRepository {
       _proficiencies ??= proficienciesFrom(
         await _table(weaponProficiencyTable),
       );
+
+  /// Which thief skills each class and kit may allocate points to.
+  ///
+  /// No talk-table merge, unlike [proficiencies]: `thiefscl.2da` carries no
+  /// strrefs, only numbers, so what comes back is already complete.
+  ///
+  /// Cached, because a rules table cannot change while the app is open.
+  Future<SkillCatalogue> thiefSkills() async =>
+      _thiefSkills ??= thiefSkillsFrom(await _table(thiefSkillTable));
 
   /// The `2DA` named [resref], or an empty table if it cannot be read.
   ///
@@ -114,6 +125,13 @@ class ResourceRepository {
 /// The resref of the weapon-proficiency table.
 const String weaponProficiencyTable = 'weapprof';
 
+/// The resref of the table saying which classes have which thief skills.
+///
+/// Not to be confused with `thiefskl.2da`, which is the *number of points* a
+/// thief gets per level, or with `tracking.2da`, which despite the name is a
+/// list of per-area strings and says nothing about who may track.
+const String thiefSkillTable = 'thiefscl';
+
 /// The `weapprof.2da` column holding the number opcode 233 stores.
 const String proficiencyIdColumn = 'ID';
 
@@ -134,6 +152,57 @@ const String proficiencyDescriptionColumn = 'DESC_REF';
 /// number four billion.
 const int maximumStrref = 0xFFFFFFFF;
 
+/// One class-or-kit column of a rules table: its header and where it sits.
+typedef _ClassColumn = ({String name, int index});
+
+/// Every column of [table] that names a class or kit.
+///
+/// Taken by **exclusion** rather than from a list of classes, because the set
+/// of kits is exactly what varies between installations — a mod adding one is
+/// the case the generated tables get wrong, and D11 is the decision that says
+/// to read the player's file instead.
+///
+/// `thiefscl.2da` excludes nothing, since every column of it is a class;
+/// `weapprof.2da` excludes its id and its two strrefs.
+List<_ClassColumn> _classColumns(
+  Table2da table, {
+  Set<String> except = const {},
+}) => [
+  for (var i = 0; i < table.columns.length; i++)
+    if (!except.contains(table.columns[i])) (name: table.columns[i], index: i),
+];
+
+/// The cell of [row] at column index [at], or `null` when there is none.
+///
+/// `Table2da.columns` and a row's `cells` both exclude the row label, so they
+/// line up directly — this is `Table2da.cell` with the row already in hand. A
+/// row too short for a column gets the file's declared default, which is what
+/// the second line of a 2DA is for.
+String? _cell(Table2da table, TableRow row, int at) {
+  if (at < 0) return null;
+  return at < row.cells.length ? row.cells[at] : table.defaultValue;
+}
+
+/// [SkillCatalogue] from a parsed `thiefscl.2da`.
+///
+/// Every column is a class or kit, and every row a skill, so this is the whole
+/// table read straight through. Unlike `weapprof.2da` the row label *is* the
+/// key here, and no label repeats.
+SkillCatalogue thiefSkillsFrom(Table2da table) {
+  final columns = _classColumns(table);
+  if (columns.isEmpty) return SkillCatalogue.empty;
+
+  return SkillCatalogue({
+    for (final row in table.allRows)
+      row.label: {
+        for (final column in columns)
+          if (int.tryParse(_cell(table, row, column.index) ?? '')
+              case final int allowance)
+            column.name: allowance,
+      },
+  });
+}
+
 /// [ProficiencyCatalogue] from a parsed `weapprof.2da`.
 ///
 /// A free function so the parsing is testable without an installation, and
@@ -150,28 +219,18 @@ ProficiencyCatalogue proficienciesFrom(Table2da table) {
   final nameAt = columns.indexOf(proficiencyNameColumn);
   if (idAt < 0) return ProficiencyCatalogue.empty;
 
-  // Everything that is not the id or one of the two strrefs is a class or kit
-  // column. Taken by exclusion rather than by a hardcoded list, because the
-  // set of kits is what varies between installations — and a modded game
-  // adding one is precisely the case the generated tables get wrong.
-  final classColumns = [
-    for (var i = 0; i < columns.length; i++)
-      if (columns[i] != proficiencyIdColumn &&
-          columns[i] != proficiencyNameColumn &&
-          columns[i] != proficiencyDescriptionColumn)
-        (name: columns[i], index: i),
-  ];
+  final classColumns = _classColumns(
+    table,
+    except: const {
+      proficiencyIdColumn,
+      proficiencyNameColumn,
+      proficiencyDescriptionColumn,
+    },
+  );
 
   final entries = <int, ProficiencyEntry>{};
   for (final row in table.allRows) {
-    // `columns` and `cells` both exclude the row label, so they line up
-    // directly — this is `Table2da.cell` with the row already in hand. A row
-    // too short for a column gets the file's declared default, which is what
-    // the second line of a 2DA is for.
-    String? cell(int column) {
-      if (column < 0) return null;
-      return column < row.cells.length ? row.cells[column] : table.defaultValue;
-    }
+    String? cell(int column) => _cell(table, row, column);
 
     final id = int.tryParse(cell(idAt) ?? '');
     if (id == null) continue;

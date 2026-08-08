@@ -32,6 +32,7 @@ import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/resistances.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/domain/saving_throws.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 import 'package:wand_of_saves/domain/thief_skills.dart';
 
 /// A savegame repository answering from memory.
@@ -129,16 +130,26 @@ class FakeStringRepository implements StringRepository {
   Future<void> close() async {}
 }
 
-/// A resource repository answering with a canned catalogue.
+/// A resource repository answering with canned tables.
 class FakeResourceRepository implements ResourceRepository {
-  /// Creates a repository answering [catalogue].
-  const FakeResourceRepository(this.catalogue);
+  /// Creates a repository answering [catalogue] and [skills].
+  const FakeResourceRepository(
+    this.catalogue, {
+    this.skills = SkillCatalogue.empty,
+  });
 
-  /// What every call returns.
+  /// What [proficiencies] returns.
   final ProficiencyCatalogue catalogue;
+
+  /// What [thiefSkills] returns. Empty means "every skill allowed", which is
+  /// the right default for the tests that are not about availability.
+  final SkillCatalogue skills;
 
   @override
   Future<ProficiencyCatalogue> proficiencies() async => catalogue;
+
+  @override
+  Future<SkillCatalogue> thiefSkills() async => skills;
 }
 
 /// A save slot summary, with the fixture's values as defaults.

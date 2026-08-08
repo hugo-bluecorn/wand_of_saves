@@ -182,17 +182,26 @@ enum CharacterStat {
   armorClassSlashing(CreHeaderField.armorClassSlashing, 'vs. slashing'),
 
   /// Hide in Shadows, as points allocated. IESDP states no range.
-  hideInShadows(CreHeaderField.hideInShadows, 'Hide in Shadows'),
+  hideInShadows(
+    CreHeaderField.hideInShadows,
+    'Hide in Shadows',
+    thiefSkillRow: 'HIDE_IN_SHADOWS',
+  ),
 
   /// Detect Illusion. IESDP: "minimum value : 0", and no maximum.
   detectIllusion(
     CreHeaderField.detectIllusion,
     'Detect Illusion',
     declaredMinimum: 0,
+    thiefSkillRow: 'DETECT_ILLUSION',
   ),
 
   /// Set Traps. IESDP states no range.
-  setTraps(CreHeaderField.setTraps, 'Set Traps'),
+  setTraps(
+    CreHeaderField.setTraps,
+    'Set Traps',
+    thiefSkillRow: 'SET_TRAPS',
+  ),
 
   /// Lore. IESDP: "(0-100)".
   lore(
@@ -207,6 +216,7 @@ enum CharacterStat {
     CreHeaderField.lockpicking,
     'Open Locks',
     declaredMinimum: 0,
+    thiefSkillRow: 'OPEN_LOCKS',
   ),
 
   /// Move Silently. IESDP: "minimum value: 0".
@@ -214,13 +224,24 @@ enum CharacterStat {
     CreHeaderField.moveSilently,
     'Move Silently',
     declaredMinimum: 0,
+    thiefSkillRow: 'MOVE_SILENTLY',
   ),
 
   /// Find/disarm traps. IESDP: "minimum value: 0".
-  findTraps(CreHeaderField.findTraps, 'Find Traps', declaredMinimum: 0),
+  findTraps(
+    CreHeaderField.findTraps,
+    'Find Traps',
+    declaredMinimum: 0,
+    thiefSkillRow: 'FIND_TRAPS',
+  ),
 
   /// Pick Pockets. IESDP: "minimum value: 0".
-  pickPockets(CreHeaderField.pickPockets, 'Pick Pockets', declaredMinimum: 0),
+  pickPockets(
+    CreHeaderField.pickPockets,
+    'Pick Pockets',
+    declaredMinimum: 0,
+    thiefSkillRow: 'PICK_POCKETS',
+  ),
 
   /// Fatigue. IESDP: "(0-100)".
   fatigue(
@@ -356,6 +377,7 @@ enum CharacterStat {
     this.label, {
     this.declaredMinimum,
     this.declaredMaximum,
+    this.thiefSkillRow,
   });
 
   /// The creature-record field this stat is stored in.
@@ -373,6 +395,25 @@ enum CharacterStat {
 
   /// The highest value IESDP documents, or `null` if it documents none.
   final int? declaredMaximum;
+
+  /// This stat's row in the player's `thiefscl.2da`, if it has one.
+  ///
+  /// That table says which classes and kits may allocate points to which
+  /// thief skill, so this is what turns "is this field editable for *this*
+  /// character" into a lookup. Each value carrying its own fact rather than a
+  /// separate map restating it is the choice D6 already made for
+  /// [CreHeaderField].
+  ///
+  /// `null` for everything else, and that covers two different reasons:
+  ///
+  /// - **Lore** is genuinely universal — every class has it, which is why the
+  ///   table has no row for it. Confirmed in game: a Necromancer's record
+  ///   screen prints `Lore: 15`.
+  /// - **Turn Undead and Tracking** have no governing table anywhere that has
+  ///   been found. `tracking.2da` turns out to be per-area prose. They are
+  ///   left editable rather than given an invented rule; see the open
+  ///   questions in `CLAUDE.md`.
+  final String? thiefSkillRow;
 
   /// The lowest value this stat accepts.
   int get minimum => declaredMinimum ?? field.minimum;

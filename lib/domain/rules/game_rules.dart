@@ -59,12 +59,13 @@ abstract interface class GameRules {
   /// [kitIdentifier] as English, e.g. `Necromancer`, or `null` for no kit.
   String? kitName(int stored);
 
-  /// The `weapprof.2da` column that governs a character's pip ceilings.
+  /// The rules-table column that governs this character.
   ///
-  /// That table's columns are `CLASS.IDS` and kit identifiers, so this is a
-  /// **lookup key, not a rendering** — `Fighter / Mage` finds nothing where
+  /// `weapprof.2da` and `thiefscl.2da` are keyed by the same vocabulary —
+  /// `CLASS.IDS` and kit identifiers — so one resolver serves both. This is a
+  /// **lookup key, not a rendering**: `Fighter / Mage` finds nothing where
   /// `FIGHTER_MAGE` finds the column. `null` when the class cannot be named.
-  String? proficiencyColumn({required int classId, required int kitId});
+  String? classColumn({required int classId, required int kitId});
 
   /// Whether class [id] uses the warrior column of the hit-point table.
   bool isWarrior(int id);
@@ -168,10 +169,11 @@ class GeneratedGameRules implements GameRules {
   /// The kit's column if there is one, otherwise the class's.
   ///
   /// **A kit replaces the class here exactly as it replaces the name.** That
-  /// is what kits are for in this table: their ceilings differ from the base
-  /// class's, which is the whole reason the column exists.
+  /// is what kits are for in these tables: a Shadowdancer is a thief who
+  /// cannot set traps and a Blade picks pockets at half a bard's rate, and
+  /// neither is derivable from the base class.
   @override
-  String? proficiencyColumn({required int classId, required int kitId}) =>
+  String? classColumn({required int classId, required int kitId}) =>
       _kitColumn(kitId) ?? classIdentifier(classId);
 
   @override

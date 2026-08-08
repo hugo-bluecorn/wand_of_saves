@@ -980,6 +980,44 @@ The lesson is narrower than "IESDP is unreliable", and worth stating precisely:
 
 That is why the app reads `chitin.key` at all, and it is recorded as **D11**.
 
+### `thiefscl.2da` — which classes may allocate which skills, read 2026-08-08
+
+The table that says a Fighter/Mage has no thief skills, found while fixing a panel that offered
+him all seven. A row per skill, a column per class **or kit**, and the cell is the percentage of
+skill points that class may put into it — so `0` is the answer to "does this class have this skill
+at all".
+
+**Its columns are the same vocabulary as `weapprof.2da`**, which is what makes it cheap: the
+kit-then-class resolver written for proficiency ceilings is the lookup key here unchanged.
+
+| Column | What it allows |
+|---|---|
+| `THIEF` | 100 on all seven |
+| `FIGHTER_MAGE` | **0 on all seven** |
+| `BARD` | Pick Pockets only |
+| `RANGER` | Move Silently and Hide in Shadows only |
+| `BLADE` | Pick Pockets at **50**, where a Bard is 100 |
+| `SKALD` | Pick Pockets at **25** |
+| `SHADOWDANCER` | a thief, except Set Traps at 0 |
+
+⚠️ **A kit does not follow its class**, as those last three show. Nothing derived from the base
+class would get a Blade or a Shadowdancer right.
+
+**Lore is deliberately not in this table**, because every class has it — confirmed in game, where
+a Necromancer's record screen prints `Lore: 15`. It stays universally editable.
+
+Three near-misses in the same neighbourhood, recorded so nobody loses the time twice:
+
+- **`thiefskl.2da`** is the *number of points per level* (a Thief starts with 40 and gets 25), not
+  who may spend them.
+- **`tracking.2da`** is, despite the name, a list of per-area strings. It says nothing about who
+  may track.
+- **`profsmax.2da`** is proficiency *slots* per level, not which proficiencies exist. The per-class
+  ceiling is `weapprof.2da`'s own class columns, where `0` again means "not this class".
+
+**So Turn Undead and Tracking have no governing table**, and are left editable rather than given
+an invented class rule. Open question, not a guess.
+
 ## Oracles
 
 Prefer verification over reasoning from a spec. Four are available, with different standing:

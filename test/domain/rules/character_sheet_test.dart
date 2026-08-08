@@ -17,6 +17,7 @@ import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 import '../../support/fakes.dart';
 
@@ -307,27 +308,27 @@ void main() {
     test('a plain character is governed by their class column', () {
       // weapprof.2da's columns are CLASS.IDS identifiers, so this is a
       // lookup and not a rendering — 'Fighter / Mage' would find nothing.
-      expect(sheetOf().proficiencyColumn, 'FIGHTER_MAGE');
-      expect(sheetOf(classId: 4).proficiencyColumn, 'THIEF');
+      expect(sheetOf().classColumn, 'FIGHTER_MAGE');
+      expect(sheetOf(classId: 4).classColumn, 'THIEF');
     });
 
     test('a kit replaces the class column, as it replaces the name', () {
       // The same rule the record screen follows: a Necromancer is a
       // Necromancer, not a Mage who is also a Necromancer. Kits exist in this
       // table precisely because their ceilings differ from the base class's.
-      expect(sheetOf(kitId: 0x10000000).proficiencyColumn, 'NECROMANCER');
+      expect(sheetOf(kitId: 0x10000000).classColumn, 'NECROMANCER');
     });
 
     test('both spellings of "no kit" fall back to the class', () {
       // 0x40000000 is KIT.IDS's TRUECLASS and plain 0 is the other encoding.
       // Neither is a column, and reading either as one would look up
       // 'TRUECLASS' and cap every proficiency at nothing.
-      expect(sheetOf().proficiencyColumn, 'FIGHTER_MAGE');
-      expect(sheetOf(kitId: 0).proficiencyColumn, 'FIGHTER_MAGE');
+      expect(sheetOf().classColumn, 'FIGHTER_MAGE');
+      expect(sheetOf(kitId: 0).classColumn, 'FIGHTER_MAGE');
     });
 
     test('a class the tables cannot name has no column', () {
-      expect(sheetOf(classId: 173).proficiencyColumn, isNull);
+      expect(sheetOf(classId: 173).classColumn, isNull);
     });
 
     test('the ceiling comes from the table, for this character', () {
@@ -381,6 +382,160 @@ void main() {
       expect(sheet.proficiencyLabel(100), 'FLAILMORNINGSTAR');
       // Nothing at all known: the number, rather than a blank tile.
       expect(sheet.proficiencyLabel(96), 'Proficiency 96');
+    });
+  });
+
+  group('what a class may actually allocate', () {
+    /// `thiefscl.2da`, cut to the classes these tests use.
+    const skills = SkillCatalogue({
+      'OPEN_LOCKS': {
+        'THIEF': 100,
+        'FIGHTER_MAGE': 0,
+        'BARD': 0,
+        'SHADOWDANCER': 100,
+      },
+      'PICK_POCKETS': {
+        'THIEF': 100,
+        'FIGHTER_MAGE': 0,
+        'BARD': 100,
+        'SHADOWDANCER': 100,
+      },
+      'SET_TRAPS': {
+        'THIEF': 100,
+        'FIGHTER_MAGE': 0,
+        'BARD': 0,
+        'SHADOWDANCER': 0,
+      },
+    });
+
+    CharacterSheet sheetFor({
+      int classId = 7,
+      int kitId = 0x40000000,
+      int lockpicking = 0,
+    }) => CharacterSheet(
+      character: fakeCharacter().copyWith(
+        classId: classId,
+        kitId: kitId,
+        thiefSkills: fakeCharacter().thiefSkills.copyWith(
+          lockpicking: lockpicking,
+        ),
+      ),
+      rules: const GeneratedGameRules(),
+      skills: skills,
+    );
+
+    test('a thief may allocate a thief skill and a fighter/mage may not', () {
+      // The defect in one line. Aard is a Fighter/Mage and the panel was
+      // offering him Open Locks.
+      expect(sheetFor(classId: 4).allows(CharacterStat.lockpicking), isTrue);
+      expect(sheetFor().allows(CharacterStat.lockpicking), isFalse);
+    });
+
+    test('a class gets a subset, not all or nothing', () {
+      // A bard picks pockets and cannot open locks — which is what makes this
+      // a table lookup rather than "is this character a thief".
+      final bard = sheetFor(classId: 5);
+
+      expect(bard.allows(CharacterStat.pickPockets), isTrue);
+      expect(bard.allows(CharacterStat.lockpicking), isFalse);
+    });
+
+    test('a kit answers for itself, through its own column', () {
+      // A Shadowdancer is a thief who cannot set traps, which no rule about
+      // the base class would get right. KIT.IDS numbers it 16417, and the
+      // record stores that key in the dword's high word.
+      final shadowdancer = sheetFor(classId: 4);
+      final byKit = CharacterSheet(
+        character: fakeCharacter().copyWith(classId: 4, kitId: 0x40210000),
+        rules: const GeneratedGameRules(),
+        skills: skills,
+      );
+
+      expect(shadowdancer.allows(CharacterStat.setTraps), isTrue);
+      expect(
+        byKit.classColumn,
+        'SHADOWDANCER',
+        reason: 'the kit column, not the class column',
+      );
+      expect(byKit.allows(CharacterStat.setTraps), isFalse);
+    });
+
+    test('Lore is allowed for everyone, having no row at all', () {
+      // Confirmed in game: a Necromancer's record screen prints Lore 15.
+      expect(sheetFor().allows(CharacterStat.lore), isTrue);
+      expect(sheetFor(classId: 4).allows(CharacterStat.lore), isTrue);
+    });
+
+    test('the fields with no table stay allowed rather than guessed at', () {
+      // Turn Undead and Tracking have no governing table anywhere found —
+      // tracking.2da is per-area prose. Inventing a class rule is exactly the
+      // sort of plausible-and-unchecked claim this project keeps retracting.
+      expect(sheetFor().allows(CharacterStat.turnUndeadLevel), isTrue);
+      expect(sheetFor().allows(CharacterStat.trackingSkill), isTrue);
+    });
+
+    test('everything universal stays allowed', () {
+      final aard = sheetFor();
+
+      for (final stat in [
+        CharacterStat.strength,
+        CharacterStat.saveVersusSpells,
+        CharacterStat.resistFire,
+        CharacterStat.numberOfAttacks,
+        CharacterStat.fatigue,
+      ]) {
+        expect(aard.allows(stat), isTrue, reason: '$stat');
+      }
+    });
+
+    test('no catalogue allows everything, rather than forbidding it', () {
+      // A machine with no game installed. Forbidding every skill would look
+      // like a broken screen; the `null` that SkillCatalogue returns for an
+      // unknown column exists precisely to keep those two apart.
+      final blind = CharacterSheet(
+        character: fakeCharacter(),
+        rules: const GeneratedGameRules(),
+      );
+
+      expect(blind.allows(CharacterStat.lockpicking), isTrue);
+    });
+
+    test('a proficiency the class cannot use is not allowed', () {
+      final aard = CharacterSheet(
+        character: fakeCharacter(),
+        rules: const GeneratedGameRules(),
+        proficiencies: const ProficiencyCatalogue({
+          114: ProficiencyEntry(
+            id: 114,
+            identifier: '2WEAPON',
+            maximumByColumn: {'FIGHTER_MAGE': 3},
+          ),
+          102: ProficiencyEntry(
+            id: 102,
+            identifier: 'QUARTERSTAFF',
+            maximumByColumn: {'FIGHTER_MAGE': 0},
+          ),
+        }),
+      );
+
+      expect(aard.allowsProficiency(114), isTrue);
+      expect(aard.allowsProficiency(102), isFalse);
+      expect(
+        aard.allowsProficiency(96),
+        isTrue,
+        reason: 'unknown to the table is not the same as forbidden',
+      );
+    });
+
+    test('says why, so the tooltip does not have to guess', () {
+      expect(
+        sheetFor().unavailableReason(CharacterStat.lockpicking),
+        allOf(contains('Fighter / Mage'), contains('Open Locks')),
+      );
+      expect(
+        sheetFor(classId: 4).unavailableReason(CharacterStat.lockpicking),
+        isNull,
+      );
     });
   });
 

@@ -17,6 +17,7 @@ import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 void main() {
   /// The shape of BG:EE's own `weapprof.2da`, cut to the rows that matter.
@@ -120,6 +121,92 @@ EXTRA2           116  4294967296 4294967296 0 0      0            0
     });
   });
 
+  /// The shape of BG:EE's `thiefscl.2da`, cut to the columns that matter.
+  ///
+  /// Rows are the thief skills, columns are the **same** `CLASS.IDS`-and-kit
+  /// vocabulary `weapprof.2da` uses, and the cell is the percentage of skill
+  /// points that class may put into that skill. `0` means the class does not
+  /// have the skill at all.
+  ///
+  /// `STEALTH` is in the real file and is zero for every class; it has no
+  /// creature-record field and nothing reads it.
+  const thiefscl = '''
+2DA V1.0
+0
+                MAGE FIGHTER THIEF BARD RANGER FIGHTER_MAGE BLADE SHADOWDANCER
+PICK_POCKETS    0    0       100   100  0      0            50    100
+OPEN_LOCKS      0    0       100   0    0      0            0     100
+FIND_TRAPS      0    0       100   0    0      0            0     100
+MOVE_SILENTLY   0    0       100   0    100    0            0     100
+HIDE_IN_SHADOWS 0    0       100   0    100    0            0     100
+DETECT_ILLUSION 0    0       100   0    0      0            0     100
+SET_TRAPS       0    0       100   0    0      0            0     0
+STEALTH         0    0       0     0    0      0            0     0
+''';
+
+  group('thiefSkillsFrom', () {
+    test('a thief may allocate every skill', () {
+      final skills = thiefSkillsFrom(Table2da.parse(thiefscl));
+
+      for (final row in [
+        'PICK_POCKETS',
+        'OPEN_LOCKS',
+        'FIND_TRAPS',
+        'MOVE_SILENTLY',
+        'HIDE_IN_SHADOWS',
+        'DETECT_ILLUSION',
+        'SET_TRAPS',
+      ]) {
+        expect(skills.allowanceFor(row, 'THIEF'), 100, reason: row);
+      }
+    });
+
+    test('a fighter/mage may allocate none of them', () {
+      // The defect this whole slice exists for: the panel was offering all
+      // seven to Aard, who cannot have any.
+      final skills = thiefSkillsFrom(Table2da.parse(thiefscl));
+
+      for (final row in ['OPEN_LOCKS', 'FIND_TRAPS', 'PICK_POCKETS']) {
+        expect(skills.allowanceFor(row, 'FIGHTER_MAGE'), 0, reason: row);
+      }
+    });
+
+    test('other classes get a subset, not all or nothing', () {
+      // What makes this a table rather than a boolean. A bard picks pockets
+      // and nothing else; a ranger sneaks and does not pick locks.
+      final skills = thiefSkillsFrom(Table2da.parse(thiefscl));
+
+      expect(skills.allowanceFor('PICK_POCKETS', 'BARD'), 100);
+      expect(skills.allowanceFor('OPEN_LOCKS', 'BARD'), 0);
+      expect(skills.allowanceFor('MOVE_SILENTLY', 'RANGER'), 100);
+      expect(skills.allowanceFor('OPEN_LOCKS', 'RANGER'), 0);
+    });
+
+    test('a kit is a column of its own, and may differ from its class', () {
+      // A Blade is a bard who picks pockets at half rate; a Shadowdancer is a
+      // thief who cannot set traps. Neither is derivable from the base class.
+      final skills = thiefSkillsFrom(Table2da.parse(thiefscl));
+
+      expect(skills.allowanceFor('PICK_POCKETS', 'BLADE'), 50);
+      expect(skills.allowanceFor('SET_TRAPS', 'SHADOWDANCER'), 0);
+      expect(skills.allowanceFor('OPEN_LOCKS', 'SHADOWDANCER'), 100);
+    });
+
+    test('an unknown column answers null, never zero', () {
+      // The distinction that keeps a missing table from silently forbidding
+      // every edit — the same one ProficiencyEntry.maximumFor makes.
+      final skills = thiefSkillsFrom(Table2da.parse(thiefscl));
+
+      expect(skills.allowanceFor('OPEN_LOCKS', 'DWARVEN_DEFENDER'), isNull);
+      expect(skills.allowanceFor('OPEN_LOCKS', null), isNull);
+      expect(skills.allowanceFor(null, 'THIEF'), isNull);
+    });
+
+    test('is empty for a table that is not one', () {
+      expect(thiefSkillsFrom(Table2da.parse('nope')).allowanceByRow, isEmpty);
+    });
+  });
+
   group('ResourceRepository', () {
     // Resolved here rather than in `setUpAll`, because `skip:` is read when
     // the test is *registered* and every setUp has yet to run.
@@ -152,20 +239,77 @@ EXTRA2           116  4294967296 4294967296 0 0      0            0
       skip: game == null ? 'no BG:EE installation on this machine' : false,
     );
 
+    test(
+      "reads the player's own thiefscl.2da",
+      () {
+        // The two readings that make this a measurement rather than a parse:
+        // a Fighter/Mage has none of the seven, and a Thief has all of them.
+        // Anything that got the column vocabulary wrong would answer null for
+        // both, and anything that got the rows wrong would answer neither.
+        final skills = ResourceRepository(
+          const GameProfileService(),
+        ).thiefSkills();
+
+        expect(
+          skills,
+          completion(
+            isA<SkillCatalogue>()
+                .having(
+                  (s) => [
+                    for (final row in [
+                      'PICK_POCKETS',
+                      'OPEN_LOCKS',
+                      'FIND_TRAPS',
+                      'MOVE_SILENTLY',
+                      'HIDE_IN_SHADOWS',
+                      'DETECT_ILLUSION',
+                      'SET_TRAPS',
+                    ])
+                      s.allowanceFor(row, 'FIGHTER_MAGE'),
+                  ],
+                  'every skill for a fighter/mage',
+                  everyElement(0),
+                )
+                .having(
+                  (s) => s.allowanceFor('OPEN_LOCKS', 'THIEF'),
+                  'open locks for a thief',
+                  100,
+                )
+                .having(
+                  (s) => s.allowanceFor('PICK_POCKETS', 'BARD'),
+                  'pick pockets for a bard',
+                  100,
+                ),
+          ),
+        );
+      },
+      skip: game == null ? 'no BG:EE installation on this machine' : false,
+    );
+
     test('degrades to empty when the installation is not there', () {
       // The app opens saves on machines with no game installed. That is an
       // ordinary state, not an error — the panel shows pip counts and skips
       // the names.
       final catalogue = ResourceRepository(
         const GameProfileService(gameCandidates: ['/nowhere'], environment: {}),
-      ).proficiencies();
+      );
 
       expect(
-        catalogue,
+        catalogue.proficiencies(),
         completion(
           isA<ProficiencyCatalogue>().having(
             (c) => c.entries,
             'entries',
+            isEmpty,
+          ),
+        ),
+      );
+      expect(
+        catalogue.thiefSkills(),
+        completion(
+          isA<SkillCatalogue>().having(
+            (s) => s.allowanceByRow,
+            'rows',
             isEmpty,
           ),
         ),

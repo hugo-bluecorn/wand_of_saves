@@ -24,6 +24,7 @@ import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
 
 /// The editor shell for one savegame: the party down the left, the selected
@@ -131,6 +132,7 @@ class _PartyShell extends StatelessWidget {
           child: _CharacterSummary(
             character: state.members[state.selectedIndex],
             proficiencies: state.proficiencies,
+            skills: state.skills,
             reputation: state.reputation,
             slotDirectoryName: slotDirectoryName,
           ),
@@ -277,12 +279,16 @@ class _CharacterSummary extends ConsumerWidget {
   const _CharacterSummary({
     required this.character,
     required this.proficiencies,
+    required this.skills,
     required this.reputation,
     required this.slotDirectoryName,
   });
 
   final Character character;
   final ProficiencyCatalogue proficiencies;
+
+  /// Which thief skills this character's class may allocate points to.
+  final SkillCatalogue skills;
 
   /// The **party's** reputation — see `PartyState.reputation` for why this is
   /// not the character's own copy.
@@ -297,6 +303,7 @@ class _CharacterSummary extends ConsumerWidget {
       character: character,
       rules: ref.watch(gameRulesProvider),
       proficiencies: proficiencies,
+      skills: skills,
     );
 
     void set(CharacterStat stat, int value) => ref
@@ -503,14 +510,12 @@ class _CharacterSummary extends ConsumerWidget {
                 value: value,
                 label: stat.label,
                 onCommitted: set,
-                hint: stat == CharacterStat.moveSilently
-                    ? 'Measured: a thief storing 15 here has the game show '
-                          '35, and two characters both storing Lore 3 show 10 '
-                          'and 15. The engine adds class, race and Dexterity '
-                          'bonuses. Working the shown figure out needs tables '
-                          'this build does not read, so only the stored base '
-                          'is offered.'
-                    : null,
+                // Greyed when the class cannot allocate it — but **not** when
+                // the record already holds something. A Fighter/Mage with 40
+                // Open Locks is an anomaly, and a field you cannot touch is
+                // one you cannot correct.
+                enabled: sheet.allows(stat) || value != 0,
+                hint: sheet.unavailableReason(stat) ?? _skillHint(stat),
               ),
           ],
         ),
@@ -573,6 +578,19 @@ class _CharacterSummary extends ConsumerWidget {
       (CharacterStat.intoxication, character.intoxication),
     ];
   }
+
+  /// What a skill tile says when the class *can* allocate it.
+  ///
+  /// Only Move Silently carries one, and it stands for the whole group: the
+  /// heading already says these are bases, and this is where the measurement
+  /// behind that claim lives.
+  String? _skillHint(CharacterStat stat) => stat == CharacterStat.moveSilently
+      ? 'Measured: a thief storing 15 here has the game show 35, and two '
+            'characters both storing Lore 3 show 10 and 15. The engine adds '
+            'class, race and Dexterity bonuses. Working the shown figure out '
+            'needs tables this build does not read, so only the stored base '
+            'is offered.'
+      : null;
 
   /// The eleven resistances, in the order the record stores them.
   ///
@@ -658,6 +676,12 @@ class _ProficiencyGroup extends ConsumerWidget {
             label: sheet.proficiencyLabel(proficiency.id),
             pips: proficiency.pips,
             maximum: sheet.maximumPipsFor(proficiency.id),
+            // A cap of 0 is how weapprof.2da says "not this class". As with
+            // the skills, an existing non-zero value stays editable so an
+            // anomaly can be corrected rather than merely stared at.
+            enabled:
+                sheet.allowsProficiency(proficiency.id) ||
+                proficiency.pips != 0,
             onCommitted: (pips) => ref
                 .read(partyProvider(slotDirectoryName).notifier)
                 .edit(
@@ -778,14 +802,16 @@ InputDecoration _statDecoration(
   required String label,
   required bool hasHint,
   String? error,
+  String? helper,
 }) => InputDecoration(
   labelText: label,
   filled: true,
   border: const OutlineInputBorder(),
   errorText: error,
   // Reserves the error line so a refused value does not shove every tile
-  // below it down the screen.
-  helperText: error == null ? ' ' : null,
+  // below it down the screen — and, where there is something worth saying,
+  // spends that reserved line on saying it rather than on a blank.
+  helperText: error == null ? (helper ?? ' ') : null,
   suffixIcon: hasHint
       ? Icon(
           Icons.info_outline,
@@ -931,6 +957,7 @@ class _PipField extends StatefulWidget {
     required this.pips,
     required this.onCommitted,
     this.maximum,
+    this.enabled = true,
     super.key,
   });
 
@@ -945,6 +972,10 @@ class _PipField extends StatefulWidget {
   final int? maximum;
 
   final void Function(int) onCommitted;
+
+  /// Whether the class may have this proficiency at all — a ceiling of `0` in
+  /// `weapprof.2da` is how the table says it may not.
+  final bool enabled;
 
   @override
   State<_PipField> createState() => _PipFieldState();
@@ -1026,6 +1057,7 @@ class _PipFieldState extends State<_PipField> {
         child: TextField(
           controller: _controller,
           focusNode: _focus,
+          enabled: widget.enabled,
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _commit(),
@@ -1034,6 +1066,10 @@ class _PipFieldState extends State<_PipField> {
             label: widget.label,
             hasHint: true,
             error: _error ?? (_accepts(widget.pips) ? null : _range),
+            // The ceiling, stated up front rather than only when a value is
+            // refused. The helper line is already reserved to stop a refusal
+            // shoving the row down, so this costs no layout.
+            helper: maximum == null ? null : 'max $maximum',
           ),
         ),
       ),

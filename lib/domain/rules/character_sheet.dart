@@ -16,6 +16,7 @@ import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 /// A character as the *game* would show them, rather than as the file holds
 /// them.
@@ -35,6 +36,7 @@ class CharacterSheet {
     required this.character,
     required this.rules,
     this.proficiencies = ProficiencyCatalogue.empty,
+    this.skills = SkillCatalogue.empty,
   });
 
   /// The character as the savegame holds them.
@@ -46,6 +48,10 @@ class CharacterSheet {
   /// What the player's `weapprof.2da` calls each proficiency, and how many
   /// pips it allows. Empty on a machine with no game installed.
   final ProficiencyCatalogue proficiencies;
+
+  /// Which thief skills the player's `thiefscl.2da` lets each class allocate.
+  /// Empty on a machine with no game installed.
+  final SkillCatalogue skills;
 
   /// Class, race and alignment, the way the record screen writes them.
   ///
@@ -124,10 +130,12 @@ class CharacterSheet {
   bool isWithinBounds(CharacterStat stat, int value) =>
       value >= lowerBoundFor(stat) && value <= upperBoundFor(stat);
 
-  /// The `weapprof.2da` column that governs this character's pip ceilings.
+  /// The rules-table column that governs this character.
   ///
   /// A lookup key, not a rendering — `FIGHTER_MAGE`, never `Fighter / Mage`.
-  String? get proficiencyColumn => rules.proficiencyColumn(
+  /// One column serves both `weapprof.2da` and `thiefscl.2da`, which share a
+  /// vocabulary.
+  String? get classColumn => rules.classColumn(
     classId: character.classId,
     kitId: character.kitId,
   );
@@ -141,7 +149,48 @@ class CharacterSheet {
   /// This is the only source there is. IESDP states no range for opcode 233's
   /// Amount, so the ceiling is the game's own table or nothing.
   int? maximumPipsFor(int proficiencyId) =>
-      proficiencies[proficiencyId]?.maximumFor(proficiencyColumn);
+      proficiencies[proficiencyId]?.maximumFor(classColumn);
+
+  /// Whether this character's class may allocate points to [stat] at all.
+  ///
+  /// The panel greys out what this refuses. Most stats are universal and
+  /// always allowed; the seven thief skills are not, and the player's own
+  /// `thiefscl.2da` is what says so — a Fighter/Mage has none of them, a Bard
+  /// has only Pick Pockets, a Ranger only the two stealth skills.
+  ///
+  /// **`true` whenever the tables cannot answer**, which covers three
+  /// different cases and deliberately treats them alike:
+  ///
+  /// - no game installed, so [skills] is empty;
+  /// - a class or kit the player's table has no column for;
+  /// - a stat with no row at all — Lore, which every class has, and Turn
+  ///   Undead and Tracking, for which no governing table has been found.
+  ///
+  /// Refusing an edit on the strength of a table that was never read would be
+  /// a broken screen rather than a careful one.
+  bool allows(CharacterStat stat) =>
+      skills.allowanceFor(stat.thiefSkillRow, classColumn) != 0;
+
+  /// Whether this character's class may have proficiency [id] at all.
+  ///
+  /// A cap of `0` in `weapprof.2da` is how the table says "not this class" —
+  /// a Fighter/Mage gets 0 in Quarterstaff. Unknown to the table is *not* the
+  /// same as forbidden, so that answers `true`.
+  bool allowsProficiency(int id) => maximumPipsFor(id) != 0;
+
+  /// Why [stat] cannot be edited, or `null` when it can.
+  ///
+  /// Phrased for a tooltip, and it names both the class and the table so the
+  /// claim can be checked rather than taken on trust.
+  String? unavailableReason(CharacterStat stat) {
+    if (allows(stat)) return null;
+    final name = rules.className(character.classId);
+    final kit = kitName;
+    final who = kit ?? name ?? 'This character';
+    return '$who cannot allocate ${stat.label}. The game’s own '
+        'thiefscl.2da gives ${classColumn ?? 'this class'} 0% of that skill, '
+        'so the value is shown but not editable.';
+  }
 
   /// What to call [proficiencyId] on screen.
   ///
