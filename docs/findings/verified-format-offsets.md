@@ -466,8 +466,12 @@ and untrue for any non-English classic install either.
 
 ## Known bugs in the spike
 
-`tool/spike/gam_cre_tlk_spike.dart` works but is **not** correct. Four defects, deliberately left
-in place so Phase 0 fixes them properly:
+**The spike was deleted on 2026-08-08**, once all four defects below were answered and every part
+of what it did was living in tested code. Keeping a second, buggier reader around invites someone
+copying from it — bug #1 was still in it, verbatim, on the day it went. It remains in git history
+if the original is ever wanted.
+
+The four defects, and where each ended up:
 
 1. **Stride computation is wrong.** It derives the NPC struct size from
    `partyInventoryOffset - partyOffset`, which yields **-180**. It produced correct output only
@@ -481,6 +485,10 @@ in place so Phase 0 fixes them properly:
    is **absent**, not misordered — and the real layout is strictly ordered. The rule ("never infer
    a size from the difference between two offsets") stands; the actual hazard is sharper: **an
    offset field of `0` means the section is absent, so arithmetic on it is meaningless.**
+
+   ✅ **RESOLVED 2026-08-08 by deletion.** `Gam` reads the documented 352-byte stride and the
+   layout invariant makes the table self-checking, so the shipped reader never had this bug. The
+   spike itself still computed `(invOff - partyOff) ~/ partyCnt` right up until it was removed.
 2. **`strref = -1` is unhandled.** The protagonist's CRE name strref is `0xFFFFFFFF`. The displayed
    name comes from the GAM NPC struct `+192` (`"Aard"` on the fixture) or from the save-local
    `.tot`/`.toh` pair. Name *editing* will need the `.tot`/`.toh` path.
@@ -490,6 +498,11 @@ in place so Phase 0 fixes them properly:
    from). Name *editing* remains open and still needs `.tot`/`.toh`.
 3. **The round-trip check is tautological.** It re-reads the file and compares it to the buffer it
    already read. A real round-trip requires a writer; it arrives in Phase 1.
+
+   ✅ **RESOLVED 2026-08-07.** The writer arrived early, and with the assertion that actually
+   constrains one: edit a single field on the real 95,968-byte fixture and prove **exactly** the
+   bytes backing it differ. Byte identity on an unedited file is still recorded as proving nothing,
+   since `return input` passes it — see `test/gam/gam_edit_test.dart`.
 4. **Locale selection is arbitrary.** It takes the first `lang/*` directory `listSync()` happens to
    return — **`pt_BR`** on this install — while `Baldur.lua` records
    `SetPrivateProfileString('Language','Text','en_US')`. Currently invisible only because the one

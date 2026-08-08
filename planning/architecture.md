@@ -236,8 +236,8 @@ choices are made here so they are not improvised.
 ## Logging
 
 `dart:developer`'s `log`, never `print`. The single exception is `tool/` diagnostics, where printing
-*is* the output — which is why `tool/spike/gam_cre_tlk_spike.dart` carries
-`// ignore_for_file: avoid_print`. `avoid_print` is enabled in the analyzer, so this is enforced.
+*is* the output. `avoid_print` is enabled in the analyzer and has no suppressions anywhere (D8):
+`tool/` writes to `stdout` explicitly, which satisfies the rule honestly rather than by exemption.
 
 ## Testing
 

@@ -30,12 +30,10 @@ rather than Win32/MFC, and Flutter MVVM rather than MFC Document/View.
 | `context/` | Pinned Flutter/Dart canon (carried over from an earlier experiment). |
 | `reference/README.md` | Pointers to read-only reference trees and game data. |
 | `packages/infinity_formats/` | Pure-Dart format codecs. Must never import `package:flutter` — enforced by `test/flutter_free_test.dart`. |
-| `tool/spike/` | The working GAM → CRE → TLK read-path spike. |
 
 ## Try the spike
 
 ```bash
-fvm dart run tool/spike/gam_cre_tlk_spike.dart
 ```
 
 Parses a real BG1EE save: party, embedded creature records, ability scores, and `dialog.tlk`

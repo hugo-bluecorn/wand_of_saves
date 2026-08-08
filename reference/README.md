@@ -22,8 +22,8 @@ Paths are expressed two ways, and neither hardcodes a machine:
 | `BGEE_SAVE_DIR` | Save root, or a single save slot | auto-discovered |
 
 Auto-discovery covers Steam (Linux/macOS/Windows), GOG and Beamdog layouts. See
-`_gameCandidates` / `_saveCandidates` in `tool/spike/gam_cre_tlk_spike.dart` for the current list;
-extend it rather than hardcoding a path.
+`defaultGameRoots` / `defaultSaveRoots` in `lib/data/services/game_profile_service.dart` for the
+current list; extend it rather than hardcoding a path.
 
 ## Source references
 

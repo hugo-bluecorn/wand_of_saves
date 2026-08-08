@@ -120,7 +120,7 @@ to undo.
 fvm flutter pub get
 fvm flutter run -d linux        # primary dev target
 fvm flutter analyze             # currently clean; keep it that way
-fvm dart run tool/spike/gam_cre_tlk_spike.dart   # the working read-path spike
+fvm dart run tool/gen/generate_rules.dart        # regenerate the rules tables
 
 # The infinity_formats suite is a separate package and runs from its own directory.
 # `fvm dart test` at the repo root finds nothing and prints usage.
@@ -156,8 +156,10 @@ deferred (see below). What exists:
   (`docs/findings/eekeeper-ui-spec.json`, 72 dialogs / 927 controls / 173 classes —
   structure only; proprietary prose deliberately redacted, do not re-add).
 - ✅ Format offsets for `GAM V2.0` and `CRE V1.0` verified against a real save.
-- ✅ **A working read-path spike** — `tool/spike/gam_cre_tlk_spike.dart` parses
-  GAM → party → embedded CRE → `dialog.tlk` in ~120 lines of pure Dart, and runs today.
+- ✅ **The read path is real code.** It began as a spike that parsed GAM → party → embedded CRE →
+  `dialog.tlk`; every part of it now lives in `packages/infinity_formats` under test, so the spike
+  was **deleted** rather than maintained as a second, buggier reader. See
+  `docs/findings/verified-format-offsets.md` §Known bugs.
 - ✅ **`Tlk` shipped** — `packages/infinity_formats/lib/src/tlk/`, written test-first, 20 tests
   passing. 16 are hermetic (built against synthetic in-test fixtures, so they run on a fresh
   clone with no game installed); 4 confirm documented values against the real `dialog.tlk` and

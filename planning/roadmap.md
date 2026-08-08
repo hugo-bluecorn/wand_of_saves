@@ -6,7 +6,8 @@ Phases 0–2 produce a genuinely useful tool. Everything after is breadth. Scope
 
 ## Phase 0 — `infinity_formats` read path · **done**
 
-Promote `tool/spike/gam_cre_tlk_spike.dart` into real code.
+Promote the read-path spike into real code. (The spike was deleted once it had been;
+see `docs/findings/verified-format-offsets.md` §Known bugs.)
 
 - `GamCodec`, `CreCodec`, `Tlk` as proper classes in `packages/infinity_formats`.
 - Offset/enum tables into `lib/src/spec/` as data.
