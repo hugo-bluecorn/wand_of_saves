@@ -14,6 +14,11 @@
 
 import 'package:dart_mappable/dart_mappable.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
+import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
+import 'package:wand_of_saves/domain/proficiency.dart';
+import 'package:wand_of_saves/domain/resistances.dart';
+import 'package:wand_of_saves/domain/saving_throws.dart';
+import 'package:wand_of_saves/domain/thief_skills.dart';
 
 part 'character.mapper.dart';
 
@@ -58,6 +63,19 @@ class Character with CharacterMappable {
     required this.genderId,
     required this.kitId,
     required this.abilities,
+    required this.savingThrows,
+    required this.resistances,
+    required this.thiefSkills,
+    required this.armorClassModifiers,
+    required this.numberOfAttacks,
+    required this.morale,
+    required this.moraleBreak,
+    required this.luck,
+    required this.fatigue,
+    required this.intoxication,
+    required this.turnUndeadLevel,
+    required this.trackingSkill,
+    this.proficiencies = const [],
     this.portraitPath,
   });
 
@@ -160,6 +178,57 @@ class Character with CharacterMappable {
 
   /// The six ability scores.
   final AbilityScores abilities;
+
+  /// The five saving throws, stored exactly as the game prints them.
+  final SavingThrows savingThrows;
+
+  /// Percentage resistance to each damage type.
+  final Resistances resistances;
+
+  /// The thief skills and Lore, **as points allocated** — see [ThiefSkills].
+  final ThiefSkills thiefSkills;
+
+  /// Armour class adjustments by attack type. Signed.
+  final ArmorClassModifiers armorClassModifiers;
+
+  /// Attacks per round.
+  final int numberOfAttacks;
+
+  /// Morale.
+  final int morale;
+
+  /// The morale at which this character panics.
+  ///
+  /// ⚠️ **Shaped differently for the protagonist.** Measured on the
+  /// four-member party: the player's own record stores 0 here with a recovery
+  /// time of 1, while every recruited companion stores 4 or 5 and 60. Same
+  /// asymmetry as the class-level slots — do not read one character's record
+  /// as representative of the file.
+  final int moraleBreak;
+
+  /// Luck.
+  final int luck;
+
+  /// Fatigue.
+  final int fatigue;
+
+  /// Intoxication.
+  final int intoxication;
+
+  /// Turn undead level.
+  final int turnUndeadLevel;
+
+  /// Tracking skill.
+  final int trackingSkill;
+
+  /// The weapons and fighting styles this character has pips in.
+  ///
+  /// **Only what the record actually holds.** A character with no effect for
+  /// a weapon has no entry here rather than a zero, because the difference is
+  /// not cosmetic: raising an existing pip patches a dword in place, while
+  /// granting a proficiency from nothing adds a 264-byte effect and moves
+  /// every offset after it. The second is the layout pass, and it is deferred.
+  final List<Proficiency> proficiencies;
 
   /// Path to this character's portrait, or `null` if the save has none.
   final String? portraitPath;

@@ -16,6 +16,11 @@ class CharacterMapper extends ClassMapperBase<Character> {
     if (_instance == null) {
       MapperContainer.globals.use(_instance = CharacterMapper._());
       AbilityScoresMapper.ensureInitialized();
+      SavingThrowsMapper.ensureInitialized();
+      ResistancesMapper.ensureInitialized();
+      ThiefSkillsMapper.ensureInitialized();
+      ArmorClassModifiersMapper.ensureInitialized();
+      ProficiencyMapper.ensureInitialized();
     }
     return _instance!;
   }
@@ -125,6 +130,63 @@ class CharacterMapper extends ClassMapperBase<Character> {
     'abilities',
     _$abilities,
   );
+  static SavingThrows _$savingThrows(Character v) => v.savingThrows;
+  static const Field<Character, SavingThrows> _f$savingThrows = Field(
+    'savingThrows',
+    _$savingThrows,
+  );
+  static Resistances _$resistances(Character v) => v.resistances;
+  static const Field<Character, Resistances> _f$resistances = Field(
+    'resistances',
+    _$resistances,
+  );
+  static ThiefSkills _$thiefSkills(Character v) => v.thiefSkills;
+  static const Field<Character, ThiefSkills> _f$thiefSkills = Field(
+    'thiefSkills',
+    _$thiefSkills,
+  );
+  static ArmorClassModifiers _$armorClassModifiers(Character v) =>
+      v.armorClassModifiers;
+  static const Field<Character, ArmorClassModifiers> _f$armorClassModifiers =
+      Field('armorClassModifiers', _$armorClassModifiers);
+  static int _$numberOfAttacks(Character v) => v.numberOfAttacks;
+  static const Field<Character, int> _f$numberOfAttacks = Field(
+    'numberOfAttacks',
+    _$numberOfAttacks,
+  );
+  static int _$morale(Character v) => v.morale;
+  static const Field<Character, int> _f$morale = Field('morale', _$morale);
+  static int _$moraleBreak(Character v) => v.moraleBreak;
+  static const Field<Character, int> _f$moraleBreak = Field(
+    'moraleBreak',
+    _$moraleBreak,
+  );
+  static int _$luck(Character v) => v.luck;
+  static const Field<Character, int> _f$luck = Field('luck', _$luck);
+  static int _$fatigue(Character v) => v.fatigue;
+  static const Field<Character, int> _f$fatigue = Field('fatigue', _$fatigue);
+  static int _$intoxication(Character v) => v.intoxication;
+  static const Field<Character, int> _f$intoxication = Field(
+    'intoxication',
+    _$intoxication,
+  );
+  static int _$turnUndeadLevel(Character v) => v.turnUndeadLevel;
+  static const Field<Character, int> _f$turnUndeadLevel = Field(
+    'turnUndeadLevel',
+    _$turnUndeadLevel,
+  );
+  static int _$trackingSkill(Character v) => v.trackingSkill;
+  static const Field<Character, int> _f$trackingSkill = Field(
+    'trackingSkill',
+    _$trackingSkill,
+  );
+  static List<Proficiency> _$proficiencies(Character v) => v.proficiencies;
+  static const Field<Character, List<Proficiency>> _f$proficiencies = Field(
+    'proficiencies',
+    _$proficiencies,
+    opt: true,
+    def: const [],
+  );
   static String? _$portraitPath(Character v) => v.portraitPath;
   static const Field<Character, String> _f$portraitPath = Field(
     'portraitPath',
@@ -158,6 +220,19 @@ class CharacterMapper extends ClassMapperBase<Character> {
     #genderId: _f$genderId,
     #kitId: _f$kitId,
     #abilities: _f$abilities,
+    #savingThrows: _f$savingThrows,
+    #resistances: _f$resistances,
+    #thiefSkills: _f$thiefSkills,
+    #armorClassModifiers: _f$armorClassModifiers,
+    #numberOfAttacks: _f$numberOfAttacks,
+    #morale: _f$morale,
+    #moraleBreak: _f$moraleBreak,
+    #luck: _f$luck,
+    #fatigue: _f$fatigue,
+    #intoxication: _f$intoxication,
+    #turnUndeadLevel: _f$turnUndeadLevel,
+    #trackingSkill: _f$trackingSkill,
+    #proficiencies: _f$proficiencies,
     #portraitPath: _f$portraitPath,
   };
 
@@ -187,6 +262,19 @@ class CharacterMapper extends ClassMapperBase<Character> {
       genderId: data.dec(_f$genderId),
       kitId: data.dec(_f$kitId),
       abilities: data.dec(_f$abilities),
+      savingThrows: data.dec(_f$savingThrows),
+      resistances: data.dec(_f$resistances),
+      thiefSkills: data.dec(_f$thiefSkills),
+      armorClassModifiers: data.dec(_f$armorClassModifiers),
+      numberOfAttacks: data.dec(_f$numberOfAttacks),
+      morale: data.dec(_f$morale),
+      moraleBreak: data.dec(_f$moraleBreak),
+      luck: data.dec(_f$luck),
+      fatigue: data.dec(_f$fatigue),
+      intoxication: data.dec(_f$intoxication),
+      turnUndeadLevel: data.dec(_f$turnUndeadLevel),
+      trackingSkill: data.dec(_f$trackingSkill),
+      proficiencies: data.dec(_f$proficiencies),
       portraitPath: data.dec(_f$portraitPath),
     );
   }
@@ -251,6 +339,17 @@ extension CharacterValueCopy<$R, $Out> on ObjectCopyWith<$R, Character, $Out> {
 abstract class CharacterCopyWith<$R, $In extends Character, $Out>
     implements ClassCopyWith<$R, $In, $Out> {
   AbilityScoresCopyWith<$R, AbilityScores, AbilityScores> get abilities;
+  SavingThrowsCopyWith<$R, SavingThrows, SavingThrows> get savingThrows;
+  ResistancesCopyWith<$R, Resistances, Resistances> get resistances;
+  ThiefSkillsCopyWith<$R, ThiefSkills, ThiefSkills> get thiefSkills;
+  ArmorClassModifiersCopyWith<$R, ArmorClassModifiers, ArmorClassModifiers>
+  get armorClassModifiers;
+  ListCopyWith<
+    $R,
+    Proficiency,
+    ProficiencyCopyWith<$R, Proficiency, Proficiency>
+  >
+  get proficiencies;
   $R call({
     String? name,
     int? nameStrref,
@@ -276,6 +375,19 @@ abstract class CharacterCopyWith<$R, $In extends Character, $Out>
     int? genderId,
     int? kitId,
     AbilityScores? abilities,
+    SavingThrows? savingThrows,
+    Resistances? resistances,
+    ThiefSkills? thiefSkills,
+    ArmorClassModifiers? armorClassModifiers,
+    int? numberOfAttacks,
+    int? morale,
+    int? moraleBreak,
+    int? luck,
+    int? fatigue,
+    int? intoxication,
+    int? turnUndeadLevel,
+    int? trackingSkill,
+    List<Proficiency>? proficiencies,
     String? portraitPath,
   });
   CharacterCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(Then<$Out2, $R2> t);
@@ -293,6 +405,31 @@ class _CharacterCopyWithImpl<$R, $Out>
   AbilityScoresCopyWith<$R, AbilityScores, AbilityScores> get abilities =>
       $value.abilities.copyWith.$chain((v) => call(abilities: v));
   @override
+  SavingThrowsCopyWith<$R, SavingThrows, SavingThrows> get savingThrows =>
+      $value.savingThrows.copyWith.$chain((v) => call(savingThrows: v));
+  @override
+  ResistancesCopyWith<$R, Resistances, Resistances> get resistances =>
+      $value.resistances.copyWith.$chain((v) => call(resistances: v));
+  @override
+  ThiefSkillsCopyWith<$R, ThiefSkills, ThiefSkills> get thiefSkills =>
+      $value.thiefSkills.copyWith.$chain((v) => call(thiefSkills: v));
+  @override
+  ArmorClassModifiersCopyWith<$R, ArmorClassModifiers, ArmorClassModifiers>
+  get armorClassModifiers => $value.armorClassModifiers.copyWith.$chain(
+    (v) => call(armorClassModifiers: v),
+  );
+  @override
+  ListCopyWith<
+    $R,
+    Proficiency,
+    ProficiencyCopyWith<$R, Proficiency, Proficiency>
+  >
+  get proficiencies => ListCopyWith(
+    $value.proficiencies,
+    (v, t) => v.copyWith.$chain(t),
+    (v) => call(proficiencies: v),
+  );
+  @override
   $R call({
     String? name,
     int? nameStrref,
@@ -318,6 +455,19 @@ class _CharacterCopyWithImpl<$R, $Out>
     int? genderId,
     int? kitId,
     AbilityScores? abilities,
+    SavingThrows? savingThrows,
+    Resistances? resistances,
+    ThiefSkills? thiefSkills,
+    ArmorClassModifiers? armorClassModifiers,
+    int? numberOfAttacks,
+    int? morale,
+    int? moraleBreak,
+    int? luck,
+    int? fatigue,
+    int? intoxication,
+    int? turnUndeadLevel,
+    int? trackingSkill,
+    List<Proficiency>? proficiencies,
     Object? portraitPath = $none,
   }) => $apply(
     FieldCopyWithData({
@@ -345,6 +495,20 @@ class _CharacterCopyWithImpl<$R, $Out>
       if (genderId != null) #genderId: genderId,
       if (kitId != null) #kitId: kitId,
       if (abilities != null) #abilities: abilities,
+      if (savingThrows != null) #savingThrows: savingThrows,
+      if (resistances != null) #resistances: resistances,
+      if (thiefSkills != null) #thiefSkills: thiefSkills,
+      if (armorClassModifiers != null)
+        #armorClassModifiers: armorClassModifiers,
+      if (numberOfAttacks != null) #numberOfAttacks: numberOfAttacks,
+      if (morale != null) #morale: morale,
+      if (moraleBreak != null) #moraleBreak: moraleBreak,
+      if (luck != null) #luck: luck,
+      if (fatigue != null) #fatigue: fatigue,
+      if (intoxication != null) #intoxication: intoxication,
+      if (turnUndeadLevel != null) #turnUndeadLevel: turnUndeadLevel,
+      if (trackingSkill != null) #trackingSkill: trackingSkill,
+      if (proficiencies != null) #proficiencies: proficiencies,
       if (portraitPath != $none) #portraitPath: portraitPath,
     }),
   );
@@ -377,6 +541,22 @@ class _CharacterCopyWithImpl<$R, $Out>
     genderId: data.get(#genderId, or: $value.genderId),
     kitId: data.get(#kitId, or: $value.kitId),
     abilities: data.get(#abilities, or: $value.abilities),
+    savingThrows: data.get(#savingThrows, or: $value.savingThrows),
+    resistances: data.get(#resistances, or: $value.resistances),
+    thiefSkills: data.get(#thiefSkills, or: $value.thiefSkills),
+    armorClassModifiers: data.get(
+      #armorClassModifiers,
+      or: $value.armorClassModifiers,
+    ),
+    numberOfAttacks: data.get(#numberOfAttacks, or: $value.numberOfAttacks),
+    morale: data.get(#morale, or: $value.morale),
+    moraleBreak: data.get(#moraleBreak, or: $value.moraleBreak),
+    luck: data.get(#luck, or: $value.luck),
+    fatigue: data.get(#fatigue, or: $value.fatigue),
+    intoxication: data.get(#intoxication, or: $value.intoxication),
+    turnUndeadLevel: data.get(#turnUndeadLevel, or: $value.turnUndeadLevel),
+    trackingSkill: data.get(#trackingSkill, or: $value.trackingSkill),
+    proficiencies: data.get(#proficiencies, or: $value.proficiencies),
     portraitPath: data.get(#portraitPath, or: $value.portraitPath),
   );
 

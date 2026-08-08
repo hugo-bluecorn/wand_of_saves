@@ -13,11 +13,17 @@
 // limitations under the License.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/character.dart';
+
+import '../support/fakes.dart';
 
 /// The protagonist of the fixture save, whose values are recorded in
 /// `docs/findings/verified-format-offsets.md`.
+///
+/// Delegates to [fakeCharacter] rather than restating those values. It used to
+/// be a second copy of them, which was tolerable at twenty fields and is not
+/// at forty — two lists of Aard's numbers is two chances for one of them to
+/// stop being Aard's.
 Character aard({
   int levelFirstClass = 1,
   int levelSecondClass = 1,
@@ -25,39 +31,13 @@ Character aard({
   int strength = 18,
   int strengthBonus = 100,
   int partyOrder = 0,
-}) => Character(
-  name: 'Aard',
-  nameStrref: -1,
-  creResref: '*HARBASE',
+}) => fakeCharacter(
   partyOrder: partyOrder,
-  structOffset: 180,
-  creOffset: 532,
-  creLength: 6780,
-  currentHitPoints: 6,
-  maximumHitPoints: 7,
-  experience: 325,
-  gold: 0,
-  thac0: 20,
-  armorClass: 10,
-  armorClassNatural: 10,
   levelFirstClass: levelFirstClass,
   levelSecondClass: levelSecondClass,
   levelThirdClass: levelThirdClass,
-  reputation: 11,
-  classId: 7,
-  raceId: 2,
-  alignmentId: 0x21,
-  genderId: 1,
-  kitId: 0x40000000,
-  abilities: AbilityScores(
-    strength: strength,
-    strengthBonus: strengthBonus,
-    dexterity: 17,
-    constitution: 16,
-    intelligence: 18,
-    wisdom: 9,
-    charisma: 9,
-  ),
+  strength: strength,
+  strengthBonus: strengthBonus,
 );
 
 void main() {

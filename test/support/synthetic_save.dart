@@ -65,6 +65,28 @@ final class SyntheticCharacter {
     this.genderId = 1,
     this.kitId = 0x40000000,
     this.creSignature = 'CRE ',
+    this.saveVersusDeath = 0,
+    this.saveVersusWands = 0,
+    this.saveVersusPolymorph = 0,
+    this.saveVersusBreath = 0,
+    this.saveVersusSpells = 0,
+    this.resistFire = 0,
+    this.resistMagic = 0,
+    this.armorClassCrushing = 0,
+    this.armorClassMissile = 0,
+    this.hideInShadows = 0,
+    this.moveSilently = 0,
+    this.findTraps = 0,
+    this.lore = 0,
+    this.numberOfAttacks = 1,
+    this.morale = 10,
+    this.moraleBreak = 0,
+    this.luck = 0,
+    this.fatigue = 0,
+    this.intoxication = 0,
+    this.turnUndeadLevel = 0,
+    this.trackingSkill = 0,
+    this.proficiencies = const {},
   });
 
   /// The CRE resref, written to `GamNpcField.creResref`.
@@ -148,6 +170,77 @@ final class SyntheticCharacter {
 
   /// Overridable so a damaged creature can be built deliberately.
   final String creSignature;
+
+  /// Save versus death — the record screen's "Paralysis / Poison / Death".
+  final int saveVersusDeath;
+
+  /// Save versus wands.
+  final int saveVersusWands;
+
+  /// Save versus polymorph.
+  final int saveVersusPolymorph;
+
+  /// Save versus breath attacks.
+  final int saveVersusBreath;
+
+  /// Save versus spells.
+  final int saveVersusSpells;
+
+  /// Fire resistance, as a percentage.
+  final int resistFire;
+
+  /// Magic resistance, as a percentage.
+  final int resistMagic;
+
+  /// Armour class modifier against crushing attacks. **Signed.**
+  final int armorClassCrushing;
+
+  /// Armour class modifier against missile attacks. **Signed.**
+  final int armorClassMissile;
+
+  /// Hide in Shadows, as points allocated.
+  final int hideInShadows;
+
+  /// Move Silently, as points allocated.
+  final int moveSilently;
+
+  /// Find Traps, as points allocated.
+  final int findTraps;
+
+  /// Lore, as points allocated.
+  final int lore;
+
+  /// Attacks per round.
+  final int numberOfAttacks;
+
+  /// Morale.
+  final int morale;
+
+  /// The morale at which this creature panics.
+  final int moraleBreak;
+
+  /// Luck.
+  final int luck;
+
+  /// Fatigue.
+  final int fatigue;
+
+  /// Intoxication.
+  final int intoxication;
+
+  /// Turn undead level.
+  final int turnUndeadLevel;
+
+  /// Tracking skill.
+  final int trackingSkill;
+
+  /// Pips per proficiency, keyed by the `STATS.IDS` index opcode 233 uses.
+  ///
+  /// Written as real 264-byte v2 effect records in an effects section, because
+  /// that is where BG:EE keeps them — the header bytes IESDP documents at
+  /// `0x6e`-`0x81` are zero on every character in a real save. A synthetic
+  /// creature that put them in the header would test the wrong thing.
+  final Map<int, int> proficiencies;
 }
 
 /// Builds a `BALDUR.gam` image holding [party].
@@ -159,7 +252,11 @@ Uint8List buildSave({
   String signature = 'GAME',
 }) {
   final creAt = syntheticPartyOffset + party.length * GamNpcField.structSize;
-  final out = Uint8List(creAt + party.length * CreHeaderField.headerSize);
+  // Creature records are **not** all one size: proficiencies are effects, so a
+  // character who has any carries a longer record. Laying them out at a fixed
+  // stride is precisely the assumption Phase 1's layout pass must not make.
+  final creLengths = [for (final c in party) _creLength(c)];
+  final out = Uint8List(creAt + creLengths.fold(0, (a, b) => a + b));
   final data = ByteData.sublistView(out);
 
   out
@@ -188,10 +285,10 @@ Uint8List buildSave({
     // shape that produced the spike's stride of -180.
     ..setUint32(GamHeaderField.partyInventoryOffset.offset, 0, Endian.little);
 
+  var cre = creAt;
   for (var i = 0; i < party.length; i++) {
     final character = party[i];
     final struct = syntheticPartyOffset + i * GamNpcField.structSize;
-    final cre = creAt + i * CreHeaderField.headerSize;
 
     void npcField(GamNpcField field, int value) =>
         data.setUint32(struct + field.offset, value, Endian.little);
@@ -202,7 +299,7 @@ Uint8List buildSave({
       Endian.little,
     );
     npcField(GamNpcField.creOffset, cre);
-    npcField(GamNpcField.creLength, CreHeaderField.headerSize);
+    npcField(GamNpcField.creLength, creLengths[i]);
     _putString(
       out,
       struct + GamNpcField.creResref.offset,
@@ -217,9 +314,15 @@ Uint8List buildSave({
     );
 
     _writeCre(out, cre, character);
+    cre += creLengths[i];
   }
   return out;
 }
+
+/// Bytes one synthetic creature occupies: the header, then its effects.
+int _creLength(SyntheticCharacter character) =>
+    CreHeaderField.headerSize +
+    character.proficiencies.length * creEffectV2Length;
 
 /// Writes a savegame slot directory under [root] and returns its path.
 ///
@@ -289,9 +392,46 @@ void _writeCre(Uint8List out, int base, SyntheticCharacter character) {
   u8(CreHeaderField.gender, character.genderId);
   i32(CreHeaderField.kit, character.kitId);
 
+  u8(CreHeaderField.saveVersusDeath, character.saveVersusDeath);
+  u8(CreHeaderField.saveVersusWands, character.saveVersusWands);
+  u8(CreHeaderField.saveVersusPolymorph, character.saveVersusPolymorph);
+  u8(CreHeaderField.saveVersusBreath, character.saveVersusBreath);
+  u8(CreHeaderField.saveVersusSpells, character.saveVersusSpells);
+  u8(CreHeaderField.resistFire, character.resistFire);
+  u8(CreHeaderField.resistMagic, character.resistMagic);
+  i16(CreHeaderField.armorClassCrushing, character.armorClassCrushing);
+  i16(CreHeaderField.armorClassMissile, character.armorClassMissile);
+  u8(CreHeaderField.hideInShadows, character.hideInShadows);
+  u8(CreHeaderField.moveSilently, character.moveSilently);
+  u8(CreHeaderField.findTraps, character.findTraps);
+  u8(CreHeaderField.lore, character.lore);
+  u8(CreHeaderField.numberOfAttacks, character.numberOfAttacks);
+  u8(CreHeaderField.morale, character.morale);
+  u8(CreHeaderField.moraleBreak, character.moraleBreak);
+  u8(CreHeaderField.luck, character.luck);
+  u8(CreHeaderField.fatigue, character.fatigue);
+  u8(CreHeaderField.intoxication, character.intoxication);
+  u8(CreHeaderField.turnUndeadLevel, character.turnUndeadLevel);
+  u8(CreHeaderField.trackingSkill, character.trackingSkill);
+
   // An empty first section starting exactly where the header ends, so
   // `Cre.contentEnd` closes on the record's length as it does on a real one.
   i32(CreHeaderField.knownSpellsOffset, CreHeaderField.headerSize);
+
+  // Proficiencies live here, in the effects section, exactly as BG:EE stores
+  // them. The offset is relative to the creature, not to the savegame.
+  i32(CreHeaderField.effectsOffset, CreHeaderField.headerSize);
+  i32(CreHeaderField.effectsCount, character.proficiencies.length);
+  var effect = base + CreHeaderField.headerSize;
+  for (final entry in character.proficiencies.entries) {
+    void field(EffectV2Field f, int value) =>
+        data.setUint32(effect + f.offset, value, Endian.little);
+
+    field(EffectV2Field.opcode, Effect.proficiencyOpcode);
+    field(EffectV2Field.parameter1, entry.value);
+    field(EffectV2Field.parameter2, entry.key);
+    effect += creEffectV2Length;
+  }
 }
 
 void _putString(Uint8List out, int offset, int width, String text) {

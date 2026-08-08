@@ -24,8 +24,13 @@ import 'package:wand_of_saves/data/party_projection.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
+import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
 import 'package:wand_of_saves/domain/character.dart';
+import 'package:wand_of_saves/domain/proficiency.dart';
+import 'package:wand_of_saves/domain/resistances.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
+import 'package:wand_of_saves/domain/saving_throws.dart';
+import 'package:wand_of_saves/domain/thief_skills.dart';
 
 /// A savegame repository answering from memory.
 class FakeSaveGameRepository implements SaveGameRepository {
@@ -134,11 +139,30 @@ SaveSlot fakeSlot(String label) => SaveSlot(
 );
 
 /// A party member, with the fixture protagonist's values as defaults.
+///
+/// **Every default is Aard's, read off `000000100-Party` rather than chosen.**
+/// That matters most for the parts a test is not looking at: a helper that
+/// filled the saving throws or the proficiencies with plausible zeroes would
+/// be asserting a shape no savegame has, under a doc comment claiming
+/// otherwise.
 Character fakeCharacter({
   String name = 'Aard',
   int nameStrref = -1,
   String creResref = '*HARBASE',
   int partyOrder = 0,
+  int levelFirstClass = 1,
+  int levelSecondClass = 1,
+  int levelThirdClass = 0,
+  int strength = 18,
+  int strengthBonus = 100,
+  int classId = 7,
+  int kitId = 0x40000000,
+  List<Proficiency> proficiencies = const [
+    // Two-Weapon Style and Flail/Morning Star, at the offsets the fixture
+    // holds them: Aard dual-wields a Battle Axe and a Flail +1.
+    Proficiency(id: 114, pips: 2, effectOffset: 1340),
+    Proficiency(id: 100, pips: 2, effectOffset: 1604),
+  ],
   String? portraitPath,
 }) => Character(
   name: name,
@@ -155,23 +179,56 @@ Character fakeCharacter({
   thac0: 20,
   armorClass: 10,
   armorClassNatural: 10,
-  levelFirstClass: 1,
-  levelSecondClass: 1,
-  levelThirdClass: 0,
+  levelFirstClass: levelFirstClass,
+  levelSecondClass: levelSecondClass,
+  levelThirdClass: levelThirdClass,
   reputation: 11,
-  classId: 7,
+  classId: classId,
   raceId: 2,
   alignmentId: 0x21,
   genderId: 1,
-  kitId: 0x40000000,
-  abilities: const AbilityScores(
-    strength: 18,
-    strengthBonus: 100,
+  kitId: kitId,
+  abilities: AbilityScores(
+    strength: strength,
+    strengthBonus: strengthBonus,
     dexterity: 17,
     constitution: 16,
     intelligence: 18,
     wisdom: 9,
     charisma: 9,
   ),
+  // The same five the game printed on the record screen, and the one block of
+  // the sheet the engine does not modify before showing it.
+  savingThrows: const SavingThrows(
+    death: 14,
+    wands: 11,
+    polymorph: 13,
+    breath: 15,
+    spells: 12,
+  ),
+  resistances: Resistances.none,
+  // A Fighter/Mage has no thief skills; Lore every class has.
+  thiefSkills: const ThiefSkills(
+    hideInShadows: 0,
+    detectIllusion: 0,
+    setTraps: 0,
+    lore: 3,
+    lockpicking: 0,
+    moveSilently: 0,
+    findTraps: 0,
+    pickPockets: 0,
+  ),
+  armorClassModifiers: ArmorClassModifiers.none,
+  numberOfAttacks: 1,
+  morale: 10,
+  // 0 here and 1 for recovery is the *protagonist's* shape; every recruited
+  // companion in the same save stores 4 or 5 and 60.
+  moraleBreak: 0,
+  luck: 0,
+  fatigue: 3,
+  intoxication: 0,
+  turnUndeadLevel: 0,
+  trackingSkill: 0,
+  proficiencies: proficiencies,
   portraitPath: portraitPath,
 );

@@ -25,8 +25,13 @@ import 'dart:io';
 
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
+import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
 import 'package:wand_of_saves/domain/character.dart';
+import 'package:wand_of_saves/domain/proficiency.dart';
+import 'package:wand_of_saves/domain/resistances.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
+import 'package:wand_of_saves/domain/saving_throws.dart';
+import 'package:wand_of_saves/domain/thief_skills.dart';
 
 /// Prefix of the party portraits the game writes beside each savegame.
 ///
@@ -55,6 +60,10 @@ List<Character> charactersFrom(Gam gam, SaveSlot slot) => [
 Character _characterFrom(GamNpc npc, SaveSlot slot) {
   final cre = CreCodec.decode(npc.creBytes, source: npc.creResref);
   final (first, second, third) = cre.levels;
+  final saves = cre.savingThrows;
+  final resists = cre.resistances;
+  final skills = cre.thiefSkills;
+  final modifiers = cre.armorClassModifiers;
 
   return Character(
     name: npc.displayName,
@@ -89,6 +98,59 @@ Character _characterFrom(GamNpc npc, SaveSlot slot) {
       wisdom: cre.wisdom,
       charisma: cre.charisma,
     ),
+    savingThrows: SavingThrows(
+      death: saves.death,
+      wands: saves.wands,
+      polymorph: saves.polymorph,
+      breath: saves.breath,
+      spells: saves.spells,
+    ),
+    resistances: Resistances(
+      fire: resists.fire,
+      cold: resists.cold,
+      electricity: resists.electricity,
+      acid: resists.acid,
+      magic: resists.magic,
+      magicFire: resists.magicFire,
+      magicCold: resists.magicCold,
+      slashing: resists.slashing,
+      crushing: resists.crushing,
+      piercing: resists.piercing,
+      missile: resists.missile,
+    ),
+    thiefSkills: ThiefSkills(
+      hideInShadows: skills.hideInShadows,
+      detectIllusion: skills.detectIllusion,
+      setTraps: skills.setTraps,
+      lore: skills.lore,
+      lockpicking: skills.lockpicking,
+      moveSilently: skills.moveSilently,
+      findTraps: skills.findTraps,
+      pickPockets: skills.pickPockets,
+    ),
+    armorClassModifiers: ArmorClassModifiers(
+      crushing: modifiers.crushing,
+      missile: modifiers.missile,
+      piercing: modifiers.piercing,
+      slashing: modifiers.slashing,
+    ),
+    numberOfAttacks: cre.numberOfAttacks,
+    morale: cre.morale,
+    moraleBreak: cre.moraleBreak,
+    luck: cre.luck,
+    fatigue: cre.fatigue,
+    intoxication: cre.intoxication,
+    turnUndeadLevel: cre.turnUndeadLevel,
+    trackingSkill: cre.trackingSkill,
+    proficiencies: [
+      for (final effect in cre.effects)
+        if (effect.isProficiency)
+          Proficiency(
+            id: effect.parameter2,
+            pips: effect.parameter1,
+            effectOffset: effect.start,
+          ),
+    ],
     portraitPath: _portraitFor(npc.partyOrder, slot),
   );
 }
