@@ -104,6 +104,22 @@ class CharacterMapper extends ClassMapperBase<Character> {
     'reputation',
     _$reputation,
   );
+  static int _$classId(Character v) => v.classId;
+  static const Field<Character, int> _f$classId = Field('classId', _$classId);
+  static int _$raceId(Character v) => v.raceId;
+  static const Field<Character, int> _f$raceId = Field('raceId', _$raceId);
+  static int _$alignmentId(Character v) => v.alignmentId;
+  static const Field<Character, int> _f$alignmentId = Field(
+    'alignmentId',
+    _$alignmentId,
+  );
+  static int _$genderId(Character v) => v.genderId;
+  static const Field<Character, int> _f$genderId = Field(
+    'genderId',
+    _$genderId,
+  );
+  static int _$kitId(Character v) => v.kitId;
+  static const Field<Character, int> _f$kitId = Field('kitId', _$kitId);
   static AbilityScores _$abilities(Character v) => v.abilities;
   static const Field<Character, AbilityScores> _f$abilities = Field(
     'abilities',
@@ -136,6 +152,11 @@ class CharacterMapper extends ClassMapperBase<Character> {
     #levelSecondClass: _f$levelSecondClass,
     #levelThirdClass: _f$levelThirdClass,
     #reputation: _f$reputation,
+    #classId: _f$classId,
+    #raceId: _f$raceId,
+    #alignmentId: _f$alignmentId,
+    #genderId: _f$genderId,
+    #kitId: _f$kitId,
     #abilities: _f$abilities,
     #portraitPath: _f$portraitPath,
   };
@@ -160,6 +181,11 @@ class CharacterMapper extends ClassMapperBase<Character> {
       levelSecondClass: data.dec(_f$levelSecondClass),
       levelThirdClass: data.dec(_f$levelThirdClass),
       reputation: data.dec(_f$reputation),
+      classId: data.dec(_f$classId),
+      raceId: data.dec(_f$raceId),
+      alignmentId: data.dec(_f$alignmentId),
+      genderId: data.dec(_f$genderId),
+      kitId: data.dec(_f$kitId),
       abilities: data.dec(_f$abilities),
       portraitPath: data.dec(_f$portraitPath),
     );
@@ -244,6 +270,11 @@ abstract class CharacterCopyWith<$R, $In extends Character, $Out>
     int? levelSecondClass,
     int? levelThirdClass,
     double? reputation,
+    int? classId,
+    int? raceId,
+    int? alignmentId,
+    int? genderId,
+    int? kitId,
     AbilityScores? abilities,
     String? portraitPath,
   });
@@ -281,6 +312,11 @@ class _CharacterCopyWithImpl<$R, $Out>
     int? levelSecondClass,
     int? levelThirdClass,
     double? reputation,
+    int? classId,
+    int? raceId,
+    int? alignmentId,
+    int? genderId,
+    int? kitId,
     AbilityScores? abilities,
     Object? portraitPath = $none,
   }) => $apply(
@@ -303,6 +339,11 @@ class _CharacterCopyWithImpl<$R, $Out>
       if (levelSecondClass != null) #levelSecondClass: levelSecondClass,
       if (levelThirdClass != null) #levelThirdClass: levelThirdClass,
       if (reputation != null) #reputation: reputation,
+      if (classId != null) #classId: classId,
+      if (raceId != null) #raceId: raceId,
+      if (alignmentId != null) #alignmentId: alignmentId,
+      if (genderId != null) #genderId: genderId,
+      if (kitId != null) #kitId: kitId,
       if (abilities != null) #abilities: abilities,
       if (portraitPath != $none) #portraitPath: portraitPath,
     }),
@@ -330,6 +371,11 @@ class _CharacterCopyWithImpl<$R, $Out>
     levelSecondClass: data.get(#levelSecondClass, or: $value.levelSecondClass),
     levelThirdClass: data.get(#levelThirdClass, or: $value.levelThirdClass),
     reputation: data.get(#reputation, or: $value.reputation),
+    classId: data.get(#classId, or: $value.classId),
+    raceId: data.get(#raceId, or: $value.raceId),
+    alignmentId: data.get(#alignmentId, or: $value.alignmentId),
+    genderId: data.get(#genderId, or: $value.genderId),
+    kitId: data.get(#kitId, or: $value.kitId),
     abilities: data.get(#abilities, or: $value.abilities),
     portraitPath: data.get(#portraitPath, or: $value.portraitPath),
   );

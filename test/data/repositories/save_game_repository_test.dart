@@ -266,6 +266,17 @@ void main() {
       expect(party.single.armorClass, -2);
     });
 
+    test('carries who the character is, as the engine numbers it', () async {
+      // Naming these is CLASS.IDS/RACE.IDS/ALIGNMEN.IDS, which is game data,
+      // not file layout -- so the projection reports numbers and the rules
+      // layer turns them into "Fighter / Mage", "Elf", "Neutral Good".
+      final character = (await partyOf(const [SyntheticCharacter()])).single;
+
+      expect(character.classId, 7);
+      expect(character.raceId, 2);
+      expect(character.alignmentId, 0x21);
+    });
+
     test('carries the byte identity an edit will need', () async {
       // A character is addressed by where they are in the file. Two party
       // members may legitimately share a name.

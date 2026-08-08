@@ -59,6 +59,11 @@ final class SyntheticCharacter {
     this.intelligence = 18,
     this.wisdom = 9,
     this.charisma = 9,
+    this.classId = 7,
+    this.raceId = 2,
+    this.alignmentId = 0x21,
+    this.genderId = 1,
+    this.kitId = 0x40000000,
     this.creSignature = 'CRE ',
   });
 
@@ -125,6 +130,21 @@ final class SyntheticCharacter {
 
   /// Charisma.
   final int charisma;
+
+  /// `CLASS.IDS` number. The fixture's `7` is `FIGHTER_MAGE`.
+  final int classId;
+
+  /// `RACE.IDS` number. The fixture's `2` is `ELF`.
+  final int raceId;
+
+  /// `ALIGNMEN.IDS` number, written in hex there. `0x21` is `NEUTRAL_GOOD`.
+  final int alignmentId;
+
+  /// `GENDER.IDS` number. The fixture's `1` is `MALE`.
+  final int genderId;
+
+  /// The kit dword. `0x40000000` is what a character with no kit carries.
+  final int kitId;
 
   /// Overridable so a damaged creature can be built deliberately.
   final String creSignature;
@@ -263,6 +283,11 @@ void _writeCre(Uint8List out, int base, SyntheticCharacter character) {
   u8(CreHeaderField.dexterity, character.dexterity);
   u8(CreHeaderField.constitution, character.constitution);
   u8(CreHeaderField.charisma, character.charisma);
+  u8(CreHeaderField.characterClass, character.classId);
+  u8(CreHeaderField.race, character.raceId);
+  u8(CreHeaderField.alignment, character.alignmentId);
+  u8(CreHeaderField.gender, character.genderId);
+  i32(CreHeaderField.kit, character.kitId);
 
   // An empty first section starting exactly where the header ends, so
   // `Cre.contentEnd` closes on the record's length as it does on a real one.

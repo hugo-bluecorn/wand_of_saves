@@ -75,6 +75,11 @@ Character _characterFrom(GamNpc npc, SaveSlot slot) {
     levelSecondClass: second,
     levelThirdClass: third,
     reputation: cre.reputation,
+    classId: cre.classId,
+    raceId: cre.raceId,
+    alignmentId: cre.alignmentId,
+    genderId: cre.genderId,
+    kitId: cre.kitId,
     abilities: AbilityScores(
       strength: cre.strength,
       strengthBonus: cre.strengthBonus,

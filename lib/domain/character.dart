@@ -52,6 +52,11 @@ class Character with CharacterMappable {
     required this.levelSecondClass,
     required this.levelThirdClass,
     required this.reputation,
+    required this.classId,
+    required this.raceId,
+    required this.alignmentId,
+    required this.genderId,
+    required this.kitId,
     required this.abilities,
     this.portraitPath,
   });
@@ -129,6 +134,29 @@ class Character with CharacterMappable {
 
   /// Reputation as displayed, e.g. `11.0`. Stored in the file times ten.
   final double reputation;
+
+  /// Class, as a `CLASS.IDS` number. `7` is `FIGHTER_MAGE`.
+  ///
+  /// The number rather than the name: naming it takes the game's own
+  /// identifier tables, which is the rules layer's job, not the model's.
+  final int classId;
+
+  /// Race, as a `RACE.IDS` number. `2` is `ELF`.
+  final int raceId;
+
+  /// Alignment, as an `ALIGNMEN.IDS` number. `0x21` is `NEUTRAL_GOOD`.
+  final int alignmentId;
+
+  /// Gender, as a `GENDER.IDS` number. `1` is `MALE`.
+  final int genderId;
+
+  /// Kit, as the dword the creature record stores — **not** a `KIT.IDS` key.
+  ///
+  /// Carried raw because the relationship between the two is not understood:
+  /// a character with no kit stores `0x40000000`, and shifting that right by
+  /// 16 lands on `KIT.IDS`'s first entry rather than on any "no kit" row. Kept
+  /// so the question can be answered later without another format change.
+  final int kitId;
 
   /// The six ability scores.
   final AbilityScores abilities;

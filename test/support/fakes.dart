@@ -159,6 +159,11 @@ Character fakeCharacter({
   levelSecondClass: 1,
   levelThirdClass: 0,
   reputation: 11,
+  classId: 7,
+  raceId: 2,
+  alignmentId: 0x21,
+  genderId: 1,
+  kitId: 0x40000000,
   abilities: const AbilityScores(
     strength: 18,
     strengthBonus: 100,

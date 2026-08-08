@@ -27,6 +27,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
+import 'package:wand_of_saves/domain/rules/game_rules.dart';
 
 /// Locates the game installation and save directory on this machine.
 final gameProfileServiceProvider = Provider<GameProfileService>(
@@ -38,6 +39,17 @@ final saveGameRepositoryProvider = Provider<SaveGameRepository>(
   (ref) => FileSaveGameRepository(
     profile: ref.watch(gameProfileServiceProvider),
   ),
+);
+
+/// The game's own rules tables.
+///
+/// A snapshot generated from IESDP's copies of the shipped `2DA` and `IDS`
+/// files, which is right for an unmodded install. It is a provider so Phase
+/// 3's resource index can override it with the player's actual files — a
+/// modded game has different tables, and nothing above this should have to
+/// know which it got.
+final gameRulesProvider = Provider<GameRules>(
+  (ref) => const GeneratedGameRules(),
 );
 
 /// Source of truth for the game's displayable text.

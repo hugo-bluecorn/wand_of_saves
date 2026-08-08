@@ -44,6 +44,11 @@ Character aard({
   levelSecondClass: levelSecondClass,
   levelThirdClass: levelThirdClass,
   reputation: 11,
+  classId: 7,
+  raceId: 2,
+  alignmentId: 0x21,
+  genderId: 1,
+  kitId: 0x40000000,
   abilities: AbilityScores(
     strength: strength,
     strengthBonus: strengthBonus,
