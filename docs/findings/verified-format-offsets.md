@@ -864,6 +864,83 @@ ways:
 
 Still fixed-width, so still no layout pass. Phase 1 remains the untouched half.
 
+### Extended 2026-08-08 — a field inside an *effect*, and it is read by the engine
+
+The third and hardest of the fixed-width claims: a value that is not in any header at all, but
+inside one 264-byte effect record in a creature's effects section. Two edits went in one save and
+one load — a plain header byte and a patched effect, so a single record screen answers both.
+
+**On disk**, diffing against the `.bak`: the file is the same 101,352 bytes and **exactly two
+bytes differ**.
+
+| Offset | Change | What |
+|---|---|---|
+| `0xb84` | `2` → `3` | Aard, CRE `+0x550` — the effect at 1340, plus `EffectV2Field.parameter1` at `+0x14` |
+| `0x3a34` | `12` → `5` | Xzar, CRE `+0x58` — `saveVersusSpells` |
+
+**In game**, BG:EE agreed with both:
+
+- Xzar's record screen prints **`Spell: 5`**, with the other four saving throws still
+  `14 / 11 / 13 / 15`. Those four are the immediate byte neighbours of the one written, which is
+  what makes this a check on the *write* and not just on the read.
+- Aard's combat screen prints **`Two-Weapon Style +++`** — three pips, from the patched effect.
+
+⚠️ **And the engine did not merely display it, it applied it.** Aard's off-hand THAC0 breakdown
+itemises `Two-Weapon Style: +2`. The game's own `stylbonu.2da` gives `THAC0_LEFT` as **4** for
+`TWOWEAPON-2` and **2** for `TWOWEAPON-3`, so `+2` is reachable only from three pips.
+`THAC0_RIGHT` is `0` in both rows, and the main hand correctly did not move — it read 12 before
+and 12 after.
+
+**The before-state was already in this document**, which is what makes the off-hand a measured
+pair rather than a prediction. §Stored vs displayed records the 2026-08-07 run on the same
+character reading *"12 main hand / **14** off hand"* at two pips. At three it is **12 / 12**. Two
+pips of difference, exactly what the table predicts, on a screen nobody was looking at the
+off-hand for at the time.
+
+⚠️ Caveat, since it costs one sentence: the 14 was read on `000000099-wandtest` and the 12 on
+`000000100-Party` — the same character with the same weapons and the same stored THAC0 of 15, but
+not literally the same file. The main hand agreeing at 12 across both is the check that they are
+comparable.
+
+Two more of that screen's lines are confirmations of things nothing had checked:
+
+- `Proficiencies: -1` on the off-hand is `wspecial.2da` row **2** (`HIT 1`) — so the engine still
+  reads Flail/Morning Star at exactly 2 pips. The *other* effect, one 264-byte stride away, was
+  untouched. Patching the wrong one is the failure a single-proficiency character could not show.
+- `Proficiencies: +2` on the **main** hand is the unproficient-weapon penalty: Aard wields a
+  Battle Axe and has no axe proficiency at all. It is not a two-weapon number, which is why it
+  does not move with the pips.
+
+**Base THAC0 is the stored byte, confirmed at last.** The record screen labels it `Base THAC0` and
+prints **15** for Aard, whose record stores 15; and **20** for Xzar, whose record stores 20. Xzar's
+second line reads `THAC0: 20` as well — a mage with no proficiency and no Strength bonus has
+nothing applied, which is exactly what the panel's own note predicted.
+
+### ⚠️ The creature's reputation copy is stale, and the engine ignores it — 2026-08-08
+
+Found by cross-checking Xzar's record screen against his bytes, and it falsified a claim this
+project had written into the UI.
+
+| Where | Value |
+|---|---|
+| GAM header `reputation` (`0x54`, ×10) | **110** → 11.0 |
+| Aard's CRE `0x44` | 110 → 11.0 |
+| Imoen's, Montaron's, **Xzar's** CRE `0x44` | **100** → 10.0 |
+| What BG:EE prints on Xzar's record screen | **`Reputation: Average (11)`** |
+
+So the number the engine shows is the **party's**, and three of the four creature copies disagree
+with it. Only the protagonist's agreed — the same asymmetry as the class-level slots and the
+morale break point, and the same trap: a one-character party cannot show it, because there the two
+always match.
+
+The panel had been showing the *creature's* copy under a tooltip asserting that it "matches the
+party's". It read 10.0 on a screen where the game says 11. It now shows the party's value and says
+what the stale copy is.
+
+⚠️ **The general lesson, which has now cost three findings: a value duplicated between the GAM and
+a CRE is not necessarily maintained in both.** Prefer the one the engine is known to read, and
+find out which that is by looking rather than by reasoning.
+
 ## `chitin.key` and the BIFF archives — measured 2026-08-08
 
 The resource index turned out to be one of the cheapest things in this project, not one of the

@@ -250,6 +250,10 @@ Uint8List buildSave({
   int gameTime = 4791,
   String area = 'AR2600',
   String signature = 'GAME',
+  // ×10, as the file stores it. Defaults to the fixture's 11.0 — and
+  // deliberately *not* the same as `SyntheticCharacter.reputationTimesTen`,
+  // because the two really do disagree in a real save.
+  int partyReputationTimesTen = 110,
 }) {
   final creAt = syntheticPartyOffset + party.length * GamNpcField.structSize;
   // Creature records are **not** all one size: proficiencies are effects, so a
@@ -271,6 +275,11 @@ Uint8List buildSave({
   data
     ..setUint32(GamHeaderField.gameTime.offset, gameTime, Endian.little)
     ..setUint32(GamHeaderField.partyGold.offset, partyGold, Endian.little)
+    ..setUint32(
+      GamHeaderField.reputation.offset,
+      partyReputationTimesTen,
+      Endian.little,
+    )
     ..setUint32(
       GamHeaderField.partyNpcOffset.offset,
       syntheticPartyOffset,

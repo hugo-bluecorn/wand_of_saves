@@ -131,6 +131,7 @@ class _PartyShell extends StatelessWidget {
           child: _CharacterSummary(
             character: state.members[state.selectedIndex],
             proficiencies: state.proficiencies,
+            reputation: state.reputation,
             slotDirectoryName: slotDirectoryName,
           ),
         ),
@@ -276,11 +277,17 @@ class _CharacterSummary extends ConsumerWidget {
   const _CharacterSummary({
     required this.character,
     required this.proficiencies,
+    required this.reputation,
     required this.slotDirectoryName,
   });
 
   final Character character;
   final ProficiencyCatalogue proficiencies;
+
+  /// The **party's** reputation — see `PartyState.reputation` for why this is
+  /// not the character's own copy.
+  final double reputation;
+
   final String slotDirectoryName;
 
   @override
@@ -421,13 +428,15 @@ class _CharacterSummary extends ConsumerWidget {
                     'moves it further, and that needs the item records.',
               ),
             _ReadOnlyStat(
-              label: 'Reputation',
-              value: character.reputation.toStringAsFixed(1),
+              label: 'Reputation (party)',
+              value: reputation.toStringAsFixed(1),
               hint:
-                  'Reputation belongs to the party, not to one character. '
-                  'This is the copy stored on this creature record, and it '
-                  'matches the party’s — so editing it here alone would only '
-                  'make the two disagree.',
+                  'Reputation belongs to the party, not to one character, and '
+                  'this is the party’s — which is the number the game shows. '
+                  'Each creature record carries a copy of its own, and on '
+                  'everyone but the protagonist it goes stale: this character '
+                  'stores ${character.reputation.toStringAsFixed(1)}, and the '
+                  'engine ignores it. Measured in game.',
             ),
           ],
         ),

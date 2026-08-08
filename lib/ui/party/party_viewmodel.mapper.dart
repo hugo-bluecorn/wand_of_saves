@@ -32,6 +32,11 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
     'members',
     _$members,
   );
+  static double _$reputation(PartyState v) => v.reputation;
+  static const Field<PartyState, double> _f$reputation = Field(
+    'reputation',
+    _$reputation,
+  );
   static ProficiencyCatalogue _$proficiencies(PartyState v) => v.proficiencies;
   static const Field<PartyState, ProficiencyCatalogue> _f$proficiencies = Field(
     'proficiencies',
@@ -72,6 +77,7 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
   final MappableFields<PartyState> fields = const {
     #slot: _f$slot,
     #members: _f$members,
+    #reputation: _f$reputation,
     #proficiencies: _f$proficiencies,
     #selectedIndex: _f$selectedIndex,
     #isDirty: _f$isDirty,
@@ -83,6 +89,7 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
     return PartyState(
       slot: data.dec(_f$slot),
       members: data.dec(_f$members),
+      reputation: data.dec(_f$reputation),
       proficiencies: data.dec(_f$proficiencies),
       selectedIndex: data.dec(_f$selectedIndex),
       isDirty: data.dec(_f$isDirty),
@@ -159,6 +166,7 @@ abstract class PartyStateCopyWith<$R, $In extends PartyState, $Out>
   $R call({
     SaveSlot? slot,
     List<Character>? members,
+    double? reputation,
     ProficiencyCatalogue? proficiencies,
     int? selectedIndex,
     bool? isDirty,
@@ -194,6 +202,7 @@ class _PartyStateCopyWithImpl<$R, $Out>
   $R call({
     SaveSlot? slot,
     List<Character>? members,
+    double? reputation,
     ProficiencyCatalogue? proficiencies,
     int? selectedIndex,
     bool? isDirty,
@@ -203,6 +212,7 @@ class _PartyStateCopyWithImpl<$R, $Out>
     FieldCopyWithData({
       if (slot != null) #slot: slot,
       if (members != null) #members: members,
+      if (reputation != null) #reputation: reputation,
       if (proficiencies != null) #proficiencies: proficiencies,
       if (selectedIndex != null) #selectedIndex: selectedIndex,
       if (isDirty != null) #isDirty: isDirty,
@@ -214,6 +224,7 @@ class _PartyStateCopyWithImpl<$R, $Out>
   PartyState $make(CopyWithData data) => PartyState(
     slot: data.get(#slot, or: $value.slot),
     members: data.get(#members, or: $value.members),
+    reputation: data.get(#reputation, or: $value.reputation),
     proficiencies: data.get(#proficiencies, or: $value.proficiencies),
     selectedIndex: data.get(#selectedIndex, or: $value.selectedIndex),
     isDirty: data.get(#isDirty, or: $value.isDirty),

@@ -39,13 +39,19 @@ void main() {
     Map<int, String> strings = const {},
     StringRepository? stringRepository,
     ResourceRepository? resourceRepository,
+    int partyReputationTimesTen = 110,
     bool slotExists = true,
   }) => ProviderContainer.test(
     overrides: [
       saveGameRepositoryProvider.overrideWithValue(
         FakeSaveGameRepository(
           slots: slotExists ? [fakeSlot('last')] : const [],
-          gam: GamCodec.decode(buildSave(party: party)),
+          gam: GamCodec.decode(
+            buildSave(
+              party: party,
+              partyReputationTimesTen: partyReputationTimesTen,
+            ),
+          ),
         ),
       ),
       stringRepositoryProvider.overrideWithValue(
@@ -194,6 +200,36 @@ void main() {
         expect(state.members.single.name, '*INSC');
       },
     );
+  });
+
+  group('reputation', () {
+    test('comes from the party, not from the creature record', () async {
+      // ⚠️ **Measured in game 2026-08-08, and it falsified what the panel
+      // said.** In the real four-member save the GAM holds 11.0 and BG:EE
+      // prints "Reputation: Average (11)" on Xzar's record screen — while
+      // Xzar's own creature record holds 10.0, as do Montaron's and Imoen's.
+      // Only the protagonist's copy agreed.
+      //
+      // So the creature's copy is not what the engine displays, and the panel
+      // was showing 10.0 against a game showing 11 with a tooltip asserting
+      // the two matched.
+      // The party's 11.0 is `buildSave`'s default, because it is the
+      // fixture's; only the creature's stale 10.0 needs stating.
+      final container = containerWith(
+        party: const [
+          SyntheticCharacter(reputationTimesTen: 100),
+        ],
+      );
+
+      final state = await container.read(partyProvider(slotName).future);
+
+      expect(state.reputation, 11.0);
+      expect(
+        state.members.single.reputation,
+        10.0,
+        reason: 'the stale copy is still read, it is just not what is shown',
+      );
+    });
   });
 
   group('proficiencies', () {

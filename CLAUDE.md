@@ -174,11 +174,14 @@ Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seve
 > **and proficiencies** — the last of which are opcode 233 effects patched in place, named from
 > the player's own `weapprof.2da` through their own `dialog.tlk` (D11's reader, now built).
 >
-> **The one thing still owed is the in-game run, and it is the phase gate.** Set Xzar's
-> Save vs. Spell 12 → 5 and raise Aard's Two-Weapon Style 2 → 3, then read the record screen:
-> a plain header byte and a patched effect, both visible at once, and Aard gaining a pip should
-> also move his off-hand THAC0. Nothing here is *verified* until that comes back. `BALDUR.gam.bak`
-> is written automatically.
+> **The in-game gate passed.** Xzar's Save vs. Spell 12 → 5 and Aard's Two-Weapon Style 2 → 3 went
+> in one save: **exactly two bytes changed**, the file did not resize, and BG:EE printed `Spell: 5`
+> with the other four saves untouched and `Two-Weapon Style +++`. The engine also *applied* the
+> pip — the off-hand THAC0 breakdown reads `Two-Weapon Style: +2`, which `stylbonu.2da` gives only
+> for three pips. Full write-up in `docs/findings/verified-format-offsets.md` §Write path.
+>
+> That run also caught a defect in the panel and settled two long-standing assumptions — see
+> §What the game taught us. **Nothing is owed.**
 >
 > **What is deliberately not done**, and why, in the order a next session would want them:
 >
@@ -231,6 +234,19 @@ Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seve
 intact** (2026-08-07). In test, `Gam.withCreatureField` changes *exactly one byte* of the real
 95,968-byte fixture.
 
+**Passed again on 2026-08-08, one layer deeper — a field inside an *effect*.** Two edits, one
+save, one load: Xzar's Save vs. Spell 12 → 5 (a header byte) and Aard's Two-Weapon Style 2 → 3
+(parameter 1 of a 264-byte opcode 233 record). The file kept its 101,352 bytes and **exactly two
+differ from the `.bak`**. BG:EE printed `Spell: 5` with the four neighbouring saving throws
+untouched, and `Two-Weapon Style +++`.
+
+⚠️ **The engine applied the pip, it did not merely display it.** Aard's off-hand THAC0 breakdown
+reads `Two-Weapon Style: +2`, and the game's own `stylbonu.2da` gives `THAC0_LEFT` of 4 at two
+pips and 2 at three — so `+2` is reachable only from three. His off-hand THAC0 moved 14 → 12
+while the main hand correctly did not, `THAC0_RIGHT` being 0 in both rows. The second effect one
+stride away was untouched, confirmed independently by the engine's own `Proficiencies: -1`
+(`wspecial.2da` row 2 — still two pips in Flail/Morning Star).
+
 ### What the game taught us that reasoning did not
 
 Read `docs/findings/verified-format-offsets.md` §Stored vs displayed before touching a stat. In
@@ -255,6 +271,14 @@ its unused class-level slots: only the player's own character stores `01 01 00`,
 shipped NPC stores `01 01 01`. Read the slot count from `CLASS.IDS`, never from the bytes. The
 same applies to the CRE resref — the engine overwrites its **first byte** with `*`, so
 `CHARBASE` arrives as `*HARBASE` and the resref is not an identity key. Use `dialogFile`.
+
+**The protagonist is not shaped like a companion**, and that has now cost four findings — the
+level slots, the morale break point (`0` and recovery `1` against every NPC's `4`–`5` and `60`),
+and reputation. ⚠️ **A value duplicated between the GAM and a CRE is not necessarily maintained
+in both:** the party's reputation is 11.0 and the engine prints 11, while Imoen's, Montaron's and
+Xzar's own copies sit stale at 10.0 and only Aard's agrees. Prefer the field the engine is known
+to read, and find out which that is by looking. **A one-character party can never show any of
+this**, because there the two always match.
 
 ### Open, and recorded rather than guessed
 

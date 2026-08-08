@@ -59,6 +59,7 @@ class PartyState with PartyStateMappable {
   const PartyState({
     required this.slot,
     required this.members,
+    required this.reputation,
     this.proficiencies = ProficiencyCatalogue.empty,
     this.selectedIndex = 0,
     this.isDirty = false,
@@ -75,6 +76,20 @@ class PartyState with PartyStateMappable {
   /// copy lives in private fields on the notifier, so a widget can render this
   /// without any way to reach into the file.
   final List<Character> members;
+
+  /// The party's reputation, as displayed.
+  ///
+  /// ⚠️ **The GAM's, not the creature's, and they genuinely differ.** Every
+  /// creature record carries a reputation byte of its own, and it is easy to
+  /// assume the engine reads it. Measured in game 2026-08-08 on the
+  /// four-member save: the GAM held 11.0 and BG:EE printed "Average (11)" on
+  /// Xzar's record screen, while Xzar's own record held 10.0 — as did
+  /// Montaron's and Imoen's. Only the protagonist's copy agreed.
+  ///
+  /// The companions' copies are simply stale; the engine never consults them.
+  /// The panel used to show one, against a game showing something else, under
+  /// a tooltip asserting the two matched.
+  final double reputation;
 
   /// What the game calls each proficiency, and how many pips it allows.
   ///
@@ -273,6 +288,7 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
                   name: _names[member.creOffset] ?? member.creResref,
                 ),
       ],
+      reputation: _working!.reputation,
       proficiencies: _proficiencies,
       selectedIndex: selectedIndex,
       isDirty: _working != _onDisk,
