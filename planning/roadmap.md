@@ -65,9 +65,23 @@ points), `dexmod` (Dexterity → armour class), `strmod`/`strmodex`, `thac0`, `h
 - ✅ **Generated**, not hand-written — `tool/gen/generate_rules.dart`, run by hand, output
   committed and stamped with the IESDP commit.
 - ✅ Class, race, gender and alignment names; Dexterity → armour class; Constitution → hit points.
-- ⬅️ Still open, and now known to need **Phase 3's real tables**: the rules-based hit-point cap
-  (IESDP ships no per-class dice tables), the warrior column (needs a Constitution 17+ character),
-  the kit encoding, and the armour-class question left by the Phase 2 gate.
+- ✅ **The kit encoding** — settled 2026-08-08. `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and
+  `0x4000` (`TRUECLASS`) both mean no kit. It had looked undecodable because `IdsMap` was
+  last-wins and `KIT.IDS` names `0x4000` twice.
+- ✅ **The warrior column** — settled 2026-08-08. A Fighter/Mage at Constitution 18 made the
+  engine print `Bonus Hit Points/Level: +4`, the warrior row, so containment is the rule and
+  `warriorRoots` was right.
+- ✅ **The armour-class question** — settled 2026-08-08, before this list was written: the engine
+  reads the **effective** field `0x48`.
+- ⬅️ **The rules-based hit-point cap** is the only item here that still needs **Phase 3's real
+  tables** — IESDP ships no per-class dice tables, only a template.
+- ⬅️ **The multi-class hit-point multiplier** is open but *not* blocked on Phase 3, and **must not
+  be answered by editing a level** — D10. It resolves itself when the protagonist's total
+  experience is between 4000 and 5000.
+
+Three of those four closed in one afternoon because a save with **four party members** finally
+existed. Two also exposed defects a one-character fixture had hidden: `Level 1/1/1` on a
+single-class Thief, and an `IdsMap` silently dropping duplicate keys.
 
 Haeravon's BG:EE walkthrough carries the same tables in prose and is useful as a **cross-check**,
 not a source: its §6.3 independently gives Constitution 16 → +2 hit points per level, agreeing

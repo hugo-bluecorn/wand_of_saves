@@ -34,11 +34,33 @@ compression `0`. File size 13,830 = 54-byte header + 84 rows × 164 bytes (54 ×
 `BALDUR.bmp` — so **the party rail shows the player's real portraits without the BIFF index
 (Phase 3) or the BAM decoder (Phase 5)**.
 
-⚠️ **The index mapping is UNVERIFIED.** Every fixture on this machine holds a *one-character*
-party, where party order and array index are both `0` and therefore indistinguishable — the same
-blind spot that hid the spike's stride of −180. The app keys on **party order** and treats a
-missing file as "no portrait" rather than an error, so a wrong reading costs a picture and nothing
-else. Settling it needs a save with 2+ party members.
+#### ✅ The index mapping — SETTLED 2026-08-08 by a four-member party
+
+`000000100-Party` carries Aard, Imoen, Montaron and Xzar, and the overlay is the proof. Each
+portrait's hit points match exactly one member's **stored** hit points plus **that member's own**
+Constitution bonus, and no two of the numbers are the same:
+
+| file | overlay | member | stored | Con | `hpconbon` | stored + bonus |
+|---|---|---|---|---|---|---|
+| `PORTRT0` | 39/42 | party[0] Aard | 37/40 | 16 | +2 | 39/42 ✓ |
+| `PORTRT1` | 8/8 | party[1] Imoen | 6/6 | 16 | +2 | 8/8 ✓ |
+| `PORTRT2` | 9/9 | party[2] Montaron | 8/8 | 15 | +1 | 9/9 ✓ |
+| `PORTRT3` | 4/4 | party[3] Xzar | 4/4 | 10 | +0 | 4/4 ✓ |
+
+**`PORTRT<n>` is the n-th party slot**, and there are exactly `partyNpcCount` of them. The reading
+the app already had is correct.
+
+One detail this save cannot show, recorded rather than guessed: **`partyOrder` equals the array
+index for all four**, and all 33 non-party structs hold `0xFFFF`, so the two candidate readings —
+"n-th in the array" and "the member whose party order is n" — agree and cannot be told apart here.
+A save where a reorder made them diverge would separate them. It is not worth chasing: an absent
+file is `null` rather than an error, so the worst a wrong reading could cost is a picture.
+
+⚠️ **The BMPs declare `biClrUsed = 0x01000000`**, which is meaningless at 24bpp and makes strict
+decoders refuse the file — ImageMagick reports `insufficient image data`. `BALDUR.bmp` carries it
+too. `dart:ui` ignores it, as any decoder should above 8bpp, so nothing in the app is affected;
+this is here because external tooling pointed at these files will fail in a way that looks like
+file corruption and is not.
 
 ### The portraits are a second oracle, and nobody had noticed
 
@@ -133,6 +155,26 @@ Two consequences for `GamCodec`'s tests:
 Layout of `000000022-last`, for orientation: header → party structs (180) → party CRE (532) →
 non-party structs (7312) → non-party CREs (19,984 onward).
 
+### `000000100-Party` — the first fixture with a real party, added 2026-08-08
+
+| Field | Value |
+|---|---|
+| `partyOffset` / `partyCount` | 180 / **4** |
+| `nonPartyOffset` / `nonPartyCount` | — / **33** |
+| Members, in array order | Aard `*HARBASE`, Imoen `*MOEN1`, Montaron `*ONTAR`, Xzar `*ZAR` |
+| Party orders | 0, 1, 2, 3 — **equal to the array index** |
+| Classes | `FIGHTER_MAGE`, `THIEF`, `FIGHTER_THIEF`, `MAGE` |
+
+It closes the blind spot named directly above: the party array now has a real stride to test, and
+four members made four separate findings visible at once — the portrait mapping, the kit encoding,
+the level slots and the `*` resref, each recorded in its own section below. `test/gam/
+party_fixture_test.dart` asserts them.
+
+⚠️ **It is a copy of a live save the app itself edits**, so its ability scores are a moving target
+— Constitution has already been rewritten from 16/16/15/10 to 18 across the board to arm an
+in-game run. A test over this fixture may assert structure and identity, never a field
+`CharacterStat` can change.
+
 ## CRE V1.0
 
 Source: IESDP `file_formats/ie_formats/cre_v1.htm`.
@@ -184,7 +226,10 @@ reputation 11, Fighter/Mage, party gold 12345. That is the Phase 2 gate.
 Extended 2026-08-08, a second run at different values: stored **20 / 40** showed as **22 / 42**,
 with the same "Bonus Hit Points/Level: +2". Two points on the line make the hit-point arithmetic
 arithmetic rather than a coincidence. Both runs were still **level 1**, so whether a multi-class
-character multiplies the bonus by the highest class level or averages it is *still* untested.
+character multiplies the bonus by the highest class level or averages it is *still* untested — and
+a third data set on 2026-08-08, four characters at three Constitutions, is still level 1 too. It
+did settle that the bonus is **not divided among a multi-class character's classes**; see
+§Hit points are stored WITHOUT the Constitution bonus.
 
 **The Constitution finding is now confirmed by the engine in its own words.** The inventory screen
 prints `Class Hit Points/Level: +7` and `Bonus Hit Points/Level: **+2**`, and shows `9/9` from a
@@ -239,17 +284,104 @@ against the screenshots from the run above and all five matched:
   (`HPWAR`, `HPWIZ`, …); IESDP ships **none of them**, just a template page (`hpx.2da`, shown as
   `hpmonk.2da`). So the rules-based cap is not computable from IESDP. Phase 3, reading the player's
   own installation, is where it becomes possible.
-- **The warrior column.** `hpconbon.2da` splits `OTHER` from `WARRIOR` only from Constitution 17
-  up, and the only fixture has 16. Which classes are warriors is taken from the walkthrough
-  ("Fighters, Paladins, Rangers, and their kits") and matched by CLASS.IDS name.
-- **The kit encoding.** A character with no kit stores `0x40000000` at `0x0244`. Shifted right 16
-  that is `0x4000`, which is `KIT.IDS`'s **first entry**, `MAGESCHOOL_GENERALIST` — and `KIT.IDS`
-  has no `TRUECLASS` row at all. The obvious decoding therefore names a kit for every character who
-  has none, so nothing is displayed until this is measured.
+- ~~**The warrior column.**~~ **SETTLED 2026-08-08 — see below.** It was the last unmeasured rule
+  in the file, and the measurement agreed with the walkthrough.
+- ~~**The kit encoding.**~~ **SETTLED 2026-08-08 — see below. The claim recorded here was wrong,
+  and it was wrong about our own parser rather than about the game.**
 
 ⚠️ **`2DA V1.0` is not always spelled that way.** 17 of the 194 BG:EE tables pad the signature —
 `hpclass.2da` writes `2DA        V1.0`. A parser matching the literal string produces a silently
 **empty** table for every one of them, which is the worst way for a rules table to be wrong.
+
+#### ✅ The warrior column — SETTLED 2026-08-08, at Constitution 18
+
+`hpconbon.2da`'s two columns are identical from 1 to 16 and diverge only from 17 up, so no save
+this project has ever held could tell them apart. The party's Constitution was raised to 18 in the
+app, the save loaded, and the engine printed its own breakdown:
+
+```
+Class Hit Points/Level: +7
+Bonus Hit Points/Level: +4      <- the WARRIOR row; OTHER reads 2 at 18
+```
+
+with the hit-point globe reading **41 / 44** against a stored **37 / 40**.
+
+| Hypothesis | Bonus | Predicted | Observed |
+|---|---|---|---|
+| `WARRIOR` column | +4 | 41 / 44 | **✓ 41 / 44** |
+| `OTHER` column | +2 | 39 / 42 | ✗ |
+
+**Three things fall out, and the second is the one that was actually in doubt.**
+
+1. `GeneratedGameRules.warriorRoots` — `{FIGHTER, PALADIN, RANGER}`, taken from a walkthrough
+   rather than from the game — is **right**. No code changed; the guess held.
+2. **A multi-class draws the warrior bonus on the strength of one of its classes.** Aard is half
+   mage and still took the warrior row. The rule is *containment*, not "the class is a warrior".
+3. **The bonus is not halved for a multi-class.** A divided reading of the warrior row gives 2 and
+   predicts 39/42, which is also what the other column predicts — so this run separated three
+   hypotheses, not two.
+
+⚠️ **It could easily have been a wasted run, for the reason §Oracles warns about.** `39 / 42` is
+what the *portrait* still shows, baked in when the save was written at Constitution 16. Had the
+answer been the other column, a fresh portrait would have been pixel-identical to the stale one
+and "the engine uses `OTHER`" would have been indistinguishable from "you forgot to re-save". The
+printed `+N` is the reading that cannot be confused; take the record or inventory screen, not the
+picture.
+
+Still level 1, so **whether the bonus multiplies by the highest class level or averages across
+them is untouched** — every reading gives ×1 here.
+
+⚠️ **Do not answer that one by editing a level (D10).** A level is not a field: hit dice, THAC0,
+saving throws, proficiency slots and spell slots are all granted on level-up, and the "Next Level"
+counter runs against a per-class experience threshold the stored total would no longer match. It
+is the recalculation layer, brought forward for one display number.
+
+It is also unnecessary. The game printed the protagonist's own thresholds — Fighter level 2 at
+**2000** per class, Mage at **2500**, against a stored total of 364 split evenly — so between a
+**total of 4000 and 5000 experience** he is **Fighter 2 / Mage 1**. At Constitution 18 and the
+warrior +4, the three readings predict stored **+8**, **+6** and **+4**: three different numbers
+on one screen. `000000100-Party` also carries Yeslick at `FIGHTER_CLERIC` **2/3**, which
+discriminates the same way if he is recruited first.
+
+#### Everything else that run re-confirmed
+
+Free checks that came with the same two screenshots, all agreeing with what is recorded above:
+`Base THAC0: 15` (a stored base, not recomputed), `Armor Class: 6` with `Dexterity: -3` giving 3
+(the **effective** field `0x48`, and `0x46` still moving nothing at its edited `8`),
+`Reputation: Average (11)` from the GAM's `110`, and party gold `12455`.
+
+One number is new. **Multi-class experience splits exactly**, at a second data point: the CRE holds
+**364** and the record screen shows `Fighter: Experience 182` and `Mage: Experience 182`. The
+earlier run's 325 showed 162 apiece, losing one to rounding, so the engine floors — 364 divides
+evenly and loses nothing.
+
+#### ✅ The kit encoding — SETTLED 2026-08-08, and the blocker was our own parser
+
+**`0x0244 >> 16` is the `KIT.IDS` key.** The shift is measured, not assumed: Xzar stores
+`0x10000000`, which shifted right 16 is `0x1000` — `MAGESCHOOL_NECROMANCER` — and Xzar is a
+Necromancer.
+
+| Member | Class | Stored | `>> 16` | `KIT.IDS` |
+|---|---|---|---|---|
+| Aard | `FIGHTER_MAGE` | `0x40000000` | `0x4000` | `TRUECLASS` — no kit |
+| Imoen | `THIEF` | `0x00000000` | `0x0000` | *(absent)* — no kit |
+| Montaron | `FIGHTER_THIEF` | `0x40000000` | `0x4000` | `TRUECLASS` — no kit |
+| Xzar | `MAGE` | `0x10000000` | `0x1000` | `MAGESCHOOL_NECROMANCER` |
+
+**"No kit" has two encodings**, `0x00000000` and `0x40000000`, and both must render as nothing.
+
+**Why the earlier note said `KIT.IDS` has no `TRUECLASS` row.** It has one. `KIT.IDS` numbers
+`0x4000` **twice** — `TRUECLASS` first, `MAGESCHOOL_GENERALIST` fourteen rows later — and
+`IdsMap.parse` was last-wins, so the row meaning "no kit" was silently dropped and the surviving
+name put a mage school on every character without one. The parser is now first-wins and keeps the
+displaced rows in `IdsMap.shadowed`, which the generator prints into `identifiers.g.dart`.
+
+Montaron settles it from the data alone, with no appeal to which row comes first: a Fighter/Thief
+has no mage component, so his `0x4000` cannot possibly be a mage school.
+
+⚠️ **`CLASS.IDS` collides the same way at 202** — `LONG_BOW` and `MAGE_ALL`, which IESDP's own page
+explains in prose. Unreachable from a CRE class byte, so it changes nothing; it is here because it
+proves duplicate keys are a property of the format rather than one bad row in one file.
 
 #### Two more facts nobody was looking for
 
@@ -264,11 +396,47 @@ against the screenshots from the run above and all five matched:
 
 | Offset | Size | Field |
 |---|---|---|
-| `0x0244` | 4 | Kit — **not** a `KIT.IDS` key as stored; see above |
+| `0x0234` | 1 | Level, first class |
+| `0x0235` | 1 | Level, second class — **junk unless the class uses it** |
+| `0x0236` | 1 | Level, third class — **junk unless the class uses it** |
+| `0x0244` | 4 | Kit — the `KIT.IDS` key in the **high word**; see above |
 | `0x0272` | 1 | Race (`RACE.IDS`) |
 | `0x0273` | 1 | Class (`CLASS.IDS`) |
 | `0x0275` | 1 | Gender (`GENDER.IDS`) |
 | `0x027b` | 1 | Alignment (`ALIGNMEN.IDS`), whose table is written in **hex** |
+
+#### ⚠️ Unused class-level slots are NOT zeroed — 2026-08-08
+
+Only the *player's own* record zeroes the slot it does not use. Every shipped NPC record leaves a
+`1` there:
+
+| Member | Class | `0x0234`–`0x0236` | Slots that mean anything |
+|---|---|---|---|
+| Aard | `FIGHTER_MAGE` | `01 01 00` | 2 |
+| Imoen | `THIEF` | `01 01 01` | **1** |
+| Montaron | `FIGHTER_THIEF` | `01 01 01` | **2** |
+| Xzar | `MAGE` | `01 01 01` | **1** |
+
+**How many slots are meaningful comes from `CLASS.IDS`, never from the bytes.** Every playable
+class name spells its classes out, so `FIGHTER_MAGE_THIEF` is three and `THIEF` is one; splitting
+the identifier on `_` and counting is the rule. Reading it off the bytes instead put
+**"Level 1/1/1" on a plain Thief** in the character panel, and the defect survived review because
+every one-character fixture was the player's own record, where the two rules agree.
+
+#### ⚠️ The first byte of a CRE resref is overwritten with `*` — 2026-08-08
+
+`CHARBASE` → `*HARBASE`, `IMOEN1` → `*MOEN1`, `XZAR` → `*ZAR`. **Replacement, not a prefix**:
+`*ZAR` occupies four bytes where a prefix would need five, and `*HARBASE` is eight where a prefix
+would have pushed the `E` out. It is on the non-party structs too, not just recruited members.
+
+**Consequence: the resref is not a usable identity key** — one character of it is simply gone.
+`dialogFile` at `0x02cc` survives intact (`IMOEN2`, `MONTAJ`, `XZARJ`) and is what to key on.
+
+#### Recruiting moves the struct between arrays — 2026-08-08
+
+Not a flag. The one-character saves hold party 1 / non-party 36; `000000100-Party` holds 4 / 33,
+and the three resrefs missing from the non-party array are exactly the three that joined. **Both
+arrays resize**, which is another entry on Phase 1's list.
 
 ### ⚠️ Hit points are stored WITHOUT the Constitution bonus. Verified 2026-08-07
 
@@ -285,6 +453,30 @@ A constant **+2** on both current and maximum, at a constant Constitution of 16 
 warrior Constitution-16 bonus of +2 HP per level, at level 1. The engine stores the base and adds
 the modifier when it displays.
 
+**Extended 2026-08-08 from one character to four, at three different Constitutions.** The
+four-member party's portraits (see §`PORTRT<n>.bmp`) each carry the same arithmetic with a
+*different* bonus, which is what turns it from a pattern into a rule:
+
+| Member | Class | Con | `hpconbon` | Stored max | Rendered |
+|---|---|---|---|---|---|
+| Aard | `FIGHTER_MAGE` | 16 | +2 | 40 | **42** |
+| Imoen | `THIEF` | 16 | +2 | 6 | **8** |
+| Montaron | `FIGHTER_THIEF` | 15 | +1 | 8 | **9** |
+| Xzar | `MAGE` | 10 | +0 | 4 | **4** |
+
+Two things fall out that a single character could not show. The bonus applies to **non-warrior
+classes on the same table** — Imoen is a Thief and takes the same +2 as Aard, exactly as
+`hpconbon.2da` says it should below 17. And the bonus is **not divided among the classes of a
+multi-class character**: Aard takes the full +2 and Montaron the full +1, not half of each.
+
+**A fourth run the same day pushed the bonus itself.** Aard at Constitution **18** rendered
+**41 / 44** from a stored 37 / 40, with the engine printing `Bonus Hit Points/Level: +4` — the
+warrior row, undivided. Varying the *modifier* rather than only the base is what makes this
+arithmetic rather than a fixed offset that happens to fit. See §The warrior column.
+
+Still level 1 everywhere, so **whether the bonus multiplies by the highest class level or averages
+across them remains untested** — every reading gives the same answer at level 1.
+
 **Consequences.** The offsets and IESDP's names (`0x0024` "Current Hit Points", `0x0026` "Maximum
 Hit Points") are correct and are not the problem; an editor should read and write exactly these
 fields. But a screen showing `6 / 7` beside a game showing `8 / 9` reads as a bug, so the UI
@@ -292,8 +484,10 @@ labels it **"Hit points (base)"** and says why. Computing the displayed value ne
 out of the BIFF archives (Phase 3) plus the class rules, which is the same territory as EE
 Keeper's deferred "Update Bonus Stats".
 
-**Suspect the same of every other derived stat** — armour class and THAC0 are the obvious
-candidates, and both are unchecked. The portrait overlay only reports hit points.
+~~**Suspect the same of every other derived stat** — armour class and THAC0 are the obvious
+candidates, and both are unchecked.~~ **Both were checked on 2026-08-07/08 and both are settled
+above:** THAC0 is a stored base the engine does not recompute, and armour class is read from the
+effective field `0x48`. The portrait overlay only reports hit points, so those two needed the game.
 
 ### Signedness — two fields corrected 2026-08-07
 
@@ -576,6 +770,16 @@ Prefer verification over reasoning from a spec. Four are available, with differe
    immediately falsified our hit-point reading (§Hit points are stored WITHOUT the Constitution
    bonus) — a discrepancy no amount of reading IESDP would have surfaced, because the offsets were
    never wrong. Limited to what the HUD draws, which today means hit points.
+
+   **On a multi-member party it becomes an identity oracle too**, which is how the portrait
+   mapping was settled: four members with different Constitutions produce four different overlay
+   numbers, and each one matches exactly one member's stored value plus that member's own bonus.
+   *Design a party that way if you can* — had all four had the same hit points, the picture would
+   have proved nothing, the same trap as the first armour-class run.
+
+   ⚠️ Read them with your own loader. The files declare `biClrUsed = 0x01000000`, which is
+   meaningless at 24bpp, and strict decoders reject them outright — the 54-byte header, 84 rows of
+   164 bytes, BGR bottom-up, is quicker than arguing with ImageMagick.
 1. **NearInfinity, run as a black-box oracle.** Open the same file, compare field values. Running
    it creates no derivative work, so this is available regardless of how D1 lands. Note from the
    previous project's measurement: NI **cannot run headless** — `AppOption.java:369` calls

@@ -382,3 +382,61 @@ Two questions deferred to that point: whether `dart_mappable` is used inside
 `packages/infinity_formats` (it is pure Dart so it *could* be, but that package's zero-dependency
 state is a feature and its types are byte-backed rather than JSON-shaped), and whether generated
 output is committed.
+
+---
+
+## D10 — Level editing is deferred; the multi-class question waits for play · CLOSED (2026-08-08)
+
+**Decision: do not add level editing, and do not edit a level to answer an open question.**
+
+### What was being asked for
+
+One measurement is still outstanding — whether the engine multiplies the Constitution hit-point
+bonus by the *highest* class level or averages it across a multi-class character's classes. Every
+run so far has been at level 1, where the readings are indistinguishable. Answering it needs a
+multi-class character above level 1, which means either playing to one or writing a level into a
+save.
+
+### Why editing a level is not the cheap option it looks like
+
+**A level is not a field, it is a commitment.** Writing `2` into `0x0235` produces a character the
+engine will disagree with everywhere: hit points come from a per-class die rolled at level-up,
+THAC0 and saving throws come from class progression tables, proficiency slots and spell slots are
+granted on level-up, and the record screen's "Next Level" counts against a per-class experience
+threshold the stored total no longer matches.
+
+That is the same machinery as EE Keeper's **"Recalculate Stats"**, already recorded as *required
+rather than optional* for Phase 4 because armour class is read from a stored effective field. So
+the honest cost of "just bump a level" is the whole recalculation layer, brought forward to serve
+a single derived display number. Not worth it, and doing it half-way would produce exactly this
+project's stated failure mode: a save that loads and is quietly wrong.
+
+### It also turns out not to be necessary
+
+`000000100-Party` already carries recruitable multi-class companions above level 1, several with
+*uneven* class levels — which is what makes the three hypotheses predict different numbers:
+
+| Companion | Class | Levels | Why it discriminates |
+|---|---|---|---|
+| Yeslick | `FIGHTER_CLERIC` | **2/3** | Con 17, stored max 22: highest → 31, average → 29/30, lowest → 28 |
+| Coran | `FIGHTER_THIEF` | 3/3 | even, so useless — all readings agree |
+| Jaheira | `FIGHTER_DRUID` | 1/1 | level 1, same problem as the current party |
+
+**And the protagonist gets there first.** The game printed Aard's own thresholds: Fighter level 2
+at 2000 per class, Mage level 2 at 2500, against a stored total of 364 split evenly. So between a
+**total of 4000 and 5000 experience** Aard is **Fighter 2 / Mage 1** — uneven, on the character
+already in the party, with no companion required. At Constitution 18 and the warrior bonus of +4,
+the three readings predict stored **+8**, **+6** and **+4**, which are three different numbers on
+one screen.
+
+The window closes at 5000 when the Mage half catches up, and reopens on the next uneven stretch.
+
+### What to do instead
+
+Nothing. Leave `CharacterSheet.hitPointBonus` reading "highest class level", which is right for
+every single-class character and untested only for the multi-class case, and leave the getter's
+doc comment saying so. Ask for a record-screen screenshot the next time the protagonist's total
+experience is between 4000 and 5000.
+
+**This decision is about sequencing, not about the feature.** Level editing is in scope for the
+application; it arrives with the recalculation layer, not before it.

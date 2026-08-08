@@ -168,14 +168,16 @@ Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seve
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 140 tests.
+  one table serves reader and writer and they cannot disagree. 153 tests.
 - **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. Stats are editable
   and write back: sealed `EditCommand`s over a curated `CharacterStat` table, undo/redo on
-  immutable savegame snapshots, atomic write leaving a `.bak`. 137 tests.
+  immutable savegame snapshots, atomic write leaving a `.bak`. 162 tests.
 - **A rules layer** — `lib/domain/rules/`, generated from IESDP's copies of the game's own `2DA`
-  and `IDS` tables. Turns stored numbers into what the game displays.
+  and `IDS` tables. Turns stored numbers into what the game displays. ⚠️ **`IDS` files repeat
+  keys** — `KIT.IDS` numbers `0x4000` twice — so `IdsMap` keeps the *first* name and records the
+  displaced ones; last-wins is what made the kit encoding look undecodable.
 - Party portraits come from `PORTRT<n>.bmp` beside each save; `dart:ui` decodes them, so no BIFF
-  index or BAM decoder is involved.
+  index or BAM decoder is involved. `PORTRT<n>` is the n-th **party slot**, settled 2026-08-08.
 
 ### The gate that matters, and it passed
 
@@ -192,18 +194,39 @@ reversed the reasoning that had picked natural. Each of these was settled by loa
 each contradicted an argument from the spec.
 
 The cheapest oracle is the one nobody noticed: **the game bakes its own HUD into `PORTRT<n>.bmp`**,
-so every save ships a picture of what the engine believed when it was written.
+so every save ships a picture of what the engine believed when it was written. On a *multi-member*
+party it doubles as an identity oracle — four members with four different hit-point totals
+fingerprint which file belongs to whom, which is what settled the portrait mapping.
+
+⚠️ **But a portrait is a snapshot, so it can only ever confirm the state it was written in.** The
+Constitution-18 run nearly fell into this: the losing hypothesis predicted `39 / 42`, which is
+exactly what the stale portrait already showed, so a wrong answer would have been
+indistinguishable from "the save was never reloaded". When the run has to *change* something, read
+the number the engine **prints** — `Bonus Hit Points/Level` — not the number it drew earlier.
+
+**And the record lies in the direction of the fixtures you have.** A savegame does **not** zero
+its unused class-level slots: only the player's own character stores `01 01 00`, while every
+shipped NPC stores `01 01 01`. Read the slot count from `CLASS.IDS`, never from the bytes. The
+same applies to the CRE resref — the engine overwrites its **first byte** with `*`, so
+`CHARBASE` arrives as `*HARBASE` and the resref is not an identity key. Use `dialogFile`.
 
 ### Open, and recorded rather than guessed
 
 None of these is blocking; none is guessed at in code. All are in the findings.
 
-| Question | What it needs |
+| Question | State |
 |---|---|
-| Multi-class hit-point multiplier | a higher-level multi-class character |
-| `hpconbon` warrior column | a character with Constitution 17+ |
-| Kit encoding | Phase 3, or a kitted character |
-| `PORTRT<n>` index mapping | a save with 2+ party members |
+| `PORTRT<n>` index mapping | **Closed 2026-08-08.** `PORTRT<n>` is the n-th party slot, fingerprinted by the hit points the game bakes into each image. |
+| Kit encoding | **Closed 2026-08-08.** `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and `0x4000` (`TRUECLASS`) both mean no kit. |
+| `hpconbon` warrior column | **Closed 2026-08-08.** Raised to Constitution 18 and loaded: the engine printed `Bonus Hit Points/Level: +4`, the warrior row, on a **Fighter/Mage**. `warriorRoots` was right, and the rule is *containment* — half a fighter is a warrior. |
+| Multi-class hit-point multiplier | **The only one still open, and deferred on purpose — D10.** The bonus is *not* divided among classes and *not* softened for a half-mage, both measured. Whether it multiplies by the highest class level or averages needs a multi-class character **above level 1**. ⚠️ **Do not edit a level to find out** — that pulls the whole recalculation layer forward. It answers itself when the protagonist's total experience is between **4000 and 5000** (Fighter 2 / Mage 1). |
+
+⚠️ **All three of the closed ones were open only because the fixtures were too plain.** Two needed
+a party of more than one; the third needed one number above 16. A save with four members and a
+Constitution edit closed all three in an afternoon and exposed two defects the blind spot had been
+hiding — `Level 1/1/1` on a single-class Thief, and an `IdsMap` that silently dropped a duplicate
+key. **When a question's answer depends on a shape the fixtures do not have, the fixture is the
+thing to go and get.**
 
 ⚠️ **One finding constrains Phase 4.** Because the engine reads a *stored* effective armour class
 rather than recomputing it from equipment, equipping an item will not update armour class by
