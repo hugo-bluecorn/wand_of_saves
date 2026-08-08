@@ -26,6 +26,8 @@ export 'src/gam/gam.dart';
 export 'src/gam/gam_codec.dart';
 export 'src/gam/gam_npc.dart';
 export 'src/io/atomic_file.dart';
+export 'src/resource/bif_archive.dart';
+export 'src/resource/key_index.dart';
 export 'src/spec/cre_v1_0.dart';
 export 'src/spec/format_field.dart';
 export 'src/spec/gam_v2_0.dart';

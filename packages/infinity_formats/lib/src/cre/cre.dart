@@ -107,6 +107,116 @@ final class Cre {
     _read(CreHeaderField.levelThirdClass),
   );
 
+  /// Attacks per round.
+  int get numberOfAttacks => _read(CreHeaderField.numberOfAttacks);
+
+  /// The five saving throws. Lower is better.
+  ///
+  /// A record because they are read as a set and the names carry the meaning
+  /// — the game labels them "Paralysis / Poison / Death", "Rod / Staff /
+  /// Wand", "Petrification / Polymorph", "Breath Weapon" and "Spell".
+  ///
+  /// **Stored exactly as displayed**, unusually for this format. Verified
+  /// 2026-08-08: a creature holding 14/11/13/15/12 showed those five numbers
+  /// on the record screen with nothing added.
+  ({int death, int wands, int polymorph, int breath, int spells})
+  get savingThrows => (
+    death: _read(CreHeaderField.saveVersusDeath),
+    wands: _read(CreHeaderField.saveVersusWands),
+    polymorph: _read(CreHeaderField.saveVersusPolymorph),
+    breath: _read(CreHeaderField.saveVersusBreath),
+    spells: _read(CreHeaderField.saveVersusSpells),
+  );
+
+  /// Percentage resistances to each damage type.
+  ({
+    int fire,
+    int cold,
+    int electricity,
+    int acid,
+    int magic,
+    int magicFire,
+    int magicCold,
+    int slashing,
+    int crushing,
+    int piercing,
+    int missile,
+  })
+  get resistances => (
+    fire: _read(CreHeaderField.resistFire),
+    cold: _read(CreHeaderField.resistCold),
+    electricity: _read(CreHeaderField.resistElectricity),
+    acid: _read(CreHeaderField.resistAcid),
+    magic: _read(CreHeaderField.resistMagic),
+    magicFire: _read(CreHeaderField.resistMagicFire),
+    magicCold: _read(CreHeaderField.resistMagicCold),
+    slashing: _read(CreHeaderField.resistSlashing),
+    crushing: _read(CreHeaderField.resistCrushing),
+    piercing: _read(CreHeaderField.resistPiercing),
+    missile: _read(CreHeaderField.resistMissile),
+  );
+
+  /// Armour class modifiers by damage type. Signed; negative is better.
+  ({int crushing, int missile, int piercing, int slashing})
+  get armorClassModifiers => (
+    crushing: _read(CreHeaderField.armorClassCrushing),
+    missile: _read(CreHeaderField.armorClassMissile),
+    piercing: _read(CreHeaderField.armorClassPiercing),
+    slashing: _read(CreHeaderField.armorClassSlashing),
+  );
+
+  /// The thief skills and Lore, **as the file stores them**.
+  ///
+  /// ⚠️ **These are allocated points, not the skill the game shows.** Measured
+  /// 2026-08-08: a thief storing Move Silently 15 displayed 35, and two
+  /// characters both storing Lore 3 displayed 10 and 15. The engine adds
+  /// class, race and Dexterity bonuses. Presenting these as the skill would
+  /// repeat the hit-point mistake, so the UI labels them.
+  ({
+    int hideInShadows,
+    int detectIllusion,
+    int setTraps,
+    int lore,
+    int lockpicking,
+    int moveSilently,
+    int findTraps,
+    int pickPockets,
+  })
+  get thiefSkills => (
+    hideInShadows: _read(CreHeaderField.hideInShadows),
+    detectIllusion: _read(CreHeaderField.detectIllusion),
+    setTraps: _read(CreHeaderField.setTraps),
+    lore: _read(CreHeaderField.lore),
+    lockpicking: _read(CreHeaderField.lockpicking),
+    moveSilently: _read(CreHeaderField.moveSilently),
+    findTraps: _read(CreHeaderField.findTraps),
+    pickPockets: _read(CreHeaderField.pickPockets),
+  );
+
+  /// Fatigue (0-100).
+  int get fatigue => _read(CreHeaderField.fatigue);
+
+  /// Intoxication (0-100).
+  int get intoxication => _read(CreHeaderField.intoxication);
+
+  /// Luck.
+  int get luck => _read(CreHeaderField.luck);
+
+  /// Turn undead level.
+  int get turnUndeadLevel => _read(CreHeaderField.turnUndeadLevel);
+
+  /// Tracking skill (0-100).
+  int get trackingSkill => _read(CreHeaderField.trackingSkill);
+
+  /// The morale at which this creature panics.
+  int get moraleBreak => _read(CreHeaderField.moraleBreak);
+
+  /// Ticks before morale recovers.
+  int get moraleRecoveryTime => _read(CreHeaderField.moraleRecoveryTime);
+
+  /// The ranger's chosen foe (`RACE.IDS`).
+  int get racialEnemy => _read(CreHeaderField.racialEnemy);
+
   /// Strength (1-25).
   int get strength => _read(CreHeaderField.strength);
 

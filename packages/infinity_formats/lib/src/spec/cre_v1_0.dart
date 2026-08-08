@@ -91,6 +91,12 @@ enum CreHeaderField implements FormatField {
   /// it would come back as −56 and display as −5.6.
   reputation(0x44, 1),
 
+  /// Hide in Shadows, **as allocated** — see [lore].
+  ///
+  /// The one thief skill that does not live with the others; IESDP puts it
+  /// here, between reputation and armour class, and the rest at `0x64`.
+  hideInShadows(0x45, 1),
+
   /// Natural armour class, before equipment. IESDP: "2 (signed word)".
   armorClassNatural(0x46, 2, signed: true),
 
@@ -99,8 +105,127 @@ enum CreHeaderField implements FormatField {
   /// Plate and shield reaches −2, which an unsigned read renders as 65534.
   armorClassEffective(0x48, 2, signed: true),
 
+  /// Armour class modifier against crushing attacks. IESDP: "2 (signed word)".
+  armorClassCrushing(0x4a, 2, signed: true),
+
+  /// Armour class modifier against missile attacks. IESDP: "2 (signed word)".
+  armorClassMissile(0x4c, 2, signed: true),
+
+  /// Armour class modifier against piercing attacks. IESDP: "2 (signed word)".
+  armorClassPiercing(0x4e, 2, signed: true),
+
+  /// Armour class modifier against slashing attacks. IESDP: "2 (signed word)".
+  armorClassSlashing(0x50, 2, signed: true),
+
   /// THAC0.
+  ///
+  /// A **base**: the game labels it "Base THAC0" and prints a second, lower
+  /// figure beside it after Strength, Dexterity and proficiencies.
   thac0(0x52, 1),
+
+  /// Number of attacks per round.
+  numberOfAttacks(0x53, 1),
+
+  /// Save versus death. IESDP: "(0-20)". Lower is better.
+  ///
+  /// The saving throws are stored **exactly as the game prints them** —
+  /// verified 2026-08-08 against a record screen reading 14/11/13/15/12 for
+  /// a creature holding those five bytes. Unlike hit points, THAC0 and the
+  /// thief skills, nothing is added before display.
+  saveVersusDeath(0x54, 1),
+
+  /// Save versus wands — the record screen's "Rod / Staff / Wand".
+  saveVersusWands(0x55, 1),
+
+  /// Save versus polymorph — "Petrification / Polymorph".
+  saveVersusPolymorph(0x56, 1),
+
+  /// Save versus breath attacks — "Breath Weapon".
+  saveVersusBreath(0x57, 1),
+
+  /// Save versus spells — "Spell".
+  saveVersusSpells(0x58, 1),
+
+  /// Resistance to fire, as a percentage.
+  resistFire(0x59, 1),
+
+  /// Resistance to cold, as a percentage.
+  resistCold(0x5a, 1),
+
+  /// Resistance to electricity, as a percentage.
+  resistElectricity(0x5b, 1),
+
+  /// Resistance to acid, as a percentage.
+  resistAcid(0x5c, 1),
+
+  /// Resistance to magic, as a percentage.
+  resistMagic(0x5d, 1),
+
+  /// Resistance to magic fire, as a percentage.
+  resistMagicFire(0x5e, 1),
+
+  /// Resistance to magic cold, as a percentage.
+  resistMagicCold(0x5f, 1),
+
+  /// Resistance to slashing damage, as a percentage.
+  resistSlashing(0x60, 1),
+
+  /// Resistance to crushing damage, as a percentage.
+  resistCrushing(0x61, 1),
+
+  /// Resistance to piercing damage, as a percentage.
+  resistPiercing(0x62, 1),
+
+  /// Resistance to missile damage, as a percentage.
+  resistMissile(0x63, 1),
+
+  /// Detect Illusion, **as allocated** — see [lore].
+  detectIllusion(0x64, 1),
+
+  /// Set Traps, **as allocated** — see [lore].
+  setTraps(0x65, 1),
+
+  /// Lore, **as allocated**. IESDP: "(0-100)".
+  ///
+  /// ⚠️ **Every skill on this row is a base, not the number the game shows.**
+  /// Measured 2026-08-08: a creature storing Lore `3` displayed `10` on one
+  /// character and `15` on another, and one storing Move Silently `15`
+  /// displayed `35`. The engine adds class, race and Dexterity bonuses. Same
+  /// hazard as hit points and THAC0 — label it, do not silently present it as
+  /// the skill.
+  lore(0x66, 1),
+
+  /// Lockpicking — the record screen's "Open Locks". **As allocated**.
+  lockpicking(0x67, 1),
+
+  /// Move Silently, **as allocated** — see [lore].
+  moveSilently(0x68, 1),
+
+  /// Find/disarm traps — "Find Traps". **As allocated**.
+  findTraps(0x69, 1),
+
+  /// Pick Pockets, **as allocated** — see [lore].
+  pickPockets(0x6a, 1),
+
+  /// Fatigue. IESDP: "(0-100)".
+  fatigue(0x6b, 1),
+
+  /// Intoxication. IESDP: "(0-100)".
+  intoxication(0x6c, 1),
+
+  /// Luck.
+  luck(0x6d, 1),
+
+  /// Turn undead level.
+  ///
+  /// ⚠️ Sits **after** the proficiency bytes at `0x6e`–`0x81`, which BG:EE
+  /// leaves empty — proficiencies are opcode 233 effects there, not header
+  /// bytes. Those bytes are deliberately absent from this table rather than
+  /// recorded as zeroes that mean something.
+  turnUndeadLevel(0x82, 1),
+
+  /// Tracking skill. IESDP: "(0-100)".
+  trackingSkill(0x83, 1),
 
   /// Level in the first class.
   levelFirstClass(0x234, 1),
@@ -143,6 +268,15 @@ enum CreHeaderField implements FormatField {
 
   /// Morale.
   morale(0x23f, 1),
+
+  /// Morale break — the morale at which the creature panics.
+  moraleBreak(0x240, 1),
+
+  /// Racial enemy (`RACE.IDS`), the ranger's chosen foe.
+  racialEnemy(0x241, 1),
+
+  /// Morale recovery time.
+  moraleRecoveryTime(0x242, 2),
 
   /// Kit, as a dword carrying the `KIT.IDS` key in its **high word**.
   ///

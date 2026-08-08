@@ -177,6 +177,111 @@ void main() {
     );
   });
 
+  group('the rest of the character sheet', () {
+    test(
+      'saving throws are stored exactly as the game prints them',
+      () {
+        // The strongest oracle in this file. BG:EE's record screen for Xzar,
+        // read 2026-08-08:
+        //
+        //   Paralysis / Poison / Death: 14
+        //   Rod / Staff / Wand:         11
+        //   Petrification / Polymorph:  13
+        //   Breath Weapon:              15
+        //   Spell:                      12
+        //
+        // Five values, five stored bytes, no modifier between them -- unlike
+        // hit points, THAC0 and the thief skills, which are all bases.
+        expect(creaturesOf()[3].savingThrows, (
+          death: 14,
+          wands: 11,
+          polymorph: 13,
+          breath: 15,
+          spells: 12,
+        ));
+      },
+      skip: skip,
+    );
+
+    test(
+      'every party member has a plausible set of saving throws',
+      () {
+        // 0-20 is IESDP's stated range, and a wrong offset here reads the
+        // resistances or the THAC0 byte instead, which would fall outside it.
+        for (final cre in creaturesOf()) {
+          final s = cre.savingThrows;
+          for (final value in [
+            s.death,
+            s.wands,
+            s.polymorph,
+            s.breath,
+            s.spells,
+          ]) {
+            expect(value, inInclusiveRange(1, 20));
+          }
+        }
+      },
+      skip: skip,
+    );
+
+    test(
+      'thief skills are the points allocated, not the skill shown',
+      () {
+        // Imoen's record screen shows Move Silently 35 and Lore 10; the file
+        // holds 15 and 3. The engine adds class, race and Dexterity bonuses
+        // before display, exactly as it does for hit points. Showing the
+        // stored byte as "Move Silently" without saying so would read as a
+        // bug the way 6/7 beside 8/9 did.
+        final imoen = creaturesOf()[1].thiefSkills;
+
+        expect(imoen.moveSilently, 15);
+        expect(imoen.findTraps, 25);
+        expect(imoen.lore, 3);
+        expect(imoen.hideInShadows, 0);
+      },
+      skip: skip,
+    );
+
+    test(
+      'a fighter/thief carries thief skills a pure fighter does not',
+      () {
+        // Montaron against Aard, which is what makes these the right bytes
+        // rather than a run of coincidental zeroes.
+        final montaron = creaturesOf()[2].thiefSkills;
+        final aard = creaturesOf()[0].thiefSkills;
+
+        expect(montaron.hideInShadows, 10);
+        expect(montaron.moveSilently, 20);
+        expect(montaron.pickPockets, 10);
+        expect(aard.moveSilently, 0);
+        expect(aard.pickPockets, 0);
+      },
+      skip: skip,
+    );
+
+    test(
+      'attacks, resistances and the armour class modifiers read cleanly',
+      () {
+        final aard = creaturesOf().first;
+
+        expect(aard.numberOfAttacks, 1);
+        expect(aard.fatigue, 3);
+        // Nobody in this party resists anything, and no armour class modifier
+        // is set -- but a wrong offset would read the saving throws, which
+        // are not zero.
+        expect(aard.resistances.fire, 0);
+        expect(aard.resistances.magic, 0);
+        expect(aard.armorClassModifiers, (
+          crushing: 0,
+          missile: 0,
+          piercing: 0,
+          slashing: 0,
+        ));
+      },
+      skip: skip,
+    );
+  });
+
   group('what only a mixed party could show', () {
     test(
       'the kit dword carries the KIT.IDS key in its high word',
