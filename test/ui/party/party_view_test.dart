@@ -311,21 +311,26 @@ void main() {
       );
     });
 
-    testWidgets('resistances stay folded away when they are all zero', (
-      tester,
-    ) async {
-      // Which is every character in every fixture. Eleven zeroes would be
-      // noise on a screen that has to stay readable.
+    testWidgets('resistances are shown like every other group', (tester) async {
+      // They used to fold away when all eleven were zero, which is every
+      // character in every fixture. Two things were wrong with that.
+      //
+      // It was not a principle, it was a one-off: the same character's Skills
+      // group shows **nine** zeroes and Combat six, and neither folds. And the
+      // toggle was broken in exactly the case it existed for — `show` was
+      // `_expanded || resists something`, so for a character who *did* resist
+      // something the "Hide" button could never take effect. No fixture has a
+      // non-zero resistance, so nothing caught it.
+      //
+      // The page being long is a real problem; tabbing it is the answer, not
+      // one bespoke collapsible group.
       await showParty(tester);
 
       expect(find.text('Resistances'), findsOneWidget);
-      expect(find.text('Fire'), findsNothing);
-
-      await tester.tap(find.text('Show'));
-      await tester.pumpAndSettle();
-
       expect(find.text('Fire'), findsOneWidget);
       expect(find.text('Missile'), findsOneWidget);
+      expect(find.text('Show'), findsNothing);
+      expect(find.text('Hide'), findsNothing);
     });
 
     testWidgets("names each proficiency from the player's own table", (

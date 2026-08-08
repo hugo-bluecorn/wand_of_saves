@@ -86,10 +86,4 @@ class Resistances with ResistancesMappable {
 
   /// Missile resistance.
   final int missile;
-
-  /// Whether this character resists nothing at all.
-  ///
-  /// The panel folds itself away when so, which is every character in every
-  /// fixture — eleven zeroes is noise on a screen that has to stay readable.
-  bool get isEmpty => this == none;
 }

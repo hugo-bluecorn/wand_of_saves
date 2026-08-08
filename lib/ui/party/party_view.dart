@@ -515,7 +515,20 @@ class _CharacterSummary extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 24),
-        _ResistanceGroup(character: character, sheet: sheet, onCommitted: set),
+        _StatGroup(
+          title: 'Resistances',
+          children: [
+            for (final (stat, value) in _resistances(character))
+              _StatField(
+                character: character,
+                sheet: sheet,
+                stat: stat,
+                value: value,
+                label: stat.label,
+                onCommitted: set,
+              ),
+          ],
+        ),
         const SizedBox(height: 24),
       ],
     );
@@ -558,6 +571,30 @@ class _CharacterSummary extends ConsumerWidget {
       (CharacterStat.trackingSkill, character.trackingSkill),
       (CharacterStat.fatigue, character.fatigue),
       (CharacterStat.intoxication, character.intoxication),
+    ];
+  }
+
+  /// The eleven resistances, in the order the record stores them.
+  ///
+  /// Shown unconditionally, like every other group. They were briefly folded
+  /// away when all eleven were zero — which is every character in every
+  /// fixture — but that was a one-off rather than a rule: Skills shows nine
+  /// zeroes on the same character and Combat six. The page *is* too long; the
+  /// answer to that is tabbing it, not one collapsible group.
+  List<(CharacterStat, int)> _resistances(Character character) {
+    final resists = character.resistances;
+    return [
+      (CharacterStat.resistFire, resists.fire),
+      (CharacterStat.resistCold, resists.cold),
+      (CharacterStat.resistElectricity, resists.electricity),
+      (CharacterStat.resistAcid, resists.acid),
+      (CharacterStat.resistMagic, resists.magic),
+      (CharacterStat.resistMagicFire, resists.magicFire),
+      (CharacterStat.resistMagicCold, resists.magicCold),
+      (CharacterStat.resistSlashing, resists.slashing),
+      (CharacterStat.resistCrushing, resists.crushing),
+      (CharacterStat.resistPiercing, resists.piercing),
+      (CharacterStat.resistMissile, resists.missile),
     ];
   }
 
@@ -632,93 +669,6 @@ class _ProficiencyGroup extends ConsumerWidget {
                   ),
                 ),
           ),
-      ],
-    );
-  }
-}
-
-/// The eleven resistances, folded away when they are all zero.
-///
-/// Which is every character in every fixture — eleven zeroes is noise on a
-/// screen that has to stay readable, and the ones who *do* resist something
-/// are exactly the ones worth showing without being asked.
-class _ResistanceGroup extends StatefulWidget {
-  const _ResistanceGroup({
-    required this.character,
-    required this.sheet,
-    required this.onCommitted,
-  });
-
-  final Character character;
-  final CharacterSheet sheet;
-  final void Function(CharacterStat, int) onCommitted;
-
-  @override
-  State<_ResistanceGroup> createState() => _ResistanceGroupState();
-}
-
-class _ResistanceGroupState extends State<_ResistanceGroup> {
-  bool _expanded = false;
-
-  List<(CharacterStat, int)> get _values {
-    final resists = widget.character.resistances;
-    return [
-      (CharacterStat.resistFire, resists.fire),
-      (CharacterStat.resistCold, resists.cold),
-      (CharacterStat.resistElectricity, resists.electricity),
-      (CharacterStat.resistAcid, resists.acid),
-      (CharacterStat.resistMagic, resists.magic),
-      (CharacterStat.resistMagicFire, resists.magicFire),
-      (CharacterStat.resistMagicCold, resists.magicCold),
-      (CharacterStat.resistSlashing, resists.slashing),
-      (CharacterStat.resistCrushing, resists.crushing),
-      (CharacterStat.resistPiercing, resists.piercing),
-      (CharacterStat.resistMissile, resists.missile),
-    ];
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // A character who resists something is shown it without being asked.
-    final show = _expanded || !widget.character.resistances.isEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Resistances',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            TextButton(
-              onPressed: () => setState(() => _expanded = !show),
-              child: Text(show ? 'Hide' : 'Show'),
-            ),
-          ],
-        ),
-        if (show) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              for (final (stat, value) in _values)
-                _StatField(
-                  character: widget.character,
-                  sheet: widget.sheet,
-                  stat: stat,
-                  value: value,
-                  label: stat.label,
-                  onCommitted: widget.onCommitted,
-                ),
-            ],
-          ),
-        ],
       ],
     );
   }
