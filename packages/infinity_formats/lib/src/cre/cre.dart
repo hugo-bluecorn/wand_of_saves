@@ -14,6 +14,7 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/spec/cre_v1_0.dart';
 import 'package:infinity_formats/src/text/fixed_field.dart';
@@ -306,6 +307,34 @@ final class Cre {
 
   /// Number of effects.
   int get effectsCount => _read(CreHeaderField.effectsCount);
+
+  /// This creature's effects, in the order the record stores them.
+  ///
+  /// Views rather than copies, so walking them costs nothing and each knows
+  /// the offset a writer would patch.
+  List<Effect> get effects => [
+    for (var i = 0; i < effectsCount; i++)
+      Effect.at(bytes, effectsOffset + i * effectLength),
+  ];
+
+  /// Proficiency pips by `STATS.IDS` index — 89-108 weapons, 111-115 styles.
+  ///
+  /// ⚠️ **Proficiencies are not header bytes on BG:EE.** IESDP documents them
+  /// at `0x6e`-`0x81`, and those bytes are zero on every character in a save
+  /// where the game plainly shows pips. They are stored as
+  /// [Effect.proficiencyOpcode] effects instead, with the count in
+  /// `parameter1` and the proficiency in `parameter2`.
+  ///
+  /// Verified 2026-08-08: a Fighter/Mage wielding a Battle Axe and a Flail
+  /// reads `{114: 2}` — two pips in `PROFICIENCY2WEAPON` — against a record
+  /// screen showing "Attacks per Round: 2" and a separate off-hand THAC0.
+  ///
+  /// Later entries win if an opcode repeats a proficiency, which is what the
+  /// engine's own last-write-wins stacking implies; no fixture does it.
+  Map<int, int> get proficiencies => {
+    for (final effect in effects)
+      if (effect.isProficiency) effect.parameter2: effect.parameter1,
+  };
 
   /// Whether this creature has a section at [offset] at all.
   ///

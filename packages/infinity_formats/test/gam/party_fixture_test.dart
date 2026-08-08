@@ -282,6 +282,91 @@ void main() {
     );
   });
 
+  group('proficiencies, which are not where the header says', () {
+    test(
+      'the effects section divides exactly by the v2 record size',
+      () {
+        // The check that pins the stride. Aard's section runs 1340..6884,
+        // which is 5544 bytes for 21 effects -- 264 each, not the 48 of a v1
+        // record. Reading it at the wrong stride does not produce slightly
+        // wrong values, it produces noise.
+        for (final cre in creaturesOf()) {
+          expect(cre.effectVersion, 1, reason: 'v2 effects');
+          expect(cre.effectLength, 264);
+          expect(
+            cre.contentEnd - cre.effectsOffset,
+            cre.effectsCount * 264,
+            reason: 'the effects section is the last thing in the record',
+          );
+        }
+      },
+      skip: skip,
+    );
+
+    test(
+      'the header proficiency bytes are empty on every character',
+      () {
+        // IESDP documents BG1 proficiencies at 0x6e-0x81. On BG:EE they are
+        // zero for a character the game shows two pips for, which is why
+        // those offsets are absent from CreHeaderField.
+        for (final cre in creaturesOf()) {
+          expect(
+            cre.bytes.sublist(0x6e, 0x82).every((b) => b == 0),
+            isTrue,
+            reason: 'no proficiency data lives in the header',
+          );
+        }
+      },
+      skip: skip,
+    );
+
+    test(
+      'each member is proficient in what they are actually carrying',
+      () {
+        // Opcode 233 carries the pip count in parameter 1 and a STATS.IDS
+        // index in parameter 2 -- 89-108 weapons, 111-115 fighting styles.
+        // Four characters, four different answers, and every one of them
+        // matches the weapon in that character's hand:
+        //
+        //   Aard      114 Two-Weapon Style, 100 Flail/Morning Star
+        //             -- dual-wields a Battle Axe and BLUN03 "Flail +1",
+        //                "Attacks per Round: 2", separate off-hand THAC0
+        //   Imoen      91 Short Sword,      105 Shortbow  -- carries BOW05
+        //   Montaron   91 Short Sword,      107 Sling     -- carries SW1H07
+        //   Xzar       96 Dagger                          -- carries DAGG01,
+        //             and his record screen reads "Proficiencies: Dagger +"
+        //
+        // A wrong opcode offset or a wrong stride gives every character the
+        // same answer, usually an empty one. Four distinct correct answers is
+        // what makes this a measurement.
+        expect(
+          [for (final cre in creaturesOf()) cre.proficiencies],
+          [
+            {114: 2, 100: 2},
+            {91: 1, 105: 1},
+            {91: 2, 107: 2},
+            {96: 1},
+          ],
+        );
+      },
+      skip: skip,
+    );
+
+    test(
+      'a pip count is never zero or absurd',
+      () {
+        // BG:EE allows at most five pips, and an effect granting none would
+        // not be written. Cheap guard against reading the wrong dword.
+        for (final cre in creaturesOf()) {
+          for (final pips in cre.proficiencies.values) {
+            expect(pips, inInclusiveRange(1, 5));
+          }
+        }
+      },
+      skip: skip,
+    );
+  });
+
   group('what only a mixed party could show', () {
     test(
       'the kit dword carries the KIT.IDS key in its high word',

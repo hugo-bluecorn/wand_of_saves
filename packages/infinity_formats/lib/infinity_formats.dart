@@ -21,6 +21,7 @@ library;
 
 export 'src/cre/cre.dart';
 export 'src/cre/cre_codec.dart';
+export 'src/cre/effect.dart';
 export 'src/exceptions.dart';
 export 'src/gam/gam.dart';
 export 'src/gam/gam_codec.dart';
