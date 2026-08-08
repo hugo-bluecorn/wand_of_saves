@@ -39,10 +39,13 @@ enum CreHeaderField implements FormatField {
   version(0x04, 4),
 
   /// Strref of the long name.
-  longName(0x08, 4),
+  ///
+  /// Signed: `-1` is the engine's "no string" sentinel, and every consumer is
+  /// written around a *negative* strref.
+  longName(0x08, 4, signed: true),
 
   /// Strref of the short name, used for tooltips.
-  shortName(0x0c, 4),
+  shortName(0x0c, 4, signed: true),
 
   /// Creature flags.
   flags(0x10, 4),
@@ -81,13 +84,20 @@ enum CreHeaderField implements FormatField {
   effectVersion(0x33, 1),
 
   /// Reputation, stored **times ten** — `110` means 11.0.
+  ///
+  /// **Unsigned, against IESDP's "1 (signed byte)".** The two claims on that
+  /// row contradict each other: the range is 0-20 and the value is stored ×10,
+  /// so a reputation of 20 is `200`, which no signed byte holds. Read signed
+  /// it would come back as −56 and display as −5.6.
   reputation(0x44, 1),
 
-  /// Natural armour class.
-  armorClassNatural(0x46, 2),
+  /// Natural armour class, before equipment. IESDP: "2 (signed word)".
+  armorClassNatural(0x46, 2, signed: true),
 
-  /// Effective armour class.
-  armorClassEffective(0x48, 2),
+  /// Effective armour class, equipment included. IESDP: "2 (signed word)".
+  ///
+  /// Plate and shield reaches −2, which an unsigned read renders as 65534.
+  armorClassEffective(0x48, 2, signed: true),
 
   /// THAC0.
   thac0(0x52, 1),
@@ -128,6 +138,30 @@ enum CreHeaderField implements FormatField {
   /// Morale.
   morale(0x23f, 1),
 
+  /// Kit, as a dword. `0x40000000` is what a character with no kit carries.
+  ///
+  /// Not a `KIT.IDS` key as stored — the relationship between the two is not
+  /// understood, so this is reported raw.
+  kit(0x244, 4),
+
+  /// Race (`RACE.IDS`). `2` is `ELF`.
+  race(0x272, 1),
+
+  /// Class (`CLASS.IDS`). `7` is `FIGHTER_MAGE`.
+  ///
+  /// Named `characterClass` because `class` is a Dart keyword and cannot be an
+  /// identifier. The IESDP row is simply "Class".
+  characterClass(0x273, 1),
+
+  /// Gender (`GENDER.IDS`). `1` is `MALE`.
+  gender(0x275, 1),
+
+  /// Alignment (`ALIGNMEN.IDS`). `0x21` is `NEUTRAL_GOOD`.
+  ///
+  /// The identifier table for this one is written in **hex**, unlike
+  /// `CLASS.IDS` and `RACE.IDS` — the stored byte 33 is `0x21`.
+  alignment(0x27b, 1),
+
   /// Offset to the known-spells section, relative to the start of the CRE.
   knownSpellsOffset(0x2a0, 4),
 
@@ -167,7 +201,7 @@ enum CreHeaderField implements FormatField {
   /// Resref of this creature's dialogue file — the last header field.
   dialogFile(0x2cc, 8);
 
-  const CreHeaderField(this.offset, this.length);
+  const CreHeaderField(this.offset, this.length, {this.signed = false});
 
   /// Bytes of fixed header before the first variable-length section.
   ///
@@ -181,6 +215,9 @@ enum CreHeaderField implements FormatField {
 
   @override
   final int length;
+
+  @override
+  final bool signed;
 }
 
 /// Bytes per known-spell entry. IESDP's sub-table ends at `0x0a` + 2.

@@ -107,6 +107,9 @@ void main() {
         final gam = GamCodec.decode(File(path!).readAsBytesSync());
 
         expect(gam.partyGold, 161);
+        expect(gam.gameTime, 4791);
+        expect(gam.currentArea, 'AR2600');
+        expect(gam.reputation, 11.0);
         expect(gam.partyNpcOffset, 180);
         expect(gam.partyNpcCount, 1);
         expect(gam.nonPartyNpcCount, 36);

@@ -24,7 +24,7 @@ import '../support/layout.dart';
 /// `FormatField` deliberately has no `name` member, since an enum's `.name` is
 /// an extension and cannot satisfy an interface.
 final class _Field implements FormatField {
-  const _Field(this._label, this.offset, this.length);
+  const _Field(this._label, this.offset, this.length, {this.signed = false});
 
   final String _label;
 
@@ -32,6 +32,8 @@ final class _Field implements FormatField {
   final int offset;
   @override
   final int length;
+  @override
+  final bool signed;
 
   @override
   String toString() => _label;
@@ -116,6 +118,46 @@ void main() {
         layoutProblems(const [_Field('a', 0, 16)], structSize: 8),
         isNotEmpty,
       );
+    });
+  });
+
+  group('bounds', () {
+    // These six lines decide whether a value is written or refused, so a
+    // boundary that is off by one is the difference between a saved edit and a
+    // wrapped number in someone's savegame.
+
+    test('an unsigned field spans zero to all-ones', () {
+      expect(const _Field('byte', 0, 1).minimum, 0);
+      expect(const _Field('byte', 0, 1).maximum, 255);
+      expect(const _Field('word', 0, 2).maximum, 65535);
+      expect(const _Field('dword', 0, 4).maximum, 4294967295);
+    });
+
+    test('a signed field spans two-s complement', () {
+      const byte = _Field('byte', 0, 1, signed: true);
+      const word = _Field('word', 0, 2, signed: true);
+      const dword = _Field('dword', 0, 4, signed: true);
+
+      expect((byte.minimum, byte.maximum), (-128, 127));
+      expect((word.minimum, word.maximum), (-32768, 32767));
+      expect((dword.minimum, dword.maximum), (-2147483648, 2147483647));
+    });
+
+    test('holds accepts the ends and refuses one past them', () {
+      const field = _Field('byte', 0, 1);
+
+      expect(field.holds(0), isTrue);
+      expect(field.holds(255), isTrue);
+      expect(field.holds(-1), isFalse);
+      expect(field.holds(256), isFalse);
+    });
+
+    test('signedness moves the boundary rather than widening it', () {
+      // Both hold 256 distinct values; a signed byte simply cannot hold 200.
+      expect(const _Field('u', 0, 1).holds(200), isTrue);
+      expect(const _Field('s', 0, 1, signed: true).holds(200), isFalse);
+      expect(const _Field('s', 0, 1, signed: true).holds(-100), isTrue);
+      expect(const _Field('u', 0, 1).holds(-100), isFalse);
     });
   });
 }

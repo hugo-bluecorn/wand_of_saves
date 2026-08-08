@@ -14,38 +14,50 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:wand_of_saves/config/router.dart';
+import 'package:wand_of_saves/ui/core/theme.dart';
 
 /// Entry point.
 ///
-/// Still Flutter's placeholder body — the real shell comes from
-/// `planning/architecture.md`. The one thing already in place is
-/// [ProviderScope]: Riverpod without code generation is a closed decision (D2),
-/// and the scope has to wrap the whole tree, so it belongs here from the start.
+/// [ProviderScope] wraps the whole tree because Riverpod is this app's DI
+/// container (D2, D7) — every service, repository and viewmodel is reached
+/// through it.
 void main() {
   runApp(const ProviderScope(child: WandOfSavesApp()));
 }
 
 /// The application root.
-///
-/// A placeholder shell. Theming here is deliberately minimal — the real
-/// `ThemeData` belongs in `ui/core/` per `planning/architecture.md`.
-class WandOfSavesApp extends StatelessWidget {
+class WandOfSavesApp extends StatefulWidget {
   /// Creates the application root.
   const WandOfSavesApp({super.key});
 
   @override
+  State<WandOfSavesApp> createState() => _WandOfSavesAppState();
+}
+
+class _WandOfSavesAppState extends State<WandOfSavesApp> {
+  /// Built once and kept.
+  ///
+  /// A router rebuilt on every frame throws away the navigation stack, so it
+  /// belongs in state rather than in `build`.
+  final GoRouter _router = buildRouter();
+
+  @override
+  void dispose() {
+    _router.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'Wand of Saves',
-      theme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        brightness: Brightness.light,
-      ),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.deepPurple,
-        brightness: Brightness.dark,
-      ),
-      home: const Scaffold(body: Center(child: Text('Wand of Saves'))),
+      // The banner sits exactly where the app bar's actions go, hiding them.
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      routerConfig: _router,
     );
   }
 }

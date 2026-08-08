@@ -16,7 +16,10 @@ import 'dart:typed_data';
 
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/gam/gam_npc.dart';
+import 'package:infinity_formats/src/spec/cre_v1_0.dart';
+import 'package:infinity_formats/src/spec/format_field.dart';
 import 'package:infinity_formats/src/spec/gam_v2_0.dart';
+import 'package:infinity_formats/src/text/fixed_field.dart';
 
 /// A parsed BG:EE savegame — `BALDUR.gam`.
 ///
@@ -38,6 +41,19 @@ final class Gam {
 
   int _u32(GamHeaderField field) =>
       ByteData.sublistView(bytes).getUint32(field.offset, Endian.little);
+
+  /// Elapsed game time. 300 units is one in-game hour.
+  int get gameTime => _u32(GamHeaderField.gameTime);
+
+  /// Resref of the area the party is standing in, e.g. `AR2600`.
+  String get currentArea => decodeFixedString(
+    bytes,
+    GamHeaderField.currentArea.offset,
+    GamHeaderField.currentArea.length,
+  );
+
+  /// Party reputation, as displayed — the stored value divided by ten.
+  double get reputation => _u32(GamHeaderField.reputation) / 10;
 
   /// Shared party gold.
   int get partyGold => _u32(GamHeaderField.partyGold);
@@ -115,6 +131,75 @@ final class Gam {
   /// nothing moves. Editing a section that changes size needs a layout pass
   /// and does not belong here.
   Gam withPartyGold(int gold) => _patchU32(GamHeaderField.partyGold, gold);
+
+  /// A copy of this save with [field] of the creature at [creOffset] set to
+  /// [value].
+  ///
+  /// The counterpart to [withPartyGold] for the fields that live *inside* an
+  /// embedded creature record. [creOffset] is absolute, as `GamNpc.creOffset`
+  /// reports it, so the byte written is at `creOffset + field.offset` — no
+  /// index-times-stride arithmetic, which is the calculation that produced the
+  /// spike's −180.
+  ///
+  /// Width and signedness come from [field] itself, mirroring how `Cre` reads:
+  /// one table, so a writer cannot disagree with a reader about what a field
+  /// means.
+  ///
+  /// Patches a copy of the original buffer and leaves every other byte alone,
+  /// including the regions this codec does not understand. **Only correct for
+  /// fixed-width fields** — nothing here moves anything, and a section that
+  /// changes size needs the layout pass instead.
+  ///
+  /// Throws [InfinityFormatException] if [value] does not fit [field], or if
+  /// the field would land outside the file. Both are refused rather than
+  /// truncated or allowed to wrap: a savegame that loads and is quietly wrong
+  /// is worse than one that fails loudly.
+  Gam withCreatureField({
+    required int creOffset,
+    required CreHeaderField field,
+    required int value,
+  }) {
+    final at = creOffset + field.offset;
+    if (creOffset < 0 || at + field.length > bytes.length) {
+      throw InfinityFormatException.truncated(
+        what: '$field of the creature at $creOffset',
+        expected: at + field.length,
+        actual: bytes.length,
+        offset: at,
+      );
+    }
+    if (!field.holds(value)) {
+      throw InfinityFormatException.valueOutOfRange(
+        what: '$field',
+        value: value,
+        minimum: field.minimum,
+        maximum: field.maximum,
+      );
+    }
+
+    final copy = Uint8List.fromList(bytes);
+    final view = ByteData.sublistView(copy);
+    switch ((field.length, field.signed)) {
+      case (1, false):
+        view.setUint8(at, value);
+      case (1, true):
+        view.setInt8(at, value);
+      case (2, false):
+        view.setUint16(at, value, Endian.little);
+      case (2, true):
+        view.setInt16(at, value, Endian.little);
+      case (4, false):
+        view.setUint32(at, value, Endian.little);
+      case (4, true):
+        view.setInt32(at, value, Endian.little);
+      case _:
+        throw InfinityFormatException.unreadableField(
+          what: '$field',
+          length: field.length,
+        );
+    }
+    return Gam.trusted(copy.asUnmodifiableView());
+  }
 
   Gam _patchU32(GamHeaderField field, int value) {
     final copy = Uint8List.fromList(bytes);

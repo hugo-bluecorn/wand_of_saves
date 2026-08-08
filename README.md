@@ -10,11 +10,12 @@ It is a functional successor to [EE Keeper](http://forum.baldursgate.com/discuss
 — the feature set is the target, but the UI and architecture are deliberately different: Material 3
 rather than Win32/MFC, and Flutter MVVM rather than MFC Document/View.
 
-> **Status: Phase 0, in progress.** The first codec has landed — `Tlk`, the talk-table reader,
-> written test-first with 20 passing tests. The GAM and CRE codecs are next; the Flutter shell
-> comes after them. Underneath sits the groundwork: the pinned target-side canon, format offsets
-> verified against real save data, the reverse engineering of EE Keeper's feature set, and a
-> working read-path spike.
+> **Status: Phase 2 — the app has a window.** `infinity_formats` reads GAM, CRE and TLK; a real
+> save has been edited and loaded back in Baldur's Gate. The Flutter app lists your saves with the
+> game's own screenshots. Next: the party editor.
+>
+> **Phase 1 (the writer's layout pass) is deliberately deferred** — every edit the app needs so far
+> is a fixed-width field, so nothing resizes. That changes when inventory arrives.
 
 ## What's here
 
@@ -29,12 +30,10 @@ rather than Win32/MFC, and Flutter MVVM rather than MFC Document/View.
 | `context/` | Pinned Flutter/Dart canon (carried over from an earlier experiment). |
 | `reference/README.md` | Pointers to read-only reference trees and game data. |
 | `packages/infinity_formats/` | Pure-Dart format codecs. Must never import `package:flutter` — enforced by `test/flutter_free_test.dart`. |
-| `tool/spike/` | The working GAM → CRE → TLK read-path spike. |
 
 ## Try the spike
 
 ```bash
-fvm dart run tool/spike/gam_cre_tlk_spike.dart
 ```
 
 Parses a real BG1EE save: party, embedded creature records, ability scores, and `dialog.tlk`

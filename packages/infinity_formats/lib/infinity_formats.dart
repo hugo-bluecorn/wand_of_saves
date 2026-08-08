@@ -29,6 +29,8 @@ export 'src/io/atomic_file.dart';
 export 'src/spec/cre_v1_0.dart';
 export 'src/spec/format_field.dart';
 export 'src/spec/gam_v2_0.dart';
+export 'src/tables/ids_map.dart';
+export 'src/tables/table_2da.dart';
 export 'src/tlk/tlk.dart';
 
 // Phase 0 continues here: GamCodec, CreCodec.
