@@ -119,6 +119,236 @@ enum CharacterStat {
   armorClassEffective(
     CreHeaderField.armorClassEffective,
     'Armour class (effective)',
+  ),
+
+  /// Attacks per round. IESDP: "Number of attacks (0-10)".
+  numberOfAttacks(
+    CreHeaderField.numberOfAttacks,
+    'Attacks per round',
+    declaredMinimum: 0,
+    declaredMaximum: 10,
+  ),
+
+  /// Save versus death. IESDP: "(0-20)". Lower is better.
+  saveVersusDeath(
+    CreHeaderField.saveVersusDeath,
+    'Paralysis / Poison / Death',
+    declaredMinimum: 0,
+    declaredMaximum: 20,
+  ),
+
+  /// Save versus wands. IESDP: "(0-20)".
+  saveVersusWands(
+    CreHeaderField.saveVersusWands,
+    'Rod / Staff / Wand',
+    declaredMinimum: 0,
+    declaredMaximum: 20,
+  ),
+
+  /// Save versus polymorph. IESDP: "(0-20)".
+  saveVersusPolymorph(
+    CreHeaderField.saveVersusPolymorph,
+    'Petrification / Polymorph',
+    declaredMinimum: 0,
+    declaredMaximum: 20,
+  ),
+
+  /// Save versus breath attacks. IESDP: "(0-20)".
+  saveVersusBreath(
+    CreHeaderField.saveVersusBreath,
+    'Breath Weapon',
+    declaredMinimum: 0,
+    declaredMaximum: 20,
+  ),
+
+  /// Save versus spells. IESDP: "(0-20)".
+  saveVersusSpells(
+    CreHeaderField.saveVersusSpells,
+    'Spell',
+    declaredMinimum: 0,
+    declaredMaximum: 20,
+  ),
+
+  /// Armour class modifier against crushing attacks. Signed; no stated range.
+  armorClassCrushing(CreHeaderField.armorClassCrushing, 'vs. crushing'),
+
+  /// Armour class modifier against missile attacks. Signed.
+  armorClassMissile(CreHeaderField.armorClassMissile, 'vs. missile'),
+
+  /// Armour class modifier against piercing attacks. Signed.
+  armorClassPiercing(CreHeaderField.armorClassPiercing, 'vs. piercing'),
+
+  /// Armour class modifier against slashing attacks. Signed.
+  armorClassSlashing(CreHeaderField.armorClassSlashing, 'vs. slashing'),
+
+  /// Hide in Shadows, as points allocated. IESDP states no range.
+  hideInShadows(CreHeaderField.hideInShadows, 'Hide in Shadows'),
+
+  /// Detect Illusion. IESDP: "minimum value : 0", and no maximum.
+  detectIllusion(
+    CreHeaderField.detectIllusion,
+    'Detect Illusion',
+    declaredMinimum: 0,
+  ),
+
+  /// Set Traps. IESDP states no range.
+  setTraps(CreHeaderField.setTraps, 'Set Traps'),
+
+  /// Lore. IESDP: "(0-100)".
+  lore(
+    CreHeaderField.lore,
+    'Lore',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Lockpicking — the record screen's "Open Locks". IESDP: "minimum value: 0".
+  lockpicking(
+    CreHeaderField.lockpicking,
+    'Open Locks',
+    declaredMinimum: 0,
+  ),
+
+  /// Move Silently. IESDP: "minimum value: 0".
+  moveSilently(
+    CreHeaderField.moveSilently,
+    'Move Silently',
+    declaredMinimum: 0,
+  ),
+
+  /// Find/disarm traps. IESDP: "minimum value: 0".
+  findTraps(CreHeaderField.findTraps, 'Find Traps', declaredMinimum: 0),
+
+  /// Pick Pockets. IESDP: "minimum value: 0".
+  pickPockets(CreHeaderField.pickPockets, 'Pick Pockets', declaredMinimum: 0),
+
+  /// Fatigue. IESDP: "(0-100)".
+  fatigue(
+    CreHeaderField.fatigue,
+    'Fatigue',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Intoxication. IESDP: "(0-100)".
+  intoxication(
+    CreHeaderField.intoxication,
+    'Intoxication',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Luck. IESDP states no range.
+  luck(CreHeaderField.luck, 'Luck'),
+
+  /// Turn undead level. IESDP states no range.
+  turnUndeadLevel(CreHeaderField.turnUndeadLevel, 'Turn Undead'),
+
+  /// Tracking skill. IESDP: "(0-100)".
+  trackingSkill(
+    CreHeaderField.trackingSkill,
+    'Tracking',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Morale. IESDP: "default value is 10 (capped 0 — 20)".
+  morale(
+    CreHeaderField.morale,
+    'Morale',
+    declaredMinimum: 0,
+    declaredMaximum: 20,
+  ),
+
+  /// The morale at which the character panics. IESDP states no range.
+  moraleBreak(CreHeaderField.moraleBreak, 'Morale break'),
+
+  /// Fire resistance. IESDP: "(0-100)".
+  resistFire(
+    CreHeaderField.resistFire,
+    'Fire',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Cold resistance. IESDP: "(0-100)".
+  resistCold(
+    CreHeaderField.resistCold,
+    'Cold',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Electricity resistance. IESDP: "(0-100)".
+  resistElectricity(
+    CreHeaderField.resistElectricity,
+    'Electricity',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Acid resistance. IESDP: "(0-100)".
+  resistAcid(
+    CreHeaderField.resistAcid,
+    'Acid',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Magic resistance. IESDP: "(0-100)".
+  resistMagic(
+    CreHeaderField.resistMagic,
+    'Magic',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Magic fire resistance. IESDP: "(0-100)".
+  resistMagicFire(
+    CreHeaderField.resistMagicFire,
+    'Magic fire',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Magic cold resistance. IESDP: "(0-100)".
+  resistMagicCold(
+    CreHeaderField.resistMagicCold,
+    'Magic cold',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Slashing resistance. IESDP: "(0-100)".
+  resistSlashing(
+    CreHeaderField.resistSlashing,
+    'Slashing',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Crushing resistance. IESDP: "(0-100)".
+  resistCrushing(
+    CreHeaderField.resistCrushing,
+    'Crushing',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Piercing resistance. IESDP: "(0-100)".
+  resistPiercing(
+    CreHeaderField.resistPiercing,
+    'Piercing',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
+  ),
+
+  /// Missile resistance. IESDP: "(0-100)".
+  resistMissile(
+    CreHeaderField.resistMissile,
+    'Missile',
+    declaredMinimum: 0,
+    declaredMaximum: 100,
   );
 
   const CharacterStat(

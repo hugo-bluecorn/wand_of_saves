@@ -64,6 +64,95 @@ void main() {
       expect(CharacterStat.strengthBonus.maximum, 100);
       expect(CharacterStat.thac0.minimum, 1);
       expect(CharacterStat.thac0.maximum, 25);
+      // "Save versus spells (0-20)", "Number of attacks (0-10)",
+      // "Resist fire (0-100)", "Lore (0-100)", morale "capped 0 - 20".
+      expect(CharacterStat.saveVersusSpells.maximum, 20);
+      expect(CharacterStat.numberOfAttacks.maximum, 10);
+      expect(CharacterStat.resistFire.maximum, 100);
+      expect(CharacterStat.lore.maximum, 100);
+      expect(CharacterStat.morale.maximum, 20);
+    });
+
+    test('a half-stated range keeps the half IESDP gives', () {
+      // Five of the thief skills are documented only as "minimum value: 0" —
+      // a floor and no ceiling. Taking the floor and leaving the field's own
+      // width as the ceiling is the honest reading of that; inventing 100 to
+      // match Lore would be a game-rules judgement with no source.
+      expect(CharacterStat.moveSilently.minimum, 0);
+      expect(
+        CharacterStat.moveSilently.maximum,
+        CreHeaderField.moveSilently.maximum,
+      );
+      expect(CharacterStat.moveSilently.declaredMaximum, isNull);
+    });
+
+    test('the whole editable sheet is reachable', () {
+      // The panel is built from this table, so a field the table forgets is a
+      // field the player cannot see. Counting the groups catches a block
+      // dropped wholesale, which reading the list by eye does not.
+      final fields = CharacterStat.values.map((s) => s.field).toSet();
+
+      expect(
+        fields,
+        containsAll([
+          CreHeaderField.saveVersusDeath,
+          CreHeaderField.saveVersusWands,
+          CreHeaderField.saveVersusPolymorph,
+          CreHeaderField.saveVersusBreath,
+          CreHeaderField.saveVersusSpells,
+        ]),
+        reason: 'all five saving throws',
+      );
+      expect(
+        fields.where((f) => f.name.startsWith('resist')),
+        hasLength(11),
+        reason: 'all eleven resistances',
+      );
+      expect(
+        fields.intersection({
+          CreHeaderField.hideInShadows,
+          CreHeaderField.detectIllusion,
+          CreHeaderField.setTraps,
+          CreHeaderField.lore,
+          CreHeaderField.lockpicking,
+          CreHeaderField.moveSilently,
+          CreHeaderField.findTraps,
+          CreHeaderField.pickPockets,
+        }),
+        hasLength(8),
+        reason: 'all eight thief skills, Lore included',
+      );
+    });
+
+    test('never offers to write a section pointer', () {
+      // The reason this table is curated at all. A command free to name any
+      // CreHeaderField could write knownSpellsOffset and destroy a savegame,
+      // and the failure would not be a crash — it would be a file that loads
+      // and is subtly wrong.
+      const forbidden = {
+        CreHeaderField.knownSpellsOffset,
+        CreHeaderField.knownSpellsCount,
+        CreHeaderField.memorizationInfoOffset,
+        CreHeaderField.memorizationInfoCount,
+        CreHeaderField.memorizedSpellsOffset,
+        CreHeaderField.memorizedSpellsCount,
+        CreHeaderField.itemSlotsOffset,
+        CreHeaderField.itemsOffset,
+        CreHeaderField.itemsCount,
+        CreHeaderField.effectsOffset,
+        CreHeaderField.effectsCount,
+        CreHeaderField.effectVersion,
+      };
+
+      expect(
+        CharacterStat.values
+            .map((s) => s.field)
+            .toSet()
+            .intersection(
+              forbidden,
+            ),
+        isEmpty,
+      );
     });
 
     test('an undocumented range falls back to what the field holds', () {

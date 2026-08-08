@@ -53,6 +53,55 @@ final class SetCharacterStat extends EditCommand {
   String get label => 'Set ${stat.label} to $value';
 }
 
+/// Sets the pip count of a proficiency the character already has.
+///
+/// Its own command rather than a [CharacterStat] because the value is not a
+/// header field: on BG:EE proficiencies are opcode 233 effects, so this
+/// patches parameter 1 of one 264-byte record inside the creature. Fixed
+/// width, like every edit this build makes — nothing moves.
+///
+/// ⚠️ **Only a proficiency that already exists.** Granting one from nothing
+/// adds an effect, which resizes the creature, which moves its length in the
+/// GAM NPC struct and then every GAM offset after it. That is Phase 1's
+/// layout pass and it is deliberately not attempted here.
+final class SetProficiency extends EditCommand {
+  /// Sets the effect at [effectOffset] to grant [pips].
+  const SetProficiency({
+    required this.creOffset,
+    required this.effectOffset,
+    required this.proficiencyId,
+    required this.pips,
+  });
+
+  /// Absolute offset of the creature record within the savegame.
+  final int creOffset;
+
+  /// Offset of the effect record, relative to the start of the creature.
+  ///
+  /// Carried rather than derived. The alternative is to find the effect by
+  /// scanning for [proficiencyId], which needs the savegame the command is
+  /// about to be applied to — and a command that reads the file is no longer
+  /// a description of an edit.
+  final int effectOffset;
+
+  /// Which proficiency, as opcode 233 stores it in parameter 2.
+  ///
+  /// Not needed to write the bytes; carried so the undo entry can say what
+  /// changed and so a mismatch is visible when debugging.
+  final int proficiencyId;
+
+  /// The new pip count.
+  final int pips;
+
+  /// What this edit did.
+  ///
+  /// Names the proficiency by number, because naming it properly needs the
+  /// player's own `weapprof.2da` and a domain command must not reach for a
+  /// data source.
+  @override
+  String get label => 'Set proficiency $proficiencyId to $pips';
+}
+
 /// Sets the shared party purse.
 ///
 /// Its own command rather than a [CharacterStat]: the purse lives in the GAM

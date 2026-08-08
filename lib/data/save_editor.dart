@@ -50,6 +50,32 @@ Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
       value: value,
     );
   }(),
+  SetProficiency(
+    :final creOffset,
+    :final effectOffset,
+    :final proficiencyId,
+    :final pips,
+  ) =>
+    () {
+      // No game-rules cap belongs here: IESDP states no range for opcode
+      // 233's Amount, and the per-class ceiling lives in the player's own
+      // `weapprof.2da`, which the panel consults. This is the field's bound,
+      // stated in domain terms so the failure reads the same as any other.
+      if (!EffectV2Field.parameter1.holds(pips)) {
+        throw InvalidEditException(
+          what: 'proficiency $proficiencyId',
+          value: pips,
+          minimum: EffectV2Field.parameter1.minimum,
+          maximum: EffectV2Field.parameter1.maximum,
+        );
+      }
+      return gam.withEffectField(
+        creOffset: creOffset,
+        effectStart: effectOffset,
+        field: EffectV2Field.parameter1,
+        value: pips,
+      );
+    }(),
   SetPartyGold(:final value) => () {
     if (!GamHeaderField.partyGold.holds(value)) {
       throw InvalidEditException(
