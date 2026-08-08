@@ -167,16 +167,16 @@ class Character with CharacterMappable {
   /// Whether this character is in the party.
   bool get isInParty => partyOrder != notInParty;
 
-  /// Levels in every class this character has, in slot order.
+  /// The three class-level slots, exactly as the record holds them.
   ///
-  /// A multi-classed character carries a level in more than one slot; unused
-  /// slots hold `0` and are dropped here rather than shown as "level 0".
-  List<int> get levels => [
-    levelFirstClass,
-    levelSecondClass,
-    levelThirdClass,
-  ].where((level) => level > 0).toList();
-
-  /// Levels as the game writes them — `1` single-classed, `1/1` multi-classed.
-  String get levelLabel => levels.isEmpty ? '—' : levels.join('/');
+  /// ⚠️ **Unused slots are not zeroed, so this is not a list of classes.**
+  /// Measured on a four-member party: the player's own character stores
+  /// `01 01 00`, and every recruited NPC stores `01 01 01` — single-class
+  /// Imoen and Xzar included. Believing the bytes prints "Level 1/1/1" for a
+  /// plain Thief.
+  ///
+  /// How many slots are meaningful comes from `CLASS.IDS`, which needs the
+  /// rules; `CharacterSheet.classLevels` is where that trimming happens, and
+  /// it is the only thing that should be rendered.
+  List<int> get levels => [levelFirstClass, levelSecondClass, levelThirdClass];
 }

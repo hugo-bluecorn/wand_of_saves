@@ -42,23 +42,36 @@ class CharacterSheet {
   ///
   /// Anything the tables cannot name is left out rather than shown as a
   /// number — a raw `173` on a character sheet is noise, not information.
+  /// A kit qualifies its class, `Mage (Necromancer)`, so an unnameable class
+  /// takes the kit down with it rather than leaving a parenthesis adrift.
   String get identity => [
     rules.genderName(character.genderId),
     rules.raceName(character.raceId),
-    rules.className(character.classId),
+    _classWithKit,
     rules.alignmentName(character.alignmentId),
   ].nonNulls.join(' · ');
 
-  /// The character's kit, or `null` — which today is always `null`.
+  String? get _classWithKit {
+    final name = rules.className(character.classId);
+    if (name == null) return null;
+    final kit = kitName;
+    return kit == null ? name : '$name ($kit)';
+  }
+
+  /// The character's kit, or `null` when they have none.
   ///
-  /// **The encoding is not understood, so nothing is shown.** The fixture
-  /// stores `0x40000000` for a character with no kit; shifted right 16 that
-  /// is `0x4000`, and `KIT.IDS` numbers its *first* entry `0x4000` —
-  /// `MAGESCHOOL_GENERALIST`. The obvious decoding therefore names a kit for
-  /// everyone who has none, and `KIT.IDS` has no `TRUECLASS` row to mean
-  /// "no kit". Guessing here would put a false kit on every plain fighter in
-  /// the game, so it waits for a measurement.
-  String? get kitName => null;
+  /// **Settled 2026-08-08 by the four-member `Party` save.** The stored dword
+  /// carries the `KIT.IDS` key in its high word: Xzar stores `0x10000000`,
+  /// which shifted right 16 is `0x1000` — `MAGESCHOOL_NECROMANCER`, and Xzar
+  /// is a Necromancer.
+  ///
+  /// What made this look undecodable was our own parser. `KIT.IDS` names
+  /// `0x4000` twice, `TRUECLASS` first and `MAGESCHOOL_GENERALIST` second,
+  /// and the table generator was last-wins — so the row meaning "no kit" was
+  /// dropped and the remaining name put a mage school on every plain fighter.
+  /// Montaron settles it from the data alone: a Fighter/Thief with no mage
+  /// component stores `0x4000`, so `0x4000` cannot be a school.
+  String? get kitName => rules.kitName(character.kitId);
 
   /// The highest maximum hit points the rules would allow, or `null`.
   ///
@@ -120,18 +133,55 @@ class CharacterSheet {
     warrior: rules.isWarrior(character.classId),
   );
 
+  /// The class levels this character actually has, in slot order.
+  ///
+  /// **The count comes from `CLASS.IDS`, never from the bytes.** A savegame
+  /// leaves its unused level slots holding `1` in every shipped NPC record
+  /// and `0` in the player's own, so a single-class Thief reads `1/1/1` on
+  /// disk. Taking the first `classCount` slots reads `FIGHTER_MAGE` as two
+  /// and `THIEF` as one, which is what the game shows.
+  ///
+  /// When the class is not in the table there is nothing better to go on, so
+  /// this falls back to the slots that are filled — showing the bytes beats
+  /// showing nothing.
+  List<int> get classLevels {
+    final slots = character.levels;
+    final count = rules.classCount(character.classId);
+    return count == null
+        ? slots.where((level) => level > 0).toList()
+        : slots.take(count).toList();
+  }
+
+  /// Levels as the game writes them — `1` single-classed, `1/1` multi-classed.
+  String get levelLabel => classLevels.isEmpty ? '—' : classLevels.join('/');
+
   /// Total hit points Constitution adds.
   ///
   /// **The multi-class rule here is inferred, not measured.** The bonus is
   /// multiplied by the *highest* class level, which is right for a
-  /// single-class character and right for the one fixture available — a
-  /// level 1/1 Fighter/Mage, where every reading gives the same answer. A
-  /// higher-level multi-class character would tell us whether the engine
-  /// averages it instead, and none exists on this machine.
+  /// single-class character and right for every fixture available — the
+  /// four-member party is level 1 throughout, where every reading gives the
+  /// same answer. A higher-level multi-class character would tell us whether
+  /// the engine averages it instead, and none exists on this machine.
+  ///
+  /// **Do not answer it by editing a level** — D10. A level is not a field:
+  /// hit dice, THAC0, saving throws, proficiency and spell slots are all
+  /// granted on level-up, so writing one produces a character the engine
+  /// disagrees with. The answer arrives free once the protagonist's *total*
+  /// experience is between 4000 and 5000, where the Fighter half has reached
+  /// level 2 and the Mage half has not.
+  ///
+  /// What the party *did* settle is that the bonus is **not divided among
+  /// classes**: Aard is a Fighter/Mage and took the full +2 at Constitution
+  /// 16, Montaron a Fighter/Thief and took the full +1 at 15 — and at 18 the
+  /// engine printed the full **+4** for Aard, where a halved reading gives 2.
+  /// Nor is the *column* softened for a half-mage: +4 is the warrior row.
   int? get hitPointBonus {
     final perLevel = hitPointBonusPerLevel;
     if (perLevel == null) return null;
-    final levels = character.levels;
+    // classLevels, not the raw slots: a junk 1 in an unused slot must not be
+    // able to become the "highest" level.
+    final levels = classLevels;
     if (levels.isEmpty) return null;
     return perLevel * levels.reduce((a, b) => a > b ? a : b);
   }
@@ -151,10 +201,15 @@ class CharacterSheet {
 
   /// Maximum hit points as the game will show them.
   ///
-  /// Confirmed at two values: a stored maximum of 7 showed as 9, and 40 showed
-  /// as 42, both with Constitution 16 at level 1 and the game's own breakdown
-  /// reading "Bonus Hit Points/Level: +2". Still level 1 in both, so the
-  /// multi-class multiplier in [hitPointBonus] remains untested.
+  /// Confirmed at three values, and the third moved the bonus as well as the
+  /// base: stored 7 showed as 9 and stored 40 as 42, both at Constitution 16
+  /// with the game printing "Bonus Hit Points/Level: +2"; then stored 40 at
+  /// Constitution 18 showed as **44**, printing **+4**. Varying the modifier
+  /// and not just the number it applies to is what makes this arithmetic
+  /// rather than an offset that happens to fit.
+  ///
+  /// Every run was still level 1, so the multi-class multiplier in
+  /// [hitPointBonus] remains untested.
   int? get maximumHitPointsInGame {
     final bonus = hitPointBonus;
     return bonus == null ? null : character.maximumHitPoints + bonus;

@@ -62,31 +62,29 @@ Character aard({
 
 void main() {
   group('levels', () {
-    test('drops the unused class slots rather than showing level 0', () {
-      expect(aard(levelSecondClass: 0).levels, [1]);
-      expect(aard(levelSecondClass: 0).levelLabel, '1');
+    // Deliberately raw. Trimming the slots to the classes the character
+    // actually has needs CLASS.IDS, so it lives on CharacterSheet -- see
+    // its `class levels` group. Character reports what the bytes hold.
+    test('reports all three slots exactly as the record holds them', () {
+      // The fixture protagonist is (1, 1, 0): the player's own record zeroes
+      // the slot it does not use.
+      expect(aard().levels, [1, 1, 0]);
     });
 
-    test('shows every class a multi-classed character has', () {
-      // The fixture protagonist is (1, 1, 0) -- multi-classed at level one.
-      expect(aard().levels, [1, 1]);
-      expect(aard().levelLabel, '1/1');
+    test('keeps a junk slot rather than guessing it away', () {
+      // Every recruited NPC stores 1/1/1, single-class Imoen and Xzar
+      // included, so a zero here is not what marks a slot unused.
+      expect(aard(levelThirdClass: 1).levels, [1, 1, 1]);
     });
 
-    test('shows three classes when all three slots are used', () {
+    test('keeps three real levels', () {
       final triple = aard(
         levelFirstClass: 7,
         levelSecondClass: 8,
         levelThirdClass: 9,
       );
 
-      expect(triple.levelLabel, '7/8/9');
-    });
-
-    test('says so rather than lying when every slot is empty', () {
-      final none = aard(levelFirstClass: 0, levelSecondClass: 0);
-
-      expect(none.levelLabel, '—');
+      expect(triple.levels, [7, 8, 9]);
     });
   });
 

@@ -305,7 +305,7 @@ class _CharacterSummary extends ConsumerWidget {
         Text(
           // What BG:EE's own record screen says, in its order.
           [
-            'Level ${character.levelLabel}',
+            'Level ${sheet.levelLabel}',
             if (sheet.identity.isNotEmpty) sheet.identity,
           ].join(' · '),
           style: theme.textTheme.bodyMedium?.copyWith(

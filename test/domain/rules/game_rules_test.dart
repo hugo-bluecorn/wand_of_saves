@@ -70,6 +70,62 @@ void main() {
     });
   });
 
+  group('kit — settled 2026-08-08 by a four-member party', () {
+    // The stored dword carries the KIT.IDS key in its high word. Xzar proves
+    // the shift: he stores 0x10000000, which shifted right 16 is 0x1000 =
+    // MAGESCHOOL_NECROMANCER, and Xzar is a Necromancer. Montaron proves the
+    // TRUECLASS reading: he stores 0x40000000 and is a Fighter/Thief with no
+    // mage component, so 0x4000 cannot mean "generalist mage".
+    test('the high word is the KIT.IDS key', () {
+      expect(rules.kitIdentifier(0x10000000), 'MAGESCHOOL_NECROMANCER');
+      expect(rules.kitIdentifier(0x40000000), 'TRUECLASS');
+    });
+
+    test('a specialist mage is named by his school', () {
+      expect(rules.kitName(0x10000000), 'Necromancer');
+    });
+
+    test('TRUECLASS is no kit rather than a kit called TRUECLASS', () {
+      expect(rules.kitName(0x40000000), isNull);
+    });
+
+    test('zero is the other way a character has no kit', () {
+      // Imoen stores 0x00000000 where Aard and Montaron store 0x40000000.
+      // Both mean the same thing, so both must render as nothing.
+      expect(rules.kitIdentifier(0), isNull);
+      expect(rules.kitName(0), isNull);
+    });
+
+    test('an unrecognised kit has no name rather than a made-up one', () {
+      expect(rules.kitName(0x00990000), isNull);
+    });
+  });
+
+  group('class count — how many level slots a record actually uses', () {
+    // A savegame does NOT zero its unused level slots: every recruited NPC in
+    // the Party fixture stores 1/1/1, including single-class Imoen and Xzar.
+    // The count has to come from the class, never from the bytes.
+    test('a single class uses one slot', () {
+      expect(rules.classCount(4), 1, reason: 'THIEF');
+      expect(rules.classCount(1), 1, reason: 'MAGE');
+    });
+
+    test('a dual name is two slots', () {
+      expect(rules.classCount(7), 2, reason: 'FIGHTER_MAGE');
+      expect(rules.classCount(9), 2, reason: 'FIGHTER_THIEF');
+      expect(rules.classCount(18), 2, reason: 'CLERIC_RANGER');
+    });
+
+    test('a triple name is three slots', () {
+      expect(rules.classCount(10), 3, reason: 'FIGHTER_MAGE_THIEF');
+      expect(rules.classCount(17), 3, reason: 'FIGHTER_MAGE_CLERIC');
+    });
+
+    test('an unknown class says so rather than guessing one', () {
+      expect(rules.classCount(173), isNull);
+    });
+  });
+
   group('armour class from Dexterity', () {
     test('17 gives -3', () {
       // The game printed "Dexterity: -3" beside an armour class of 10, and
@@ -94,8 +150,8 @@ void main() {
   group('hit points from Constitution', () {
     test('16 gives +2, whatever the class', () {
       // The game printed "Bonus Hit Points/Level: +2" for this character, who
-      // has Constitution 16. Both columns read 2 there, which is exactly why
-      // this fixture cannot settle the warrior question.
+      // had Constitution 16 at the time. Both columns read 2 there, which is
+      // why 16 could never settle the warrior question.
       expect(rules.hitPointBonusPerLevel(constitution: 16, warrior: false), 2);
       expect(rules.hitPointBonusPerLevel(constitution: 16, warrior: true), 2);
     });
@@ -104,6 +160,17 @@ void main() {
       expect(rules.hitPointBonusPerLevel(constitution: 17, warrior: false), 2);
       expect(rules.hitPointBonusPerLevel(constitution: 17, warrior: true), 3);
       expect(rules.hitPointBonusPerLevel(constitution: 18, warrior: true), 4);
+    });
+
+    test('18 on a warrior gives +4 — the game printed exactly this', () {
+      // 2026-08-08, the run that closed the last unmeasured rule in this
+      // file. Aard raised to Constitution 18 and loaded in BG:EE: the
+      // inventory screen read "Bonus Hit Points/Level: +4" and the globe
+      // read 41/44 against a stored 37/40. The other column reads 2 at 18,
+      // which would have shown 39/42 — a different number on the same
+      // screen, which is what made the run decisive.
+      expect(rules.hitPointBonusPerLevel(constitution: 18, warrior: true), 4);
+      expect(rules.hitPointBonusPerLevel(constitution: 18, warrior: false), 2);
     });
 
     test('a low Constitution is a penalty', () {
@@ -119,9 +186,13 @@ void main() {
   });
 
   group('warrior classification', () {
-    // From the walkthrough's ability chapter: "the bonus for warriors
-    // (Fighters, Paladins, Rangers, and their kits)". Applied by CLASS.IDS
-    // name so the rule reads in the engine's own vocabulary.
+    // The roots come from the walkthrough's ability chapter: "the bonus for
+    // warriors (Fighters, Paladins, Rangers, and their kits)". Applied by
+    // CLASS.IDS name so the rule reads in the engine's own vocabulary.
+    //
+    // **Confirmed in game 2026-08-08** for the case that mattered -- a
+    // multi-class. A FIGHTER_MAGE at Constitution 18 made the engine print
+    // "+4", so containment is right and half a fighter is a warrior.
     test('fighters, paladins and rangers are warriors', () {
       expect(rules.isWarrior(2), isTrue, reason: 'FIGHTER');
       expect(rules.isWarrior(6), isTrue, reason: 'PALADIN');

@@ -19,7 +19,8 @@
 // by hand. Regenerate rather than editing:
 //   fvm dart run tool/gen/generate_rules.dart
 
-/// CRE `0x0273`. `7` is `FIGHTER_MAGE`. Generated from
+/// CRE `0x0273`. `7` is `FIGHTER_MAGE`. The source names 0xca MAGE_ALL on a key
+/// already taken; the first name wins. Generated from
 /// `files/ids/bgee/class.ids`.
 const Map<int, String> classIdentifiers = {
   1: 'MAGE',
@@ -143,7 +144,7 @@ const Map<int, String> classIdentifiers = {
   199: 'FOOD_CREATURE',
   200: 'HUNTER_CREATURE',
   201: 'LONG_SWORD',
-  202: 'MAGE_ALL',
+  202: 'LONG_BOW',
   203: 'FIGHTER_ALL',
   204: 'CLERIC_ALL',
   205: 'THIEF_ALL',
@@ -317,9 +318,10 @@ const Map<int, String> genderIdentifiers = {
 };
 
 /// CRE `0x0244`, a dword rather than a byte. `0x40000000` is TRUECLASS, meaning
-/// no kit at all. Generated from `files/ids/bgee/kit.ids`.
+/// no kit at all. The source names 0x4000 MAGESCHOOL_GENERALIST on a key
+/// already taken; the first name wins. Generated from `files/ids/bgee/kit.ids`.
 const Map<int, String> kitIdentifiers = {
-  16384: 'MAGESCHOOL_GENERALIST',
+  16384: 'TRUECLASS',
   16385: 'BERSERKER',
   16386: 'WIZARDSLAYER',
   16387: 'KENSAI',

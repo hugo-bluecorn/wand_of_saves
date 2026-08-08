@@ -26,13 +26,17 @@ void main() {
     int classId = 7,
     int constitution = 16,
     int dexterity = 17,
-    int levelFirstClass = 1,
-    int levelSecondClass = 1,
+    // All three slots at once, because what these tests are about is the
+    // shape of the slots -- 1/1/1 against 1/1/0 -- not one field at a time.
+    List<int> levels = const [1, 1, 0],
+    int kitId = 0x40000000,
   }) => CharacterSheet(
     character: fakeCharacter().copyWith(
       classId: classId,
-      levelFirstClass: levelFirstClass,
-      levelSecondClass: levelSecondClass,
+      kitId: kitId,
+      levelFirstClass: levels[0],
+      levelSecondClass: levels[1],
+      levelThirdClass: levels[2],
       abilities: fakeCharacter().abilities.copyWith(
         constitution: constitution,
         dexterity: dexterity,
@@ -53,6 +57,64 @@ void main() {
 
     test('leaves out what it cannot name rather than showing a number', () {
       expect(sheetOf(classId: 173).identity, 'Male · Elf · Neutral Good');
+    });
+  });
+
+  group('class levels — a savegame does not zero its unused slots', () {
+    // Measured on the four-member Party fixture. Aard, the player's own
+    // character, stores 01 01 00; every recruited NPC stores 01 01 01,
+    // single-class Imoen and Xzar included. Reading "how many classes" off
+    // the bytes therefore prints "Level 1/1/1" for a plain Thief, which is
+    // what the character panel was doing.
+    test('a single class shows one level however many slots are filled', () {
+      final imoen = sheetOf(classId: 4, levels: const [1, 1, 1]);
+
+      expect(imoen.classLevels, [1]);
+      expect(imoen.levelLabel, '1');
+    });
+
+    test('a two-class name shows two, dropping the junk third', () {
+      final montaron = sheetOf(classId: 9, levels: const [1, 1, 1]);
+
+      expect(montaron.levelLabel, '1/1');
+    });
+
+    test('the player character was already right, and stays right', () {
+      // Aard: FIGHTER_MAGE storing 01 01 00. The old drop-zeroes rule and the
+      // class-driven one agree here, which is precisely why the bug survived.
+      expect(sheetOf().levelLabel, '1/1');
+    });
+
+    test('a triple multi-class shows all three', () {
+      expect(
+        sheetOf(classId: 10, levels: const [7, 8, 9]).levelLabel,
+        '7/8/9',
+      );
+    });
+
+    test('an unknown class falls back to the slots that are filled', () {
+      // Nothing better is available, and showing nothing would be worse than
+      // showing the bytes.
+      final unknown = sheetOf(classId: 173, levels: const [3, 2, 0]);
+
+      expect(unknown.classLevels, [3, 2]);
+      expect(unknown.levelLabel, '3/2');
+    });
+
+    test('a record with no levels at all says so', () {
+      expect(
+        sheetOf(classId: 173, levels: const [0, 0, 0]).levelLabel,
+        '—',
+      );
+    });
+
+    test('the hit-point bonus ignores a junk slot', () {
+      // A single-class Thief at level 5 storing 05 01 01: the bonus multiplies
+      // by 5, and would still do so if the junk slots ever exceeded it.
+      expect(
+        sheetOf(classId: 4, levels: const [5, 1, 1]).maximumHitPointsInGame,
+        7 + 2 * 5,
+      );
     });
   });
 
@@ -84,7 +146,7 @@ void main() {
     test('multiplies the bonus by the highest class level', () {
       // Confirmed at level 1 and nowhere else -- see the note on the getter.
       expect(
-        sheetOf(levelFirstClass: 5, levelSecondClass: 3).maximumHitPointsInGame,
+        sheetOf(levels: const [5, 3, 0]).maximumHitPointsInGame,
         7 + 2 * 5,
       );
     });
@@ -102,6 +164,31 @@ void main() {
         2,
         reason: 'a MAGE does not',
       );
+    });
+
+    test('reproduces the whole Constitution 18 run, number for number', () {
+      // The 2026-08-08 in-game run, and the strongest single check in this
+      // suite: every figure below was read off BG:EE's own inventory screen
+      // for a character whose savegame held 37/40 at Constitution 18.
+      //
+      //   Class Hit Points/Level: +7
+      //   Bonus Hit Points/Level: +4      <- the warrior column
+      //   globe: 41/44
+      //
+      // The rival hypothesis was not a rounding error away: the other column
+      // gives 2, so it predicted 39/42.
+      final aard = CharacterSheet(
+        character: fakeCharacter().copyWith(
+          currentHitPoints: 37,
+          maximumHitPoints: 40,
+          abilities: fakeCharacter().abilities.copyWith(constitution: 18),
+        ),
+        rules: const GeneratedGameRules(),
+      );
+
+      expect(aard.hitPointBonusPerLevel, 4);
+      expect(aard.currentHitPointsInGame, 41);
+      expect(aard.maximumHitPointsInGame, 44);
     });
 
     test('has no derived value when Constitution is off the table', () {
@@ -172,15 +259,40 @@ void main() {
     });
   });
 
-  group('what the tables cannot answer', () {
-    test('the kit is reported as unknown rather than guessed at', () {
-      // The fixture stores 0x40000000 for "no kit". Shifted right 16 that is
-      // 0x4000, which is KIT.IDS's *first* entry, MAGESCHOOL_GENERALIST — so
-      // the obvious decoding names a kit for a character who has none. Until
-      // the encoding is measured, this stays null rather than wrong.
-      expect(sheetOf().kitName, isNull);
+  group('kit', () {
+    test('a specialist mage is named, and joins the identity line', () {
+      // Xzar, party[3] of the Party fixture: a MAGE storing 0x10000000, which
+      // shifted right 16 is 0x1000 = MAGESCHOOL_NECROMANCER. He is a
+      // Necromancer, which is what makes the shift a measurement.
+      final xzar = sheetOf(classId: 1, kitId: 0x10000000);
+
+      expect(xzar.kitName, 'Necromancer');
+      expect(
+        xzar.identity,
+        'Male · Elf · Mage (Necromancer) · Neutral Good',
+        reason: 'the kit qualifies the class rather than standing beside it',
+      );
     });
 
+    test('a character with no kit shows none, on either encoding', () {
+      // Aard and Montaron store 0x40000000 (TRUECLASS); Imoen stores 0. All
+      // three have no kit and the game shows none for any of them.
+      expect(sheetOf().kitName, isNull);
+      expect(sheetOf(kitId: 0).kitName, isNull);
+      expect(sheetOf().identity, 'Male · Elf · Fighter / Mage · Neutral Good');
+    });
+
+    test('an unnamed class cannot carry a kit into the identity line', () {
+      // The parenthesis has nothing to attach to, so the kit drops with it
+      // rather than appearing on its own.
+      expect(
+        sheetOf(classId: 173, kitId: 0x10000000).identity,
+        'Male · Elf · Neutral Good',
+      );
+    });
+  });
+
+  group('what the tables cannot answer', () {
     test('no maximum hit points are suggested', () {
       // What the maximum *should* be needs the per-class dice tables
       // (hpwar.2da and friends). IESDP ships only a template for them, so the

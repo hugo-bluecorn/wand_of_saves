@@ -39,6 +39,11 @@ abstract interface class GameRules {
   /// The `GENDER.IDS` identifier for [id], e.g. `MALE`.
   String? genderIdentifier(int id);
 
+  /// The `KIT.IDS` identifier for the dword [stored] at CRE `0x0244`.
+  ///
+  /// `null` when the character has no kit, which the engine writes two ways.
+  String? kitIdentifier(int stored);
+
   /// [classIdentifier] as English, e.g. `Fighter / Mage`.
   String? className(int id);
 
@@ -51,8 +56,15 @@ abstract interface class GameRules {
   /// [genderIdentifier] as English, e.g. `Male`.
   String? genderName(int id);
 
+  /// [kitIdentifier] as English, e.g. `Necromancer`, or `null` for no kit.
+  String? kitName(int stored);
+
   /// Whether class [id] uses the warrior column of the hit-point table.
   bool isWarrior(int id);
+
+  /// How many class-level slots class [id] actually uses, or `null` if the
+  /// class is unknown.
+  int? classCount(int id);
 
   /// The armour class modifier [dexterity] grants, or `null` off the table.
   ///
@@ -79,10 +91,15 @@ class GeneratedGameRules implements GameRules {
   /// and by *containment* so every multi-class with a fighter in it — CLASS.IDS
   /// spells them `FIGHTER_MAGE`, `FIGHTER_THIEF` and so on — is covered too.
   ///
-  /// **Unverified.** `hpconbon.2da`'s two columns are identical up to
-  /// Constitution 16 and the only fixture has 16, so no save on this machine
-  /// can tell a warrior from anyone else. A character with 17 or more would
-  /// settle it.
+  /// **Verified in game 2026-08-08, and it was the last unmeasured rule here.**
+  /// `hpconbon.2da`'s two columns are identical up to Constitution 16, so for
+  /// a year of fixtures nothing could tell a warrior from anyone else. Raised
+  /// to 18, a `FIGHTER_MAGE` made the engine print
+  /// `Bonus Hit Points/Level: **+4**` — the warrior row. The other column
+  /// reads 2 there, so the reading is unambiguous.
+  ///
+  /// It also confirms the *containment* rule rather than just the roots: Aard
+  /// is half mage and still draws on the warrior column.
   static const Set<String> warriorRoots = {'FIGHTER', 'PALADIN', 'RANGER'};
 
   @override
@@ -96,6 +113,49 @@ class GeneratedGameRules implements GameRules {
 
   @override
   String? genderIdentifier(int id) => genderIdentifiers[id];
+
+  /// The `KIT.IDS` name for a character with no kit at all.
+  ///
+  /// `KIT.IDS` numbers it `0x4000`, and numbers `MAGESCHOOL_GENERALIST` the
+  /// same. `IdsMap.shadowed` keeps that second name rather than letting it
+  /// displace this one, which is what it used to do.
+  static const String noKitIdentifier = 'TRUECLASS';
+
+  /// Where the `KIT.IDS` key sits inside the stored dword.
+  ///
+  /// Measured, not assumed: Xzar stores `0x10000000` and is a Necromancer,
+  /// whose key is `0x1000`.
+  static const int kitKeyShift = 16;
+
+  /// Mage schools are stored under a prefixed name the game does not use.
+  ///
+  /// `MAGESCHOOL_NECROMANCER` is shown as `Necromancer`.
+  static const String schoolPrefix = 'MAGESCHOOL_';
+
+  @override
+  String? kitIdentifier(int stored) => kitIdentifiers[stored >>> kitKeyShift];
+
+  @override
+  String? kitName(int stored) {
+    final identifier = kitIdentifier(stored);
+    // Two encodings mean the same thing. Aard and Montaron store 0x40000000,
+    // Imoen stores 0, and the game shows no kit for any of the three.
+    if (identifier == null || identifier == noKitIdentifier) return null;
+    final bare = identifier.startsWith(schoolPrefix)
+        ? identifier.substring(schoolPrefix.length)
+        : identifier;
+    return _words(bare).join(' ');
+  }
+
+  @override
+  int? classCount(int id) {
+    // The bytes cannot answer this: a savegame leaves the unused level slots
+    // holding 1 in every shipped NPC record and 0 in the player's own, so a
+    // single-class Thief reads 1/1/1. Every playable CLASS.IDS name spells
+    // its classes out -- FIGHTER_MAGE_THIEF is three -- so the name can.
+    final identifier = classIdentifier(id);
+    return identifier?.split('_').length;
+  }
 
   @override
   String? className(int id) {

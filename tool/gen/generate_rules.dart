@@ -178,11 +178,28 @@ String _idsConstant({
       "  ${entry.key}: '${entry.value}',",
   ];
   return '''
-${_doc(about, source)}
+${_doc('$about${_collisions(ids)}', source)}
 const Map<int, String> $name = {
 ${entries.join('\n')}
 };
 ''';
+}
+
+/// A sentence naming the rows a duplicate key displaced, or nothing.
+///
+/// IDS files really do number a key twice — `KIT.IDS` gives `0x4000` both
+/// `TRUECLASS` and `MAGESCHOOL_GENERALIST`, and IESDP says in prose that
+/// `CLASS.IDS` shares 202 between `LONG_BOW` and `MAGE_ALL`. [IdsMap] keeps
+/// the first name; saying which name it dropped puts the collision in the
+/// generated file, so the next IESDP sync shows a new one in the diff instead
+/// of swallowing it the way last-wins swallowed `TRUECLASS`.
+String _collisions(IdsMap ids) {
+  if (ids.shadowed.isEmpty) return '';
+  final named = [
+    for (final (key, name) in ids.shadowed) '0x${key.toRadixString(16)} $name',
+  ];
+  return ' The source names ${named.join(' and ')} on a key already taken; '
+      'the first name wins.';
 }
 
 String _numberConstant({

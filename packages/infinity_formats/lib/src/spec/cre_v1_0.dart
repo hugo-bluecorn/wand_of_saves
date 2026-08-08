@@ -105,10 +105,16 @@ enum CreHeaderField implements FormatField {
   /// Level in the first class.
   levelFirstClass(0x234, 1),
 
-  /// Level in the second class.
+  /// Level in the second class — **junk unless the class uses it.**
+  ///
+  /// ⚠️ Unused slots are not zeroed. Measured 2026-08-08: the player's own
+  /// record stores `01 01 00`, every shipped NPC record stores `01 01 01`,
+  /// and that includes single-class characters. **How many slots mean
+  /// anything comes from `CLASS.IDS`, never from these bytes.**
   levelSecondClass(0x235, 1),
 
-  /// Level in the third class.
+  /// Level in the third class — **junk unless the class uses it.** See
+  /// [levelSecondClass].
   levelThirdClass(0x236, 1),
 
   /// Sex (`GENDER.IDS`).
@@ -138,10 +144,12 @@ enum CreHeaderField implements FormatField {
   /// Morale.
   morale(0x23f, 1),
 
-  /// Kit, as a dword. `0x40000000` is what a character with no kit carries.
+  /// Kit, as a dword carrying the `KIT.IDS` key in its **high word**.
   ///
-  /// Not a `KIT.IDS` key as stored — the relationship between the two is not
-  /// understood, so this is reported raw.
+  /// Reported raw; shift right 16 to get the key. Settled 2026-08-08 against
+  /// a four-member party: Xzar stores `0x10000000`, whose `0x1000` is
+  /// `MAGESCHOOL_NECROMANCER`, and Xzar is a Necromancer. **"No kit" has two
+  /// encodings** — `0x40000000` (`KIT.IDS`'s `TRUECLASS`) and plain `0`.
   kit(0x244, 4),
 
   /// Race (`RACE.IDS`). `2` is `ELF`.

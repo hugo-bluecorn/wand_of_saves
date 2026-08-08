@@ -80,8 +80,35 @@ Detects fighters (and monks), though only single class & kits.
       expect(IdsMap.parse('IDS V1.0\n\n').entries, isEmpty);
     });
 
-    test('a later entry wins over an earlier one with the same key', () {
-      expect(IdsMap.parse('1 FIRST\n1 SECOND\n')[1], 'SECOND');
+    test('the first entry wins over a later one with the same key', () {
+      // IDS files really do repeat a key: KIT.IDS numbers 0x4000 both
+      // TRUECLASS and MAGESCHOOL_GENERALIST, and IESDP's CLASS.IDS page says
+      // in prose that 202 is shared by LONG_BOW and MAGE_ALL. Last-wins lost
+      // TRUECLASS, which is the name a character with no kit stores -- so the
+      // kit encoding looked undecodable when it was only mis-parsed.
+      expect(IdsMap.parse('1 FIRST\n1 SECOND\n')[1], 'FIRST');
+    });
+
+    test('a shadowed entry is recorded rather than dropped', () {
+      // Both names are real. Keeping the loser means a table can say so
+      // instead of silently presenting one reading as the only one.
+      final ids = IdsMap.parse(
+        '0x4000 TRUECLASS\n0x4000 MAGESCHOOL_GENERALIST\n',
+      );
+
+      expect(ids.entries, hasLength(1));
+      expect(ids.shadowed, [(0x4000, 'MAGESCHOOL_GENERALIST')]);
+    });
+
+    test('shadowed is empty when every key is distinct', () {
+      expect(IdsMap.parse('1 MAGE\n2 FIGHTER\n').shadowed, isEmpty);
+    });
+
+    test('a key repeated three times keeps the first and shadows two', () {
+      final ids = IdsMap.parse('1 A\n1 B\n1 C\n');
+
+      expect(ids[1], 'A');
+      expect(ids.shadowed, [(1, 'B'), (1, 'C')]);
     });
   });
 

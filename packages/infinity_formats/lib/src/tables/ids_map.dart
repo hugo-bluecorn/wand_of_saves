@@ -28,9 +28,16 @@
 /// blank lines, and the prose IESDP interleaves between entries — is skipped.
 /// That is deliberately narrower than "starts with a number", so a sentence
 /// opening with a digit cannot become an entry.
+///
+/// ⚠️ **A key can appear twice, and both names are real.** `KIT.IDS` numbers
+/// `0x4000` as `TRUECLASS` and again as `MAGESCHOOL_GENERALIST`; IESDP's
+/// `CLASS.IDS` page says in prose that 202 is shared by `LONG_BOW` and
+/// `MAGE_ALL`. The first name wins and the rest are kept in [shadowed] — see
+/// its note for why "first" rather than "last", which is measured rather than
+/// arbitrary.
 final class IdsMap {
-  /// Wraps [entries] directly.
-  const IdsMap(this.entries);
+  /// Wraps [entries] directly, with the duplicate rows [shadowed] displaced.
+  const IdsMap(this.entries, {this.shadowed = const []});
 
   /// Reads an `IDS` table from [text].
   ///
@@ -39,13 +46,20 @@ final class IdsMap {
   /// generator it is, and it says so loudly.
   factory IdsMap.parse(String text) {
     final entries = <int, String>{};
+    final shadowed = <(int, String)>[];
     for (final line in text.split('\n')) {
       final match = _entry.firstMatch(line);
       if (match == null) continue;
       final key = _number(match.group(1)!);
-      if (key != null) entries[key] = match.group(2)!;
+      if (key == null) continue;
+      final name = match.group(2)!;
+      if (entries.containsKey(key)) {
+        shadowed.add((key, name));
+      } else {
+        entries[key] = name;
+      }
     }
-    return IdsMap(entries);
+    return IdsMap(entries, shadowed: shadowed);
   }
 
   /// A number and an identifier, and nothing else on the line.
@@ -53,8 +67,21 @@ final class IdsMap {
     r'^\s*(0[xX][0-9a-fA-F]+|-?\d+)\s+([A-Za-z_][A-Za-z0-9_]*)\s*$',
   );
 
-  /// Every identifier in the table, by its number.
+  /// Every identifier in the table, by its number. First name per key wins.
   final Map<int, String> entries;
+
+  /// The rows a duplicate key displaced, in the order the file listed them.
+  ///
+  /// **First-wins is measured, not a convention.** `KIT.IDS` lists `0x4000`
+  /// as `TRUECLASS` before it lists it as `MAGESCHOOL_GENERALIST`, and a real
+  /// save stores `0x4000` for a Fighter/Thief — a character with no mage
+  /// component at all, who therefore cannot have a mage school. `TRUECLASS`
+  /// is the name that describes what the field holds, and it is the first.
+  ///
+  /// Keeping the losers matters because dropping them is what hid that:
+  /// last-wins made `KIT.IDS` look as though it had no `TRUECLASS` row, and
+  /// the kit encoding was recorded as unresolved for want of it.
+  final List<(int, String)> shadowed;
 
   /// The identifier numbered [key], or `null`.
   String? operator [](int key) => entries[key];

@@ -247,7 +247,7 @@ void main() {
       expect(character.experience, 325);
       expect(character.thac0, 20);
       expect(character.armorClass, 10);
-      expect(character.levelLabel, '1/1');
+      expect(character.levels, [1, 1, 0]);
       expect(character.reputation, 11.0);
       expect(character.abilities.strength, 18);
       expect(character.abilities.strengthLabel, '18/00');
