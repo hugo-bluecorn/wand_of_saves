@@ -103,8 +103,10 @@ class CharacterSheet {
 
   /// Armour class as the game will show it, before equipment.
   ///
-  /// Confirmed exactly once, and exactly: stored 10 with Dexterity 17 gave
-  /// `10 + (−3)`, and BG:EE's shield read 7.
+  /// Confirmed at two different values, which is what makes it arithmetic
+  /// rather than a coincidence: stored 10 with Dexterity 17 showed 7, and
+  /// stored 6 showed 3. Both from the **effective** field — the natural one
+  /// was set differently in each run and moved nothing.
   int? get armourClassInGame {
     final modifier = armourClassModifier;
     return modifier == null ? null : character.armorClass + modifier;
@@ -149,8 +151,10 @@ class CharacterSheet {
 
   /// Maximum hit points as the game will show them.
   ///
-  /// Confirmed: a stored maximum of 7 with Constitution 16 at level 1 showed
-  /// as 9, and the game's own breakdown read "Bonus Hit Points/Level: +2".
+  /// Confirmed at two values: a stored maximum of 7 showed as 9, and 40 showed
+  /// as 42, both with Constitution 16 at level 1 and the game's own breakdown
+  /// reading "Bonus Hit Points/Level: +2". Still level 1 in both, so the
+  /// multi-class multiplier in [hitPointBonus] remains untested.
   int? get maximumHitPointsInGame {
     final bonus = hitPointBonus;
     return bonus == null ? null : character.maximumHitPoints + bonus;

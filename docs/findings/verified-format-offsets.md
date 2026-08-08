@@ -181,22 +181,42 @@ reputation 11, Fighter/Mage, party gold 12345. That is the Phase 2 gate.
 | Armour class **natural** (`0x46`) 10 → **8** | **No visible effect.** Game showed base armour class 10. | Writing `0x46` alone does not move what the game displays. |
 | Current hit points 6 → **20** | Clamped. Game showed **9/9**. | Current hit points are clamped to maximum on load. |
 
+Extended 2026-08-08, a second run at different values: stored **20 / 40** showed as **22 / 42**,
+with the same "Bonus Hit Points/Level: +2". Two points on the line make the hit-point arithmetic
+arithmetic rather than a coincidence. Both runs were still **level 1**, so whether a multi-class
+character multiplies the bonus by the highest class level or averages it is *still* untested.
+
 **The Constitution finding is now confirmed by the engine in its own words.** The inventory screen
 prints `Class Hit Points/Level: +7` and `Bonus Hit Points/Level: **+2**`, and shows `9/9` from a
 stored maximum of `7`. That is the third independent agreement, after the portrait overlay and
 `hpconbon.2da`.
 
-#### Armour class is not settled, and the observed value is ambiguous
+#### Armour class — SETTLED 2026-08-08: the engine reads `0x48`, the **effective** field
 
-The game showed a base armour class of **10** with `Dexterity: −3` → 7. But `10` is *both* the
-value the untouched **effective** field (`0x48`) already held *and* the unarmoured default, so two
-hypotheses fit equally: the engine reads `0x48`, or the engine recomputes armour class from
-equipment and ignores both stored fields.
+The first run was ambiguous: the game showed a base of **10**, which was both the untouched
+effective field's value *and* the unarmoured default. Two hypotheses fit — the engine reads
+`0x48`, or it recomputes and ignores both stored fields.
 
-**Writing a value that cannot arise naturally separates them.** Set `0x48` to something like `6`
-with nothing worn: if the game shows a base of 6, it reads the field; if it shows 10, it
-recomputes. Both armour-class fields are editable meanwhile — a field is not withheld on a guess
-about behaviour there is an oracle for.
+A second run wrote **6** into `0x48`, a value that cannot arise unarmoured, and left `0x46` at the
+`8` the first run had put there. The result is decisive:
+
+| Run | `0x46` natural | `0x48` effective | Game showed |
+|---|---|---|---|
+| 1 | **8** (edited) | 10 | `Armor Class: 10` → AC 7 |
+| 2 | 8 | **6** (edited) | `Armor Class: 6` → AC 3 |
+
+**`0x48` is the field. `0x46` moved nothing in either run**, including the run where it was the
+only one edited. It stays editable — the field is real and may matter to the engine somewhere the
+character sheet does not show — but it is not what sets armour class.
+
+This **reverses the reasoning that chose it.** The plan argued for editing the "authored input"
+and letting the engine derive the output, on the strength of IESDP's Natural/Effective naming.
+The engine does not work that way, and only the measurement showed it.
+
+⚠️ **Consequence for a future inventory editor:** since the engine reads a stored effective armour
+class rather than recomputing it from what is worn, equipping an item in this editor will *not*
+update armour class on its own. That is EE Keeper's "Recalculate Stats", and it is now known to be
+required rather than optional.
 
 #### The rules tables, and what they still cannot say — 2026-08-08
 

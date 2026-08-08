@@ -102,17 +102,20 @@ enum CharacterStat {
 
   /// Natural armour class — IESDP's "Armor Class (Natural)".
   ///
-  /// **Measured 2026-08-07: writing this had no visible effect in game.** Set
-  /// to 8 on a real save, BG:EE still showed a base armour class of 10.
+  /// **Measured twice, and it changes nothing the character sheet shows.** Set
+  /// to 8 while the effective field read 10, BG:EE showed 10; left at 8 while
+  /// the effective field read 6, BG:EE showed 6. Kept editable because the
+  /// field is real and may matter to the engine elsewhere, but it is not the
+  /// one that moves armour class.
   armorClassNatural(CreHeaderField.armorClassNatural, 'Armour class (natural)'),
 
   /// Effective armour class — IESDP's "Armor Class (Effective)".
   ///
-  /// Editable so the next in-game run can settle which field the engine
-  /// actually reads. The observed base of 10 is **ambiguous**: it is both the
-  /// value this field already held and the unarmoured default, so "the engine
-  /// reads this one" and "the engine recomputes armour class from scratch"
-  /// both fit. Writing a value that cannot arise naturally separates them.
+  /// **This is the field the engine reads.** Settled 2026-08-08 by writing 6,
+  /// a value that cannot arise unarmoured: BG:EE then showed "Armor Class: 6"
+  /// and, with Dexterity 17 at −3, an AC of 3. The earlier reading of 10 was
+  /// ambiguous — it was both this field's value and the unarmoured default —
+  /// so a number that could not arise by accident was what separated them.
   armorClassEffective(
     CreHeaderField.armorClassEffective,
     'Armour class (effective)',

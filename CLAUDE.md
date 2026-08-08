@@ -197,10 +197,10 @@ deferred (see below). What exists:
   - **THAC0 is a base, like hit points** — the game showed `15` − 3 (Strength) + 2 (Proficiencies).
   - **The Constitution finding is confirmed by the engine itself**, which prints
     "Bonus Hit Points/Level: +2".
-  - ⚠️ **Armour class is unsettled.** Writing natural AC (`0x46`) had no visible effect, and the
-    observed base of 10 is ambiguous — it is both the untouched `0x48` and the unarmoured default.
-    Both fields are editable pending one decisive in-game run. See
-    `docs/findings/verified-format-offsets.md` §Armour class is not settled.
+  - ✅ **Armour class settled** (2026-08-08): the engine reads the **effective** field (`0x48`).
+    Writing `6` there showed `Armor Class: 6` in game; natural (`0x46`) moved nothing in either
+    run. This reversed the reasoning that picked natural, and it means **equipping an item will
+    not update armour class by itself** — "Recalculate Stats" is required, not optional.
 - ✅ **Phase 2.5 — the rules layer** (2026-08-08). `Table2da` and `IdsMap` in the package;
   `tool/gen/generate_rules.dart` turns IESDP's copies of the game's own tables into committed Dart;
   `GameRules` and `CharacterSheet` above them. **No KEY/BIFF reader was needed** — IESDP ships 198

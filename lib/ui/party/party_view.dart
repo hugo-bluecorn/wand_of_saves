@@ -371,9 +371,9 @@ class _CharacterSummary extends ConsumerWidget {
               label: 'Armour class (natural)',
               onCommitted: set,
               hint:
-                  'Measured in game on 2026-08-07: changing this had no '
-                  'visible effect. Kept editable, and recorded as such, until '
-                  'we know which field the engine reads.',
+                  'Measured twice: changing this alone does not move what the '
+                  'game shows. The effective field beside it is the one the '
+                  'engine reads. Kept editable because the field is real.',
             ),
             _StatField(
               character: character,
@@ -383,9 +383,9 @@ class _CharacterSummary extends ConsumerWidget {
               label: 'Armour class (effective)',
               onCommitted: set,
               hint:
-                  'What the character defends at before Dexterity is applied. '
-                  'Which of the two armour-class fields the game actually '
-                  'reads is still being measured.',
+                  'What the character defends at before Dexterity is applied, '
+                  'and the field the game actually reads — confirmed in game '
+                  'by writing a value that could not arise unarmoured.',
             ),
             if (sheet.maximumHitPointsInGame != null)
               _ReadOnlyStat(
