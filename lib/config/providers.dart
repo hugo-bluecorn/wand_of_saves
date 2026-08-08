@@ -24,6 +24,7 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
@@ -50,6 +51,21 @@ final saveGameRepositoryProvider = Provider<SaveGameRepository>(
 /// know which it got.
 final gameRulesProvider = Provider<GameRules>(
   (ref) => const GeneratedGameRules(),
+);
+
+/// Source of truth for the rules tables inside the game's own archives.
+///
+/// **Not the same thing as [gameRulesProvider], and the difference is D11.**
+/// That one is a snapshot generated from IESDP, which is right for tables of
+/// pure numbers. This one reads the player's installation, which is the only
+/// correct source for anything whose values are string references — IESDP
+/// ships the BG2:EE `weapprof.2da`, and its strrefs name tutorial prose in a
+/// BG:EE talk table.
+///
+/// On a machine with no game installed this answers an empty catalogue —
+/// no second implementation, because there is no open file to stand in for.
+final resourceRepositoryProvider = Provider<ResourceRepository>(
+  (ref) => ResourceRepository(ref.watch(gameProfileServiceProvider)),
 );
 
 /// Source of truth for the game's displayable text.

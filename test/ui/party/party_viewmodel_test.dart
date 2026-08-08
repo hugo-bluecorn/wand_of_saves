@@ -16,9 +16,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
+import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
 
 import '../../support/fakes.dart';
@@ -36,6 +38,7 @@ void main() {
     List<SyntheticCharacter> party = const [],
     Map<int, String> strings = const {},
     StringRepository? stringRepository,
+    ResourceRepository? resourceRepository,
     bool slotExists = true,
   }) => ProviderContainer.test(
     overrides: [
@@ -47,6 +50,10 @@ void main() {
       ),
       stringRepositoryProvider.overrideWithValue(
         stringRepository ?? FakeStringRepository(strings),
+      ),
+      resourceRepositoryProvider.overrideWithValue(
+        resourceRepository ??
+            const FakeResourceRepository(ProficiencyCatalogue.empty),
       ),
     ],
   );
@@ -187,6 +194,113 @@ void main() {
         expect(state.members.single.name, '*INSC');
       },
     );
+  });
+
+  group('proficiencies', () {
+    /// A catalogue answering with the two rows the fixture party needs.
+    ///
+    /// Strrefs, not names — that is what the resource repository produces,
+    /// and resolving them is the merge this group is about.
+    ResourceRepository catalogue() => const FakeResourceRepository(
+      ProficiencyCatalogue({
+        114: ProficiencyEntry(
+          id: 114,
+          identifier: '2WEAPON',
+          nameStrref: 25023,
+          maximumByColumn: {'FIGHTER_MAGE': 3},
+        ),
+        100: ProficiencyEntry(
+          id: 100,
+          identifier: 'FLAILMORNINGSTAR',
+          nameStrref: 25012,
+          maximumByColumn: {'FIGHTER_MAGE': 2},
+        ),
+      }),
+    );
+
+    test('names come from the talk table, not from the table of rules', () {
+      // Two repositories, merged above both of them: `weapprof.2da` gives the
+      // strref and `dialog.tlk` gives the text. A repository reaching sideways
+      // for the other is what the layering forbids.
+      //
+      // ⚠️ 25023 is the *player's* strref. IESDP's copy of this table says
+      // 31138, which in a BG:EE talk table is a paragraph about temples.
+      final container = containerWith(
+        party: const [
+          SyntheticCharacter(proficiencies: {114: 2, 100: 2}),
+        ],
+        strings: const {
+          25023: 'Two-Weapon Style',
+          25012: 'Flail / Morning Star',
+        },
+        resourceRepository: catalogue(),
+      );
+
+      expect(
+        container.read(partyProvider(slotName).future),
+        completion(
+          isA<PartyState>()
+              .having(
+                (s) => s.proficiencies[114]?.name,
+                '114',
+                'Two-Weapon Style',
+              )
+              .having(
+                (s) => s.proficiencies[100]?.name,
+                '100',
+                'Flail / Morning Star',
+              ),
+        ),
+      );
+    });
+
+    test('keeps the per-class ceilings the game states', () async {
+      final container = containerWith(
+        party: const [
+          SyntheticCharacter(proficiencies: {114: 2}),
+        ],
+        strings: const {25023: 'Two-Weapon Style'},
+        resourceRepository: catalogue(),
+      );
+
+      final state = await container.read(partyProvider(slotName).future);
+
+      expect(state.proficiencies[114]?.maximumFor('FIGHTER_MAGE'), 3);
+    });
+
+    test('a machine with no game installed still loads the party', () async {
+      // The panel then shows pip counts with no names and no ceilings, which
+      // is a degradation rather than a failure — the app exists to open saves,
+      // and it must not need the game to do it.
+      final container = containerWith(
+        party: const [
+          SyntheticCharacter(proficiencies: {114: 2}),
+        ],
+      );
+
+      final state = await container.read(partyProvider(slotName).future);
+
+      expect(state.proficiencies.entries, isEmpty);
+      expect(state.members.single.proficiencies, hasLength(1));
+      expect(state.members.single.proficiencies.single.pips, 2);
+    });
+
+    test('survives a talk table that cannot answer', () async {
+      final container = containerWith(
+        party: const [
+          SyntheticCharacter(proficiencies: {114: 2}),
+        ],
+        stringRepository: const AbsentStringRepository(),
+        resourceRepository: catalogue(),
+      );
+
+      final state = await container.read(partyProvider(slotName).future);
+
+      // The identifier survives, so the panel has something to label the tile
+      // with other than a number.
+      expect(state.proficiencies[114]?.name, isNull);
+      expect(state.proficiencies[114]?.identifier, '2WEAPON');
+    });
   });
 
   group('editing', () {

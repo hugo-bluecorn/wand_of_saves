@@ -21,12 +21,14 @@ library;
 
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/party_projection.dart';
+import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/proficiency.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/resistances.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/domain/saving_throws.dart';
@@ -125,6 +127,18 @@ class FakeStringRepository implements StringRepository {
 
   @override
   Future<void> close() async {}
+}
+
+/// A resource repository answering with a canned catalogue.
+class FakeResourceRepository implements ResourceRepository {
+  /// Creates a repository answering [catalogue].
+  const FakeResourceRepository(this.catalogue);
+
+  /// What every call returns.
+  final ProficiencyCatalogue catalogue;
+
+  @override
+  Future<ProficiencyCatalogue> proficiencies() async => catalogue;
 }
 
 /// A save slot summary, with the fixture's values as defaults.

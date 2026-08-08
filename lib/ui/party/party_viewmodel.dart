@@ -24,6 +24,7 @@ import 'package:wand_of_saves/data/party_projection.dart';
 import 'package:wand_of_saves/data/save_editor.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 
 part 'party_viewmodel.mapper.dart';
@@ -58,6 +59,7 @@ class PartyState with PartyStateMappable {
   const PartyState({
     required this.slot,
     required this.members,
+    this.proficiencies = ProficiencyCatalogue.empty,
     this.selectedIndex = 0,
     this.isDirty = false,
     this.canUndo = false,
@@ -73,6 +75,13 @@ class PartyState with PartyStateMappable {
   /// copy lives in private fields on the notifier, so a widget can render this
   /// without any way to reach into the file.
   final List<Character> members;
+
+  /// What the game calls each proficiency, and how many pips it allows.
+  ///
+  /// Merged from two repositories — the player's `weapprof.2da` for the rows
+  /// and their talk table for the text. Empty on a machine with no game
+  /// installed, which the panel degrades to numbers for rather than failing.
+  final ProficiencyCatalogue proficiencies;
 
   /// Which member the detail pane is showing.
   final int selectedIndex;
@@ -139,6 +148,15 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
   /// party every time a digit is typed.
   final Map<int, String> _names = {};
 
+  /// The proficiency table, named, resolved once at load.
+  ///
+  /// The second cross-repository merge in this ViewModel, and it is here for
+  /// the same reason the first is: the architecture allows either a use-case
+  /// or the ViewModel, and exactly one ViewModel needs both. It moves to a
+  /// use-case when a *second* ViewModel does — the item and spell pickers are
+  /// the likely trigger, not this.
+  ProficiencyCatalogue _proficiencies = ProficiencyCatalogue.empty;
+
   @override
   Future<PartyState> build() async {
     final saves = ref.watch(saveGameRepositoryProvider);
@@ -162,6 +180,15 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
       _names[member.creOffset] =
           await strings.lookup(member.nameStrref) ?? member.creResref;
     }
+
+    final catalogue = await ref
+        .watch(resourceRepositoryProvider)
+        .proficiencies();
+    _proficiencies = catalogue.withNames({
+      for (final entry in catalogue.entries.values)
+        if (entry.nameStrref case final int strref)
+          if (await strings.lookup(strref) case final String name) strref: name,
+    });
 
     return _projected(slot, selectedIndex: 0);
   }
@@ -246,6 +273,7 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
                   name: _names[member.creOffset] ?? member.creResref,
                 ),
       ],
+      proficiencies: _proficiencies,
       selectedIndex: selectedIndex,
       isDirty: _working != _onDisk,
       canUndo: _undoStack.isNotEmpty,

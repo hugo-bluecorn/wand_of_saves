@@ -17,6 +17,7 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
       MapperContainer.globals.use(_instance = PartyStateMapper._());
       SaveSlotMapper.ensureInitialized();
       CharacterMapper.ensureInitialized();
+      ProficiencyCatalogueMapper.ensureInitialized();
     }
     return _instance!;
   }
@@ -30,6 +31,13 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
   static const Field<PartyState, List<Character>> _f$members = Field(
     'members',
     _$members,
+  );
+  static ProficiencyCatalogue _$proficiencies(PartyState v) => v.proficiencies;
+  static const Field<PartyState, ProficiencyCatalogue> _f$proficiencies = Field(
+    'proficiencies',
+    _$proficiencies,
+    opt: true,
+    def: ProficiencyCatalogue.empty,
   );
   static int _$selectedIndex(PartyState v) => v.selectedIndex;
   static const Field<PartyState, int> _f$selectedIndex = Field(
@@ -64,6 +72,7 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
   final MappableFields<PartyState> fields = const {
     #slot: _f$slot,
     #members: _f$members,
+    #proficiencies: _f$proficiencies,
     #selectedIndex: _f$selectedIndex,
     #isDirty: _f$isDirty,
     #canUndo: _f$canUndo,
@@ -74,6 +83,7 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
     return PartyState(
       slot: data.dec(_f$slot),
       members: data.dec(_f$members),
+      proficiencies: data.dec(_f$proficiencies),
       selectedIndex: data.dec(_f$selectedIndex),
       isDirty: data.dec(_f$isDirty),
       canUndo: data.dec(_f$canUndo),
@@ -144,9 +154,12 @@ abstract class PartyStateCopyWith<$R, $In extends PartyState, $Out>
   SaveSlotCopyWith<$R, SaveSlot, SaveSlot> get slot;
   ListCopyWith<$R, Character, CharacterCopyWith<$R, Character, Character>>
   get members;
+  ProficiencyCatalogueCopyWith<$R, ProficiencyCatalogue, ProficiencyCatalogue>
+  get proficiencies;
   $R call({
     SaveSlot? slot,
     List<Character>? members,
+    ProficiencyCatalogue? proficiencies,
     int? selectedIndex,
     bool? isDirty,
     bool? canUndo,
@@ -174,9 +187,14 @@ class _PartyStateCopyWithImpl<$R, $Out>
     (v) => call(members: v),
   );
   @override
+  ProficiencyCatalogueCopyWith<$R, ProficiencyCatalogue, ProficiencyCatalogue>
+  get proficiencies =>
+      $value.proficiencies.copyWith.$chain((v) => call(proficiencies: v));
+  @override
   $R call({
     SaveSlot? slot,
     List<Character>? members,
+    ProficiencyCatalogue? proficiencies,
     int? selectedIndex,
     bool? isDirty,
     bool? canUndo,
@@ -185,6 +203,7 @@ class _PartyStateCopyWithImpl<$R, $Out>
     FieldCopyWithData({
       if (slot != null) #slot: slot,
       if (members != null) #members: members,
+      if (proficiencies != null) #proficiencies: proficiencies,
       if (selectedIndex != null) #selectedIndex: selectedIndex,
       if (isDirty != null) #isDirty: isDirty,
       if (canUndo != null) #canUndo: canUndo,
@@ -195,6 +214,7 @@ class _PartyStateCopyWithImpl<$R, $Out>
   PartyState $make(CopyWithData data) => PartyState(
     slot: data.get(#slot, or: $value.slot),
     members: data.get(#members, or: $value.members),
+    proficiencies: data.get(#proficiencies, or: $value.proficiencies),
     selectedIndex: data.get(#selectedIndex, or: $value.selectedIndex),
     isDirty: data.get(#isDirty, or: $value.isDirty),
     canUndo: data.get(#canUndo, or: $value.canUndo),

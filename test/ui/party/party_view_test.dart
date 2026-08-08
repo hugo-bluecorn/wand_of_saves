@@ -27,6 +27,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/ui/party/party_view.dart';
 
 import '../../support/fakes.dart';
@@ -36,10 +37,18 @@ void main() {
   const slotName = '000000022-last';
 
   /// The Party save's four members, as the savegame holds them.
+  ///
+  /// Proficiencies included, and they are the real ones — each matches the
+  /// weapon that character is actually carrying, which is what made them a
+  /// measurement rather than four readings of the same byte.
   const party = [
     // Aard, and every default in SyntheticCharacter is already his: the
-    // protagonist is what every other fixture on this machine holds.
-    SyntheticCharacter(),
+    // protagonist is what every other fixture on this machine holds. He
+    // dual-wields, hence Two-Weapon Style.
+    SyntheticCharacter(
+      saveVersusSpells: 12,
+      proficiencies: {114: 2, 100: 2},
+    ),
     SyntheticCharacter(
       resref: '*MOEN1',
       displayName: 'Imoen',
@@ -47,6 +56,10 @@ void main() {
       classId: 4,
       kitId: 0,
       levelThirdClass: 1,
+      moveSilently: 15,
+      findTraps: 25,
+      lore: 3,
+      proficiencies: {91: 1, 105: 1},
     ),
     SyntheticCharacter(
       resref: '*ONTAR',
@@ -54,6 +67,9 @@ void main() {
       partyOrder: 2,
       classId: 9,
       levelThirdClass: 1,
+      hideInShadows: 10,
+      moveSilently: 20,
+      proficiencies: {91: 2, 107: 2},
     ),
     SyntheticCharacter(
       resref: '*ZAR',
@@ -62,8 +78,58 @@ void main() {
       classId: 1,
       kitId: 0x10000000,
       levelThirdClass: 1,
+      saveVersusDeath: 14,
+      saveVersusWands: 11,
+      saveVersusPolymorph: 13,
+      saveVersusBreath: 15,
+      saveVersusSpells: 12,
+      proficiencies: {96: 1},
     ),
   ];
+
+  /// What the player's own `weapprof.2da` calls the party's proficiencies.
+  ///
+  /// Names as the talk table resolves them, and ceilings as the table states
+  /// them — a Fighter/Mage caps at 3 in Two-Weapon Style, which is why Aard
+  /// at 2 has one pip left to give.
+  const proficiencyNames = ProficiencyCatalogue({
+    114: ProficiencyEntry(
+      id: 114,
+      identifier: '2WEAPON',
+      name: 'Two-Weapon Style',
+      maximumByColumn: {'FIGHTER_MAGE': 3},
+    ),
+    100: ProficiencyEntry(
+      id: 100,
+      identifier: 'FLAILMORNINGSTAR',
+      name: 'Flail / Morning Star',
+      maximumByColumn: {'FIGHTER_MAGE': 2},
+    ),
+    91: ProficiencyEntry(
+      id: 91,
+      identifier: 'SHORTSWORD',
+      name: 'Short Sword',
+      maximumByColumn: {'THIEF': 1, 'FIGHTER_THIEF': 2},
+    ),
+    105: ProficiencyEntry(
+      id: 105,
+      identifier: 'SHORTBOW',
+      name: 'Shortbow',
+      maximumByColumn: {'THIEF': 1},
+    ),
+    107: ProficiencyEntry(
+      id: 107,
+      identifier: 'SLING',
+      name: 'Sling',
+      maximumByColumn: {'FIGHTER_THIEF': 2},
+    ),
+    96: ProficiencyEntry(
+      id: 96,
+      identifier: 'DAGGER',
+      name: 'Dagger',
+      maximumByColumn: {'NECROMANCER': 1},
+    ),
+  });
 
   ProviderContainer containerWith(List<SyntheticCharacter> members) =>
       ProviderContainer.test(
@@ -77,6 +143,13 @@ void main() {
           // Every member here is named in the GAM struct, so no strref is
           // ever resolved and the table can be empty.
           stringRepositoryProvider.overrideWithValue(FakeStringRepository()),
+          // ⚠️ **Not optional.** Left to the real one, this reads the
+          // machine's own `chitin.key` and a 30 MB archive, and `pumpAndSettle`
+          // does not await real file I/O — the widget never settles and the
+          // whole file times out rather than failing on an assertion.
+          resourceRepositoryProvider.overrideWithValue(
+            const FakeResourceRepository(proficiencyNames),
+          ),
         ],
       );
 
