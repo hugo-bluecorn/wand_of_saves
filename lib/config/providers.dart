@@ -35,6 +35,7 @@ import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
+import 'package:wand_of_saves/data/services/portrait_import_service.dart';
 import 'package:wand_of_saves/data/services/recycle_service.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 
@@ -94,6 +95,18 @@ final gameRulesProvider = Provider<GameRules>(
 /// no second implementation, because there is no open file to stand in for.
 final resourceRepositoryProvider = Provider<ResourceRepository>(
   (ref) => ResourceRepository(ref.watch(gameProfileServiceProvider)),
+);
+
+/// Puts a portrait of the player's own where the engine looks first.
+///
+/// The whole of what a "custom portrait" is: a loose file in
+/// `<user data>/portraits/` shadows a packed one of the same name, so the same
+/// two CRE resrefs serve either and nothing else in the app needs to know
+/// which it got.
+final portraitImportServiceProvider = Provider<PortraitImportService>(
+  (ref) => PortraitImportService(
+    profile: ref.watch(gameProfileServiceProvider),
+  ),
 );
 
 /// A character's portrait, by base name — the picture the record names.

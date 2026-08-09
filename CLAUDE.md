@@ -153,6 +153,10 @@ there will surface only when someone first tries to build on those platforms.
 app reads a local game installation and writes to local save files, which is not a sandboxed-mobile
 or browser workload. Development happens on Linux; macOS and Windows are scaffolded but unverified.
 
+**`file_selector` is the one native plugin.** Added for `Add a portrait…`; it registers on
+`linux/`, `macos/` and `windows/`, and the Linux debug build is confirmed to compile with it. It is
+the only dependency in the project that needs anything from the platform side.
+
 **Dependencies are kept at latest.** The project was created and then immediately brought up to
 date with `fvm flutter pub upgrade --major-versions`. Prefer current versions over pinning. Note
 that `matcher`, `meta`, `test_api` and `vector_math` will always report as outdated in the app —
@@ -192,9 +196,11 @@ four workflows they serve.
 >   a picture of what the engine *believed*, and it closed D10 — but it is not the character's face.
 > - **`+` creates a character** from the engine's own `CHARBASE`, portrait first.
 >
-> **What was left out, and why:** the picker offers the game's 210 and whatever is already in
-> `portraits/`, but there is **no "Add a portrait…" file import** — that needs a file-picker
-> dependency, which is a decision worth taking deliberately rather than in passing.
+>   The picker offers the game's 210, whatever is already in `portraits/`, and **`Add a
+>   portrait…`**, which copies a file from anywhere into that folder — the same thing the game's
+>   own CUSTOM button does. ⚠️ **It explains rather than refuses**: the only hard rule is a base
+>   name of seven characters or fewer, because depth, compression and size are all things the
+>   engine tolerates in its own portraits.
 >
 > **Two cheap experiments are still queued** for the next time the game is open, neither blocking:
 > store a THAC0 *worse* than the class table computes and see whether the engine overrides it, and

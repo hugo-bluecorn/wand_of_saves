@@ -1385,3 +1385,23 @@ loses six bases; one that chops the last letter unconditionally renames three.
 ### The resource type of a portrait is `0x0001`
 
 Not in `ResourceType` until this session. All 210 in `PORTRAIT.BIF` carry it.
+
+### Importing a portrait needs no new mechanism
+
+`<user data>/portraits/` is read by the engine **before** its own archives, and a portrait is named
+by resref either way — so a loose file simply shadows a packed one. The same two CRE resrefs serve
+a built-in portrait and a custom one; there is no separate field, flag or code path anywhere.
+
+⚠️ **One imported file is written under *both* variants**, `<base>M.bmp` and `<base>L.bmp`. A CRE
+names two portraits and a character whose `L` does not resolve is one the game draws
+inconsistently. Writing the same picture under both is the engine's own tolerance for off-size
+portraits put to use.
+
+⚠️ **The only hard rule is the name**: seven characters or fewer, so the variant letter fits an
+8-byte resref. Depth, compression and dimensions are reported to the player and allowed, because
+the game's own 210 include eleven off-size ones, a 32-bit one and an 8-bit one — a check stricter
+than the engine refuses files the engine would draw.
+
+BMP header offsets, measured by parsing all 210: width `0x12` and height `0x16` as **signed**
+int32 (a negative height is a top-down row order, not a negative picture), bit depth `0x1c`,
+compression `0x1e`. A header is 54 bytes.

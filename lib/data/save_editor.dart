@@ -97,12 +97,12 @@ T applyCharacterEdit<T extends CreatureDocument<T>>(
     // the *suffixed* resref and would report a limit of 8 for a name the
     // player typed at 7. The bound is the base name's, and it comes from the
     // game's own naming: base plus one letter must fit an 8-byte field.
-    if (baseName.length > portraitBaseNameLimit) {
+    if (baseName.length > SetPortrait.baseNameLimit) {
       throw InvalidEditException(
         what: 'a portrait name',
         value: baseName.length,
         minimum: 0,
-        maximum: portraitBaseNameLimit,
+        maximum: SetPortrait.baseNameLimit,
       );
     }
     final portrait = SetPortrait(creOffset: creOffset, baseName: baseName);
@@ -119,13 +119,6 @@ T applyCharacterEdit<T extends CreatureDocument<T>>(
         );
   }(),
 };
-
-/// The longest a portrait's base name may be.
-///
-/// Seven, so the `L`/`M`/`S` variant suffix fits an 8-byte resref. Measured
-/// across all 210 portraits the game ships: every one that is part of a triple
-/// has a base of seven characters or fewer.
-const int portraitBaseNameLimit = 7;
 
 /// [gam] with [command] applied, as a new savegame.
 ///

@@ -144,6 +144,18 @@ final class SetPortrait extends CharacterEditCommand {
   @override
   final int creOffset;
 
+  /// The longest a portrait's base name may be.
+  ///
+  /// Seven, so the `L`/`M`/`S` variant suffix fits an 8-byte resref. Measured
+  /// across all 210 portraits the game ships: every one that is part of a
+  /// triple has a base of seven characters or fewer.
+  ///
+  /// **The only hard requirement a portrait has to meet.** Depth, compression
+  /// and dimensions are all reported and allowed, because the game's own
+  /// portraits include eleven off-size ones, a 32-bit one and an 8-bit one — a
+  /// check stricter than the engine refuses files the engine would draw.
+  static const int baseNameLimit = 7;
+
   /// The portrait's base name, e.g. `AJANTIS`, with no variant suffix.
   ///
   /// At most seven characters, so the suffix fits an 8-byte resref. Empty
