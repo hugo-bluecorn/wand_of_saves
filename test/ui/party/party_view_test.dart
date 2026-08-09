@@ -262,6 +262,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Brings the tab called [heading] to the front.
+  ///
+  /// **Needed by almost every test below**, because a `TabBarView` builds only
+  /// the tab on show — a field behind another heading is not merely off-screen
+  /// like a `ListView`'s tail, it does not exist, and `find.text` cannot see
+  /// it. Matched on the `Tab` rather than on the bare string so a heading that
+  /// happens to share a word with a field label still selects the tab.
+  Future<void> openTab(WidgetTester tester, String heading) async {
+    await tester.tap(find.widgetWithText(Tab, heading));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('every party member is on the rail', (tester) async {
     await showParty(tester);
 
@@ -338,6 +350,7 @@ void main() {
       // the game's own wording, so a player can put the two screens side by
       // side without translating.
       await showParty(tester);
+      await openTab(tester, 'Combat');
       await select(tester, 'Xzar');
 
       for (final label in [
@@ -370,6 +383,7 @@ void main() {
       // Imoen on the same screen is the control: identical field, identical
       // group, enabled, because THIEF is 100. One save, two answers.
       await showParty(tester);
+      await openTab(tester, 'Skills');
 
       expect(fieldFor(tester, 'Open Locks').enabled, isFalse);
       expect(fieldFor(tester, 'Pick Pockets').enabled, isFalse);
@@ -385,6 +399,7 @@ void main() {
       // game, where a Necromancer's record screen prints Lore 15. Greying it
       // out along with its neighbours would be the obvious wrong move.
       await showParty(tester);
+      await openTab(tester, 'Skills');
 
       expect(fieldFor(tester, 'Lore').enabled, isTrue);
 
@@ -402,6 +417,7 @@ void main() {
       // touch is one you cannot correct — so a non-zero value wins over the
       // table.
       await showParty(tester);
+      await openTab(tester, 'Skills');
       await select(tester, 'Montaron');
 
       expect(fieldFor(tester, 'Hide in Shadows').enabled, isTrue);
@@ -413,6 +429,7 @@ void main() {
       // Turn Undead and Tracking. No table says who may have them, so no rule
       // is invented — recorded as an open question instead.
       await showParty(tester);
+      await openTab(tester, 'Skills');
 
       expect(fieldFor(tester, 'Turn Undead').enabled, isTrue);
       expect(fieldFor(tester, 'Tracking').enabled, isTrue);
@@ -425,6 +442,7 @@ void main() {
       // until a value was refused. A Fighter/Mage tops out at 3 in Two-Weapon
       // Style, and the tile now says so up front.
       await showParty(tester);
+      await openTab(tester, 'Skills');
 
       expect(find.text('max 3'), findsOneWidget);
       expect(find.text('max 2'), findsOneWidget);
@@ -436,10 +454,11 @@ void main() {
       // heading has to say so — it is the same trap that made 6/7 look wrong
       // beside the game's 8/9.
       await showParty(tester);
+      await openTab(tester, 'Skills');
       await select(tester, 'Imoen');
 
       expect(
-        find.text('Skills — points allocated, not what the game shows'),
+        find.text('Points allocated, not what the game shows'),
         findsOneWidget,
       );
     });
@@ -458,6 +477,7 @@ void main() {
       // The page being long is a real problem; tabbing it is the answer, not
       // one bespoke collapsible group.
       await showParty(tester);
+      await openTab(tester, 'Combat');
 
       expect(find.text('Resistances'), findsOneWidget);
       expect(find.text('Fire'), findsOneWidget);
@@ -473,6 +493,7 @@ void main() {
       // weapprof.2da resolved through its talk table. IESDP's copy of that
       // file would have labelled this tile with a paragraph about temples.
       await showParty(tester);
+      await openTab(tester, 'Skills');
 
       expect(find.text('Two-Weapon Style'), findsOneWidget);
       expect(find.text('Flail / Morning Star'), findsOneWidget);
@@ -485,6 +506,7 @@ void main() {
       // weapon cannot be given one without resizing the record, so offering
       // the field would be offering an edit this build cannot make.
       await showParty(tester);
+      await openTab(tester, 'Skills');
       await select(tester, 'Xzar');
 
       // `DAGGER`, not `Dagger`: this row has no strref in the fixture, so the
@@ -502,6 +524,7 @@ void main() {
       // it: Aard's Two-Weapon Style from 2 to 3, which is a dword patched
       // inside an effect rather than a header byte.
       await showParty(tester);
+      await openTab(tester, 'Skills');
 
       await tester.enterText(
         find.ancestor(
@@ -528,6 +551,7 @@ void main() {
       // than clamp: quietly turning 5 into 3 is what makes an editor
       // untrustworthy.
       await showParty(tester);
+      await openTab(tester, 'Skills');
 
       await tester.enterText(
         find.ancestor(
@@ -545,6 +569,88 @@ void main() {
         findsNothing,
         reason: 'a refused value must not reach the savegame',
       );
+    });
+  });
+
+  group('the sheet is divided the way the game divides it', () {
+    // BG:EE's character creation names its own steps, and four of them are
+    // things this panel holds: ABILITIES, SKILLS, and the numbers that make up
+    // a character and how they fight. Those names are the game's, not ours, so
+    // a player can hold the two screens side by side — the same reason the
+    // saving throws are labelled in the game's wording.
+    testWidgets("carries the game's own headings", (tester) async {
+      await showParty(tester);
+
+      for (final tab in ['Character', 'Abilities', 'Skills', 'Combat']) {
+        expect(find.widgetWithText(Tab, tab), findsOneWidget, reason: tab);
+      }
+    });
+
+    testWidgets('puts each group behind the heading it belongs to', (
+      tester,
+    ) async {
+      await showParty(tester);
+
+      const expected = {
+        'Character': 'Current hit points',
+        'Abilities': 'Charisma',
+        'Skills': 'Lore',
+        'Combat': 'Paralysis / Poison / Death',
+      };
+
+      for (final MapEntry(key: tab, value: field) in expected.entries) {
+        await openTab(tester, tab);
+        expect(find.text(field), findsOneWidget, reason: '$field under $tab');
+      }
+    });
+
+    testWidgets('files proficiencies under Skills, where the game files them', (
+      tester,
+    ) async {
+      // ⚠️ Not a layout preference. Pressing SKILLS in character creation leads
+      // to the proficiency screen — its header reads "PROFICIENCY SLOTS 4 |
+      // SKILLS 0" — and on a spellcaster continues into the spellbook. The
+      // game has one heading for all three; this panel used to have two.
+      await showParty(tester);
+      await openTab(tester, 'Skills');
+
+      expect(find.text('Two-Weapon Style'), findsOneWidget);
+      expect(find.text('Open Locks'), findsOneWidget);
+    });
+
+    testWidgets('condition belongs to the character, not to their skills', (
+      tester,
+    ) async {
+      // Fatigue and intoxication sat in the skills group because that is where
+      // the record stores them, which is not a reason to show them there.
+      await showParty(tester);
+      await openTab(tester, 'Character');
+
+      expect(find.text('Fatigue'), findsOneWidget);
+      expect(find.text('Intoxication'), findsOneWidget);
+    });
+
+    testWidgets('resistances stay with the rest of the combat numbers', (
+      tester,
+    ) async {
+      await showParty(tester);
+      await openTab(tester, 'Combat');
+
+      expect(find.text('Fire'), findsOneWidget);
+      expect(find.text('Magic cold'), findsOneWidget);
+    });
+
+    testWidgets('keeps the heading you are reading when you change character', (
+      tester,
+    ) async {
+      // The whole point of a party rail is comparing one number across the
+      // party. Snapping back to the first tab on every selection would make
+      // that four clicks instead of one.
+      await showParty(tester);
+      await openTab(tester, 'Combat');
+      await select(tester, 'Imoen');
+
+      expect(find.text('Paralysis / Poison / Death'), findsOneWidget);
     });
   });
 

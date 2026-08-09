@@ -124,20 +124,27 @@ class _PartyShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _PortraitRail(state: state, slotDirectoryName: slotDirectoryName),
-        const VerticalDivider(width: 1),
-        Expanded(
-          child: _CharacterSummary(
-            character: state.members[state.selectedIndex],
-            proficiencies: state.proficiencies,
-            skills: state.skills,
-            reputation: state.reputation,
-            slotDirectoryName: slotDirectoryName,
+    // The controller lives here, above the rail, so **the tab survives
+    // changing character**. Comparing one number across the party is the whole
+    // point of having a rail; a controller owned by the detail pane would be
+    // rebuilt on every selection and snap back to Character each time.
+    return DefaultTabController(
+      length: _CharacterTab.values.length,
+      child: Row(
+        children: [
+          _PortraitRail(state: state, slotDirectoryName: slotDirectoryName),
+          const VerticalDivider(width: 1),
+          Expanded(
+            child: _CharacterSummary(
+              character: state.members[state.selectedIndex],
+              proficiencies: state.proficiencies,
+              skills: state.skills,
+              reputation: state.reputation,
+              slotDirectoryName: slotDirectoryName,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -316,22 +323,117 @@ class _CharacterSummary extends ConsumerWidget {
           ),
         );
 
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(character.name, style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 4),
-        Text(
-          // What BG:EE's own record screen says, in its order.
-          [
-            'Level ${sheet.levelLabel}',
-            if (sheet.identity.isNotEmpty) sheet.identity,
-          ].join(' · '),
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+        Padding(
+          // Above the tabs, not inside one: whose sheet this is has to be true
+          // on every tab, and the game keeps its own summary on screen
+          // throughout creation for the same reason.
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(character.name, style: theme.textTheme.headlineSmall),
+              const SizedBox(height: 4),
+              Text(
+                // What BG:EE's own record screen says, in its order.
+                [
+                  'Level ${sheet.levelLabel}',
+                  if (sheet.identity.isNotEmpty) sheet.identity,
+                ].join(' · '),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 24),
+        TabBar(
+          tabs: [
+            for (final tab in _CharacterTab.values) Tab(text: tab.label),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            children: [
+              _CharacterFacts(
+                character: character,
+                sheet: sheet,
+                reputation: reputation,
+                onCommitted: set,
+              ),
+              _Abilities(character: character, sheet: sheet, onCommitted: set),
+              _Skills(
+                character: character,
+                sheet: sheet,
+                slotDirectoryName: slotDirectoryName,
+                onCommitted: set,
+              ),
+              _Combat(character: character, sheet: sheet, onCommitted: set),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// How the game itself divides a character.
+///
+/// BG:EE's character creation walks
+/// `GENDER · RACE · CLASS · ALIGNMENT · ABILITIES · SKILLS · APPEARANCE ·
+/// NAME`, and these four are the steps whose contents this panel holds. The
+/// names are the game's rather than ours, for the same reason the saving
+/// throws carry the game's wording: a player can hold the two screens side by
+/// side without translating.
+///
+/// ⚠️ **SKILLS is the game's umbrella for weapon proficiencies too**, and for
+/// spells. Pressing it in creation leads to the proficiency screen — whose
+/// header reads `PROFICIENCY SLOTS 4 | SKILLS 0` — and on a spellcaster
+/// continues into the spellbook and memorisation screens. This panel used to
+/// file proficiencies under a heading of their own, which the game does not.
+///
+/// Two steps have no tab: APPEARANCE, because nothing here edits colours or
+/// the voice set yet, and the identity steps, which are read-only and sit
+/// above the tabs where they stay visible.
+enum _CharacterTab {
+  /// Who they are and how they are doing.
+  character('Character'),
+
+  /// The six scores.
+  abilities('Abilities'),
+
+  /// Proficiencies and thief skills, under the game's own heading.
+  skills('Skills'),
+
+  /// How they fight, and what they shrug off.
+  combat('Combat');
+
+  const _CharacterTab(this.label);
+
+  /// What the tab says.
+  final String label;
+}
+
+/// The Character tab: the numbers that belong to the person.
+class _CharacterFacts extends StatelessWidget {
+  const _CharacterFacts({
+    required this.character,
+    required this.sheet,
+    required this.reputation,
+    required this.onCommitted,
+  });
+
+  final Character character;
+  final CharacterSheet sheet;
+  final double reputation;
+  final void Function(CharacterStat, int) onCommitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return _TabBody(
+      children: [
         _StatGroup(
           title: 'Character',
           children: [
@@ -341,7 +443,7 @@ class _CharacterSummary extends ConsumerWidget {
               stat: CharacterStat.currentHitPoints,
               value: character.currentHitPoints,
               label: 'Current hit points',
-              onCommitted: set,
+              onCommitted: onCommitted,
               hint:
                   'What the savegame stores, and what you edit. The game adds '
                   'the Constitution bonus before showing it, and clamps to '
@@ -353,15 +455,27 @@ class _CharacterSummary extends ConsumerWidget {
               stat: CharacterStat.maximumHitPoints,
               value: character.maximumHitPoints,
               label: 'Maximum hit points',
-              onCommitted: set,
+              onCommitted: onCommitted,
             ),
+            if (sheet.maximumHitPointsInGame != null)
+              _ReadOnlyStat(
+                label: 'Hit points (in game)',
+                value:
+                    '${sheet.currentHitPointsInGame} / '
+                    '${sheet.maximumHitPointsInGame}',
+                hint:
+                    'Stored hit points plus '
+                    '${sheet.hitPointBonusPerLevel} per level from '
+                    'Constitution ${character.abilities.constitution}, which '
+                    'is what the game shows on the character sheet.',
+              ),
             _StatField(
               character: character,
               sheet: sheet,
               stat: CharacterStat.experience,
               value: character.experience,
               label: 'Experience',
-              onCommitted: set,
+              onCommitted: onCommitted,
             ),
             _StatField(
               character: character,
@@ -369,18 +483,233 @@ class _CharacterSummary extends ConsumerWidget {
               stat: CharacterStat.gold,
               value: character.gold,
               label: 'Gold (carried)',
-              onCommitted: set,
+              onCommitted: onCommitted,
               hint:
                   'Gold on this character. The shared party purse is stored '
                   'separately and is not this number.',
             ),
+            _ReadOnlyStat(
+              label: 'Reputation (party)',
+              value: reputation.toStringAsFixed(1),
+              hint:
+                  'Reputation belongs to the party, not to one character, and '
+                  'this is the party’s — which is the number the game shows. '
+                  'Each creature record carries a copy of its own, and on '
+                  'everyone but the protagonist it goes stale: this character '
+                  'stores ${character.reputation.toStringAsFixed(1)}, and the '
+                  'engine ignores it. Measured in game.',
+            ),
+          ],
+        ),
+        _StatGroup(
+          // Not skills, which is where the record's own layout had put them
+          // and where this panel followed it. They are how the character is
+          // doing right now, which is what the rest of this tab is about.
+          title: 'Condition',
+          children: [
+            _StatField(
+              character: character,
+              sheet: sheet,
+              stat: CharacterStat.fatigue,
+              value: character.fatigue,
+              label: CharacterStat.fatigue.label,
+              onCommitted: onCommitted,
+            ),
+            _StatField(
+              character: character,
+              sheet: sheet,
+              stat: CharacterStat.intoxication,
+              value: character.intoxication,
+              label: CharacterStat.intoxication.label,
+              onCommitted: onCommitted,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The Abilities tab — the game's ABILITIES step.
+class _Abilities extends StatelessWidget {
+  const _Abilities({
+    required this.character,
+    required this.sheet,
+    required this.onCommitted,
+  });
+
+  final Character character;
+  final CharacterSheet sheet;
+  final void Function(CharacterStat, int) onCommitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return _TabBody(
+      children: [
+        _StatGroup(
+          title: 'Abilities',
+          children: [
+            for (final (stat, value) in _scores(character.abilities))
+              _StatField(
+                character: character,
+                sheet: sheet,
+                stat: stat,
+                value: value,
+                // The modifier goes in the label, so what a score is *worth*
+                // sits beside the score instead of only in a tooltip.
+                label: _label(stat, sheet),
+                onCommitted: onCommitted,
+                // Percentile strength is only meaningful at Strength 18,
+                // which is the one place the engine consults it.
+                enabled:
+                    stat != CharacterStat.strengthBonus ||
+                    character.abilities.strength == 18,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// A stat's label with the modifier the game's tables give it.
+  ///
+  /// Only the two that this build can look up say anything: Constitution's
+  /// hit points per level and Dexterity's armour class. The rest are plain,
+  /// rather than implying a modifier of zero where there is simply no table
+  /// read yet.
+  String _label(CharacterStat stat, CharacterSheet sheet) {
+    final modifier = switch (stat) {
+      CharacterStat.constitution => sheet.hitPointBonusPerLevel,
+      CharacterStat.dexterity => sheet.armourClassModifier,
+      _ => null,
+    };
+    if (modifier == null || modifier == 0) return stat.label;
+    final sign = modifier > 0 ? '+' : '';
+    return '${stat.label}  $sign$modifier';
+  }
+
+  List<(CharacterStat, int)> _scores(AbilityScores abilities) => [
+    (CharacterStat.strength, abilities.strength),
+    (CharacterStat.strengthBonus, abilities.strengthBonus),
+    (CharacterStat.dexterity, abilities.dexterity),
+    (CharacterStat.constitution, abilities.constitution),
+    (CharacterStat.intelligence, abilities.intelligence),
+    (CharacterStat.wisdom, abilities.wisdom),
+    (CharacterStat.charisma, abilities.charisma),
+  ];
+}
+
+/// The Skills tab — the game's SKILLS step, proficiencies included.
+///
+/// See [_CharacterTab.skills] for why those two share a heading here when the
+/// record stores them in completely different places: one is header bytes, the
+/// other is opcode 233 effects. The game presents them together, so this does.
+class _Skills extends StatelessWidget {
+  const _Skills({
+    required this.character,
+    required this.sheet,
+    required this.slotDirectoryName,
+    required this.onCommitted,
+  });
+
+  final Character character;
+  final CharacterSheet sheet;
+  final String slotDirectoryName;
+  final void Function(CharacterStat, int) onCommitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return _TabBody(
+      children: [
+        _ProficiencyGroup(
+          character: character,
+          sheet: sheet,
+          slotDirectoryName: slotDirectoryName,
+        ),
+        _StatGroup(
+          // Named for what they are, because every one of them is a base and
+          // the game shows something larger. Saying so once in the title beats
+          // repeating "(base)" on ten tiles.
+          title: 'Points allocated, not what the game shows',
+          children: [
+            for (final (stat, value) in _allocated(character))
+              _StatField(
+                character: character,
+                sheet: sheet,
+                stat: stat,
+                value: value,
+                label: stat.label,
+                onCommitted: onCommitted,
+                // Greyed when the class cannot allocate it — but **not** when
+                // the record already holds something. A Fighter/Mage with 40
+                // Open Locks is an anomaly, and a field you cannot touch is
+                // one you cannot correct.
+                enabled: sheet.allows(stat) || value != 0,
+                hint: sheet.unavailableReason(stat) ?? _hint(stat),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// The skills a character spends points on, in the record's own order.
+  List<(CharacterStat, int)> _allocated(Character character) {
+    final skills = character.thiefSkills;
+    return [
+      (CharacterStat.lore, skills.lore),
+      (CharacterStat.lockpicking, skills.lockpicking),
+      (CharacterStat.findTraps, skills.findTraps),
+      (CharacterStat.pickPockets, skills.pickPockets),
+      (CharacterStat.moveSilently, skills.moveSilently),
+      (CharacterStat.hideInShadows, skills.hideInShadows),
+      (CharacterStat.detectIllusion, skills.detectIllusion),
+      (CharacterStat.setTraps, skills.setTraps),
+      (CharacterStat.turnUndeadLevel, character.turnUndeadLevel),
+      (CharacterStat.trackingSkill, character.trackingSkill),
+    ];
+  }
+
+  /// What a skill tile says when the class *can* allocate it.
+  ///
+  /// Only Move Silently carries one, and it stands for the whole group: the
+  /// heading already says these are bases, and this is where the measurement
+  /// behind that claim lives.
+  String? _hint(CharacterStat stat) => stat == CharacterStat.moveSilently
+      ? 'Measured: a thief storing 15 here has the game show 35, and two '
+            'characters both storing Lore 3 show 10 and 15. The engine adds '
+            'class, race and Dexterity bonuses. Working the shown figure out '
+            'needs tables this build does not read, so only the stored base '
+            'is offered.'
+      : null;
+}
+
+/// The Combat tab: how they fight, and what they shrug off.
+class _Combat extends StatelessWidget {
+  const _Combat({
+    required this.character,
+    required this.sheet,
+    required this.onCommitted,
+  });
+
+  final Character character;
+  final CharacterSheet sheet;
+  final void Function(CharacterStat, int) onCommitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return _TabBody(
+      children: [
+        _StatGroup(
+          title: 'Combat',
+          children: [
             _StatField(
               character: character,
               sheet: sheet,
               stat: CharacterStat.thac0,
               value: character.thac0,
               label: 'THAC0 (base)',
-              onCommitted: set,
+              onCommitted: onCommitted,
               hint:
                   'The game calls this "Base THAC0" and shows a second, lower '
                   'number beside it — Strength, Dexterity and weapon '
@@ -395,7 +724,7 @@ class _CharacterSummary extends ConsumerWidget {
               stat: CharacterStat.armorClassNatural,
               value: character.armorClassNatural,
               label: 'Armour class (natural)',
-              onCommitted: set,
+              onCommitted: onCommitted,
               hint:
                   'Measured twice: changing this alone does not move what the '
                   'game shows. The effective field beside it is the one the '
@@ -407,24 +736,12 @@ class _CharacterSummary extends ConsumerWidget {
               stat: CharacterStat.armorClassEffective,
               value: character.armorClass,
               label: 'Armour class (effective)',
-              onCommitted: set,
+              onCommitted: onCommitted,
               hint:
                   'What the character defends at before Dexterity is applied, '
                   'and the field the game actually reads — confirmed in game '
                   'by writing a value that could not arise unarmoured.',
             ),
-            if (sheet.maximumHitPointsInGame != null)
-              _ReadOnlyStat(
-                label: 'Hit points (in game)',
-                value:
-                    '${sheet.currentHitPointsInGame} / '
-                    '${sheet.maximumHitPointsInGame}',
-                hint:
-                    'Stored hit points plus '
-                    '${sheet.hitPointBonusPerLevel} per level from '
-                    'Constitution ${character.abilities.constitution}, which '
-                    'is what the game shows on the character sheet.',
-              ),
             if (sheet.armourClassInGame != null)
               _ReadOnlyStat(
                 label: 'Armour class (in game)',
@@ -434,53 +751,14 @@ class _CharacterSummary extends ConsumerWidget {
                     'Dexterity ${character.abilities.dexterity}. Equipment '
                     'moves it further, and that needs the item records.',
               ),
-            _ReadOnlyStat(
-              label: 'Reputation (party)',
-              value: reputation.toStringAsFixed(1),
-              hint:
-                  'Reputation belongs to the party, not to one character, and '
-                  'this is the party’s — which is the number the game shows. '
-                  'Each creature record carries a copy of its own, and on '
-                  'everyone but the protagonist it goes stale: this character '
-                  'stores ${character.reputation.toStringAsFixed(1)}, and the '
-                  'engine ignores it. Measured in game.',
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        _StatGroup(
-          title: 'Abilities',
-          children: [
-            for (final (stat, value) in _abilities(character.abilities))
-              _StatField(
-                character: character,
-                sheet: sheet,
-                stat: stat,
-                value: value,
-                // The modifier goes in the label, so what a score is *worth*
-                // sits beside the score instead of only in a tooltip.
-                label: _abilityLabel(stat, sheet),
-                onCommitted: set,
-                // Percentile strength is only meaningful at Strength 18,
-                // which is the one place the engine consults it.
-                enabled:
-                    stat != CharacterStat.strengthBonus ||
-                    character.abilities.strength == 18,
-              ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        _StatGroup(
-          title: 'Combat',
-          children: [
-            for (final (stat, value) in _combat(character))
+            for (final (stat, value) in _fighting(character))
               _StatField(
                 character: character,
                 sheet: sheet,
                 stat: stat,
                 value: value,
                 label: stat.label,
-                onCommitted: set,
+                onCommitted: onCommitted,
                 hint: stat == CharacterStat.saveVersusDeath
                     ? 'The five saving throws are stored exactly as the game '
                           'prints them — nothing is added before display, '
@@ -489,37 +767,6 @@ class _CharacterSummary extends ConsumerWidget {
               ),
           ],
         ),
-        const SizedBox(height: 24),
-        _ProficiencyGroup(
-          character: character,
-          sheet: sheet,
-          slotDirectoryName: slotDirectoryName,
-        ),
-        const SizedBox(height: 24),
-        _StatGroup(
-          // Named for what they are, because every one of them is a base and
-          // the game shows something larger. Saying so once in the title beats
-          // repeating "(base)" on nine tiles.
-          title: 'Skills — points allocated, not what the game shows',
-          children: [
-            for (final (stat, value) in _skills(character))
-              _StatField(
-                character: character,
-                sheet: sheet,
-                stat: stat,
-                value: value,
-                label: stat.label,
-                onCommitted: set,
-                // Greyed when the class cannot allocate it — but **not** when
-                // the record already holds something. A Fighter/Mage with 40
-                // Open Locks is an anomaly, and a field you cannot touch is
-                // one you cannot correct.
-                enabled: sheet.allows(stat) || value != 0,
-                hint: sheet.unavailableReason(stat) ?? _skillHint(stat),
-              ),
-          ],
-        ),
-        const SizedBox(height: 24),
         _StatGroup(
           title: 'Resistances',
           children: [
@@ -530,17 +777,16 @@ class _CharacterSummary extends ConsumerWidget {
                 stat: stat,
                 value: value,
                 label: stat.label,
-                onCommitted: set,
+                onCommitted: onCommitted,
               ),
           ],
         ),
-        const SizedBox(height: 24),
       ],
     );
   }
 
-  /// The Combat group, in the order the record screen stacks it.
-  List<(CharacterStat, int)> _combat(Character character) {
+  /// The combat numbers, in the order the record screen stacks them.
+  List<(CharacterStat, int)> _fighting(Character character) {
     final saves = character.savingThrows;
     final modifiers = character.armorClassModifiers;
     return [
@@ -560,45 +806,13 @@ class _CharacterSummary extends ConsumerWidget {
     ];
   }
 
-  /// The Skills group. Every one of these is a base; see the group's title.
-  List<(CharacterStat, int)> _skills(Character character) {
-    final skills = character.thiefSkills;
-    return [
-      (CharacterStat.lore, skills.lore),
-      (CharacterStat.lockpicking, skills.lockpicking),
-      (CharacterStat.findTraps, skills.findTraps),
-      (CharacterStat.pickPockets, skills.pickPockets),
-      (CharacterStat.moveSilently, skills.moveSilently),
-      (CharacterStat.hideInShadows, skills.hideInShadows),
-      (CharacterStat.detectIllusion, skills.detectIllusion),
-      (CharacterStat.setTraps, skills.setTraps),
-      (CharacterStat.turnUndeadLevel, character.turnUndeadLevel),
-      (CharacterStat.trackingSkill, character.trackingSkill),
-      (CharacterStat.fatigue, character.fatigue),
-      (CharacterStat.intoxication, character.intoxication),
-    ];
-  }
-
-  /// What a skill tile says when the class *can* allocate it.
-  ///
-  /// Only Move Silently carries one, and it stands for the whole group: the
-  /// heading already says these are bases, and this is where the measurement
-  /// behind that claim lives.
-  String? _skillHint(CharacterStat stat) => stat == CharacterStat.moveSilently
-      ? 'Measured: a thief storing 15 here has the game show 35, and two '
-            'characters both storing Lore 3 show 10 and 15. The engine adds '
-            'class, race and Dexterity bonuses. Working the shown figure out '
-            'needs tables this build does not read, so only the stored base '
-            'is offered.'
-      : null;
-
   /// The eleven resistances, in the order the record stores them.
   ///
   /// Shown unconditionally, like every other group. They were briefly folded
   /// away when all eleven were zero — which is every character in every
-  /// fixture — but that was a one-off rather than a rule: Skills shows nine
-  /// zeroes on the same character and Combat six. The page *is* too long; the
-  /// answer to that is tabbing it, not one collapsible group.
+  /// fixture — but that was a one-off rather than a rule, and the toggle was
+  /// dead for anyone who actually resisted something. The page being long was
+  /// the real complaint, and the tabs above are the answer to it.
   List<(CharacterStat, int)> _resistances(Character character) {
     final resists = character.resistances;
     return [
@@ -615,33 +829,21 @@ class _CharacterSummary extends ConsumerWidget {
       (CharacterStat.resistMissile, resists.missile),
     ];
   }
+}
 
-  /// A stat's label with the modifier the game's tables give it.
-  ///
-  /// Only the two that this build can look up say anything: Constitution's
-  /// hit points per level and Dexterity's armour class. The rest are plain,
-  /// rather than implying a modifier of zero where there is simply no table
-  /// read yet.
-  String _abilityLabel(CharacterStat stat, CharacterSheet sheet) {
-    final modifier = switch (stat) {
-      CharacterStat.constitution => sheet.hitPointBonusPerLevel,
-      CharacterStat.dexterity => sheet.armourClassModifier,
-      _ => null,
-    };
-    if (modifier == null || modifier == 0) return stat.label;
-    final sign = modifier > 0 ? '+' : '';
-    return '${stat.label}  $sign$modifier';
-  }
+/// The scrolling body every tab shares, so they indent and space alike.
+class _TabBody extends StatelessWidget {
+  const _TabBody({required this.children});
 
-  List<(CharacterStat, int)> _abilities(AbilityScores abilities) => [
-    (CharacterStat.strength, abilities.strength),
-    (CharacterStat.strengthBonus, abilities.strengthBonus),
-    (CharacterStat.dexterity, abilities.dexterity),
-    (CharacterStat.constitution, abilities.constitution),
-    (CharacterStat.intelligence, abilities.intelligence),
-    (CharacterStat.wisdom, abilities.wisdom),
-    (CharacterStat.charisma, abilities.charisma),
-  ];
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => ListView.separated(
+    padding: const EdgeInsets.all(24),
+    itemCount: children.length,
+    itemBuilder: (context, index) => children[index],
+    separatorBuilder: (context, _) => const SizedBox(height: 24),
+  );
 }
 
 /// The weapons and fighting styles this character has pips in.
