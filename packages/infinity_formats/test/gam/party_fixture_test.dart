@@ -181,24 +181,34 @@ void main() {
     test(
       'saving throws are stored exactly as the game prints them',
       () {
-        // The strongest oracle in this file. BG:EE's record screen for Xzar,
-        // read 2026-08-08:
+        // BG:EE's record screen for Xzar, read 2026-08-08, against the five
+        // bytes his record held:
         //
-        //   Paralysis / Poison / Death: 14
-        //   Rod / Staff / Wand:         11
-        //   Petrification / Polymorph:  13
-        //   Breath Weapon:              15
-        //   Spell:                      12
+        //   Paralysis / Poison / Death: 14      0x54
+        //   Rod / Staff / Wand:         11      0x55
+        //   Petrification / Polymorph:  13      0x56
+        //   Breath Weapon:              15      0x57
+        //   Spell:                      12      0x58
         //
         // Five values, five stored bytes, no modifier between them -- unlike
-        // hit points, THAC0 and the thief skills, which are all bases.
-        expect(creaturesOf()[3].savingThrows, (
-          death: 14,
-          wands: 11,
-          polymorph: 13,
-          breath: 15,
-          spells: 12,
-        ));
+        // hit points, THAC0 and the thief skills, which are all bases. That
+        // finding is banked in docs/findings/verified-format-offsets.md.
+        //
+        // ⚠️ **The numbers themselves are not asserted, and must not be.**
+        // This app has since written 5 over that 12 to prove the write path in
+        // game, and the fixture is a copy of the save it wrote to. What is
+        // durable is the *mapping* -- which byte is which throw, and in what
+        // order -- so that is what this checks: the accessor against the raw
+        // bytes at the offsets the record screen identified.
+        for (final cre in creaturesOf()) {
+          expect(cre.savingThrows, (
+            death: cre.bytes[CreHeaderField.saveVersusDeath.offset],
+            wands: cre.bytes[CreHeaderField.saveVersusWands.offset],
+            polymorph: cre.bytes[CreHeaderField.saveVersusPolymorph.offset],
+            breath: cre.bytes[CreHeaderField.saveVersusBreath.offset],
+            spells: cre.bytes[CreHeaderField.saveVersusSpells.offset],
+          ));
+        }
       },
       skip: skip,
     );
@@ -353,15 +363,29 @@ void main() {
         // A wrong opcode offset or a wrong stride gives every character the
         // same answer, usually an empty one. Four distinct correct answers is
         // what makes this a measurement.
+        //
+        // ⚠️ **Which proficiencies, not how many pips.** The pip count is a
+        // value this app edits -- it wrote Aard's Two-Weapon Style from 2 to 3
+        // to prove the write path in game, and this fixture is a copy of the
+        // save it wrote to. *Gaining* a proficiency is the thing that cannot
+        // happen behind our backs: it adds a 264-byte effect and needs the
+        // layout pass, which does not exist. So the key set is durable where
+        // the values are not.
         expect(
-          [for (final cre in creaturesOf()) cre.proficiencies],
+          [for (final cre in creaturesOf()) cre.proficiencies.keys.toSet()],
           [
-            {114: 2, 100: 2},
-            {91: 1, 105: 1},
-            {91: 2, 107: 2},
-            {96: 1},
+            {114, 100},
+            {91, 105},
+            {91, 107},
+            {96},
           ],
         );
+
+        // And every pip is a real allocation rather than a decode artefact:
+        // zero pips would mean the effect should not be there at all.
+        for (final cre in creaturesOf()) {
+          expect(cre.proficiencies.values, everyElement(greaterThan(0)));
+        }
       },
       skip: skip,
     );
@@ -370,8 +394,8 @@ void main() {
       'a pip can be raised in place, moving exactly one byte',
       () {
         // Changing a proficiency is a fixed-width edit: parameter 1 is a
-        // dword already sitting in the record, so 2 -> 3 touches its low byte
-        // and nothing else. No layout pass, no resize. Only *granting* a
+        // dword already sitting in the record, so raising it touches the low
+        // byte and nothing else. No layout pass, no resize. Only *granting* a
         // proficiency the character lacks adds an effect.
         final gam = gamOf();
         final npc = gam.partyMembers.first;
@@ -380,11 +404,17 @@ void main() {
           (e) => e.isProficiency && e.parameter2 == 114,
         );
 
+        // ⚠️ **Derived from what is stored, never a literal.** Writing a
+        // constant 3 over a value that is already 3 changes nothing, and this
+        // test then fails claiming the writer is broken -- which is exactly
+        // what happened once the fixture was re-synced after an in-game run
+        // had raised that very pip to 3.
+        final raised = twoWeapon.parameter1 + 1;
         final after = gam.withEffectField(
           creOffset: npc.creOffset,
           effectStart: twoWeapon.start,
           field: EffectV2Field.parameter1,
-          value: 3,
+          value: raised,
         );
 
         expect(after.bytes, hasLength(gam.bytes.length));
@@ -401,7 +431,12 @@ void main() {
           after.partyMembers.first.creBytes,
           source: npc.creResref,
         );
-        expect(reread.proficiencies, {114: 3, 100: 2});
+        // The raised pip reads back, and the *other* proficiency one stride
+        // away is untouched -- the check that a 264-byte stride was applied
+        // rather than a guessed one. The engine confirmed the same thing
+        // independently, printing "Proficiencies: -1" for the neighbour.
+        expect(reread.proficiencies[114], raised);
+        expect(reread.proficiencies[100], before.proficiencies[100]);
       },
       skip: skip,
     );
