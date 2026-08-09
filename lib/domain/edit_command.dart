@@ -28,8 +28,32 @@ sealed class EditCommand {
   String get label;
 }
 
+/// An edit to one character, which **either document can accept**.
+///
+/// The application opens two kinds of file — a savegame and an exported
+/// character — and both wrap the same `CRE V1.0` record. Every edit in this
+/// subtree names a creature by [creOffset] and touches only bytes inside it, so
+/// it means the same thing whichever file it is applied to.
+/// `applyCharacterEdit` is generic over exactly this.
+///
+/// ⚠️ **The split is what keeps a `.chr` from being handed a savegame edit.**
+/// `SetPartyGold` deliberately sits outside: a character file has no party, and
+/// a document that had to throw `UnsupportedError` at run time would be the
+/// very bug a sealed hierarchy exists to catch at compile time.
+sealed class CharacterEditCommand extends EditCommand {
+  /// Creates a character edit.
+  const CharacterEditCommand();
+
+  /// Where the creature record starts **within the file being edited**.
+  ///
+  /// An absolute position in a savegame, and the CHR header's own offset in an
+  /// exported character. A character is addressed by where they are, not by
+  /// name: two party members may legitimately share one.
+  int get creOffset;
+}
+
 /// Sets one numeric field on one character.
-final class SetCharacterStat extends EditCommand {
+final class SetCharacterStat extends CharacterEditCommand {
   /// Sets [stat] to [value] on the creature record at [creOffset].
   const SetCharacterStat({
     required this.creOffset,
@@ -37,10 +61,7 @@ final class SetCharacterStat extends EditCommand {
     required this.value,
   });
 
-  /// Absolute offset of the creature record within the savegame.
-  ///
-  /// A character is addressed by where they are, not by name: two party
-  /// members may legitimately share one.
+  @override
   final int creOffset;
 
   /// Which field to write.
@@ -64,7 +85,7 @@ final class SetCharacterStat extends EditCommand {
 /// adds an effect, which resizes the creature, which moves its length in the
 /// GAM NPC struct and then every GAM offset after it. That is Phase 1's
 /// layout pass and it is deliberately not attempted here.
-final class SetProficiency extends EditCommand {
+final class SetProficiency extends CharacterEditCommand {
   /// Sets the effect at [effectOffset] to grant [pips].
   const SetProficiency({
     required this.creOffset,
@@ -73,7 +94,7 @@ final class SetProficiency extends EditCommand {
     required this.pips,
   });
 
-  /// Absolute offset of the creature record within the savegame.
+  @override
   final int creOffset;
 
   /// Offset of the effect record, relative to the start of the creature.
@@ -102,10 +123,52 @@ final class SetProficiency extends EditCommand {
   String get label => 'Set proficiency $proficiencyId to $pips';
 }
 
+/// Sets which portrait a character uses.
+///
+/// **The first edit that writes text rather than a number.** A portrait is
+/// named by an 8-byte resref in two fields — the `…M` variant the sheet shows
+/// and the `…L` variant — and both are written together, because a character
+/// with mismatched pictures is one the game draws inconsistently.
+///
+/// ⚠️ **Fixed-width, so it is as safe as a pip edit.** The two fields exactly
+/// fill the gap the spec leaves between `effectVersion` and `reputation`;
+/// nothing resizes and the layout pass is not involved.
+///
+/// The base name carries no `L`/`M`/`S` suffix — [medium] and [large] are
+/// derived from it — because that is how the game names a portrait: one base,
+/// three variants, and the CRE references two of them.
+final class SetPortrait extends CharacterEditCommand {
+  /// Points the character at the portrait called [baseName].
+  const SetPortrait({required this.creOffset, required this.baseName});
+
+  @override
+  final int creOffset;
+
+  /// The portrait's base name, e.g. `AJANTIS`, with no variant suffix.
+  ///
+  /// At most seven characters, so the suffix fits an 8-byte resref. Empty
+  /// clears both fields, which is how "no portrait" is written.
+  final String baseName;
+
+  /// The resref of the medium variant — what the sheet shows.
+  String get medium => baseName.isEmpty ? '' : '${baseName}M';
+
+  /// The resref of the large variant.
+  String get large => baseName.isEmpty ? '' : '${baseName}L';
+
+  @override
+  String get label =>
+      baseName.isEmpty ? 'Clear the portrait' : 'Set the portrait to $baseName';
+}
+
 /// Sets the shared party purse.
 ///
 /// Its own command rather than a [CharacterStat]: the purse lives in the GAM
 /// header and belongs to the party, not to anyone in it.
+///
+/// ⚠️ **Outside [CharacterEditCommand], and that is the point.** An exported
+/// character has no party purse, so this must not be applicable to one — and
+/// the type system is where that is said, not a run-time refusal.
 final class SetPartyGold extends EditCommand {
   /// Sets the shared purse to [value].
   const SetPartyGold(this.value);

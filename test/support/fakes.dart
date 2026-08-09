@@ -19,14 +19,20 @@
 /// filesystem or `infinity_formats`.
 library;
 
+import 'dart:typed_data';
+
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/party_projection.dart';
+import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
+import 'package:wand_of_saves/data/services/game_profile_service.dart';
+import 'package:wand_of_saves/data/services/recycle_service.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
 import 'package:wand_of_saves/domain/character.dart';
+import 'package:wand_of_saves/domain/character_file.dart';
 import 'package:wand_of_saves/domain/proficiency.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/resistances.dart';
@@ -108,6 +114,134 @@ class FakeSaveGameRepository implements SaveGameRepository {
   }
 }
 
+/// A character-file repository answering from memory.
+class FakeCharacterFileRepository implements CharacterFileRepository {
+  /// Creates a repository over [files].
+  FakeCharacterFileRepository({this.files = const [], this.chr, this.failure});
+
+  /// The character files this repository reports, in the order given.
+  List<CharacterFile> files;
+
+  /// The document [load] returns. A test that edits needs a real one, for the
+  /// same reason `FakeSaveGameRepository.gam` exists.
+  Chr? chr;
+
+  /// Thrown by every method when set, so failure paths can be exercised.
+  Exception? failure;
+
+  /// How many times [listFiles] has been called.
+  int listCalls = 0;
+
+  /// Documents handed to [write], newest last.
+  final List<Chr> written = [];
+
+  /// Name and document handed to [create], newest last — so a test can assert
+  /// what was exported without touching a filesystem.
+  final List<(String, Chr)> created = [];
+
+  /// File names [create] should refuse, as the real one refuses an existing
+  /// file.
+  Set<String> taken = const {};
+
+  @override
+  Future<List<CharacterFile>> listFiles() async {
+    listCalls++;
+    if (failure != null) throw failure!;
+    return files;
+  }
+
+  @override
+  Future<CharacterFile?> fileNamed(String fileName) async {
+    if (failure != null) throw failure!;
+    return files.where((f) => f.fileName == fileName).firstOrNull;
+  }
+
+  @override
+  Future<Chr> load(CharacterFile file) async {
+    if (failure != null) throw failure!;
+    final source = chr;
+    if (source == null) {
+      throw StateError('this fake was not given a character to load');
+    }
+    return source;
+  }
+
+  @override
+  Future<void> write(CharacterFile file, Chr chr) async {
+    if (failure != null) throw failure!;
+    written.add(chr);
+  }
+
+  @override
+  Future<CharacterFile> create(String fileName, Chr chr) async {
+    if (failure != null) throw failure!;
+    if (taken.contains(fileName)) {
+      throw CharacterFileExistsException(
+        fileName: fileName,
+        directory: '/tmp/characters',
+      );
+    }
+    created.add((fileName, chr));
+    final summary = CharacterFile(
+      fileName: fileName,
+      path: '/tmp/characters/$fileName',
+      character: fakeCharacter(
+        name: chr.name,
+        partyOrder: Character.notInParty,
+      ),
+      modified: DateTime(2026),
+    );
+    files = [...files, summary];
+    return summary;
+  }
+}
+
+/// A recycle service that records what it was asked to move.
+///
+/// A subclass rather than an interface implementation: `RecycleService` is a
+/// service over the filesystem, and the only thing a test needs to replace is
+/// what it *does* — where it looks is already injected.
+class FakeRecycleService extends RecycleService {
+  /// Creates a service that touches nothing.
+  FakeRecycleService()
+    : super(profile: const GameProfileService(environment: {}));
+
+  /// Paths handed to [recycleSaveAt], in order.
+  final List<String> recycledSaves = [];
+
+  /// Paths handed to [recycleCharacterAt], in order.
+  final List<String> recycledCharacters = [];
+
+  /// Whether [empty] was called.
+  bool emptied = false;
+
+  @override
+  bool hasRecycled = false;
+
+  @override
+  String? recycleRoot() => '/tmp/deleted';
+
+  @override
+  Future<String> recycleSaveAt(String path) async {
+    recycledSaves.add(path);
+    hasRecycled = true;
+    return '/tmp/deleted/save/x';
+  }
+
+  @override
+  Future<String> recycleCharacterAt(String path) async {
+    recycledCharacters.add(path);
+    hasRecycled = true;
+    return '/tmp/deleted/characters/x.chr';
+  }
+
+  @override
+  Future<void> empty() async {
+    emptied = true;
+    hasRecycled = false;
+  }
+}
+
 /// A talk table answering from a map.
 class FakeStringRepository implements StringRepository {
   /// Creates a repository over [strings], keyed by strref.
@@ -136,7 +270,16 @@ class FakeResourceRepository implements ResourceRepository {
   const FakeResourceRepository(
     this.catalogue, {
     this.skills = SkillCatalogue.empty,
+    this.portraits = const {},
+    this.creatures = const {},
   });
+
+  /// Creature records by resref — `CHARBASE`, in practice.
+  final Map<String, Uint8List> creatures;
+
+  /// Portrait bytes by resref. Anything absent reads as "no such portrait",
+  /// which is the ordinary case on a machine with no game installed.
+  final Map<String, Uint8List> portraits;
 
   /// What [proficiencies] returns.
   final ProficiencyCatalogue catalogue;
@@ -150,6 +293,17 @@ class FakeResourceRepository implements ResourceRepository {
 
   @override
   Future<SkillCatalogue> thiefSkills() async => skills;
+
+  @override
+  Future<Uint8List?> portrait(String resref) async => portraits[resref];
+
+  @override
+  Future<Uint8List?> creature(String resref) async => creatures[resref];
+
+  @override
+  Future<List<String>> portraitNames() async =>
+      portraits.keys.map((r) => r.substring(0, r.length - 1)).toSet().toList()
+        ..sort();
 }
 
 /// A save slot summary, with the fixture's values as defaults.
@@ -161,6 +315,25 @@ SaveSlot fakeSlot(String label) => SaveSlot(
   partySize: 1,
   gold: 161,
   modified: DateTime(2026),
+);
+
+/// An exported character on disk, with the developer's own export as defaults.
+///
+/// ⚠️ [fileName] and the character's own name are deliberately different, and
+/// really are on disk: `Aard1.chr` holds a character called `Aard`. A helper
+/// that made them the same would hide the whole reason both exist.
+CharacterFile fakeCharacterFile({
+  String fileName = 'Aard1.chr',
+  String name = 'Aard',
+  DateTime? modified,
+}) => CharacterFile(
+  fileName: fileName,
+  path: '/tmp/characters/$fileName',
+  character: fakeCharacter(
+    name: name,
+    partyOrder: Character.notInParty,
+  ),
+  modified: modified ?? DateTime(2026),
 );
 
 /// A party member, with the fixture protagonist's values as defaults.

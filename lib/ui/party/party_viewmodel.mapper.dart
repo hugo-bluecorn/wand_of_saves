@@ -18,6 +18,7 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
       SaveSlotMapper.ensureInitialized();
       CharacterMapper.ensureInitialized();
       ProficiencyCatalogueMapper.ensureInitialized();
+      SkillCatalogueMapper.ensureInitialized();
     }
     return _instance!;
   }
@@ -43,6 +44,13 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
     _$proficiencies,
     opt: true,
     def: ProficiencyCatalogue.empty,
+  );
+  static SkillCatalogue _$skills(PartyState v) => v.skills;
+  static const Field<PartyState, SkillCatalogue> _f$skills = Field(
+    'skills',
+    _$skills,
+    opt: true,
+    def: SkillCatalogue.empty,
   );
   static int _$selectedIndex(PartyState v) => v.selectedIndex;
   static const Field<PartyState, int> _f$selectedIndex = Field(
@@ -79,6 +87,7 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
     #members: _f$members,
     #reputation: _f$reputation,
     #proficiencies: _f$proficiencies,
+    #skills: _f$skills,
     #selectedIndex: _f$selectedIndex,
     #isDirty: _f$isDirty,
     #canUndo: _f$canUndo,
@@ -91,6 +100,7 @@ class PartyStateMapper extends ClassMapperBase<PartyState> {
       members: data.dec(_f$members),
       reputation: data.dec(_f$reputation),
       proficiencies: data.dec(_f$proficiencies),
+      skills: data.dec(_f$skills),
       selectedIndex: data.dec(_f$selectedIndex),
       isDirty: data.dec(_f$isDirty),
       canUndo: data.dec(_f$canUndo),
@@ -163,11 +173,13 @@ abstract class PartyStateCopyWith<$R, $In extends PartyState, $Out>
   get members;
   ProficiencyCatalogueCopyWith<$R, ProficiencyCatalogue, ProficiencyCatalogue>
   get proficiencies;
+  SkillCatalogueCopyWith<$R, SkillCatalogue, SkillCatalogue> get skills;
   $R call({
     SaveSlot? slot,
     List<Character>? members,
     double? reputation,
     ProficiencyCatalogue? proficiencies,
+    SkillCatalogue? skills,
     int? selectedIndex,
     bool? isDirty,
     bool? canUndo,
@@ -199,11 +211,15 @@ class _PartyStateCopyWithImpl<$R, $Out>
   get proficiencies =>
       $value.proficiencies.copyWith.$chain((v) => call(proficiencies: v));
   @override
+  SkillCatalogueCopyWith<$R, SkillCatalogue, SkillCatalogue> get skills =>
+      $value.skills.copyWith.$chain((v) => call(skills: v));
+  @override
   $R call({
     SaveSlot? slot,
     List<Character>? members,
     double? reputation,
     ProficiencyCatalogue? proficiencies,
+    SkillCatalogue? skills,
     int? selectedIndex,
     bool? isDirty,
     bool? canUndo,
@@ -214,6 +230,7 @@ class _PartyStateCopyWithImpl<$R, $Out>
       if (members != null) #members: members,
       if (reputation != null) #reputation: reputation,
       if (proficiencies != null) #proficiencies: proficiencies,
+      if (skills != null) #skills: skills,
       if (selectedIndex != null) #selectedIndex: selectedIndex,
       if (isDirty != null) #isDirty: isDirty,
       if (canUndo != null) #canUndo: canUndo,
@@ -226,6 +243,7 @@ class _PartyStateCopyWithImpl<$R, $Out>
     members: data.get(#members, or: $value.members),
     reputation: data.get(#reputation, or: $value.reputation),
     proficiencies: data.get(#proficiencies, or: $value.proficiencies),
+    skills: data.get(#skills, or: $value.skills),
     selectedIndex: data.get(#selectedIndex, or: $value.selectedIndex),
     isDirty: data.get(#isDirty, or: $value.isDirty),
     canUndo: data.get(#canUndo, or: $value.canUndo),

@@ -15,26 +15,42 @@
 /// Turns an [EditCommand] into bytes.
 ///
 /// The one place a domain command meets the format. It lives in the data layer
-/// because it knows `Gam`; the commands themselves know only domain concepts,
-/// so nothing in `lib/ui/` needs to.
+/// because it knows the codecs; the commands themselves know only domain
+/// concepts, so nothing in `lib/ui/` needs to.
+///
+/// **Two entry points, and the smaller one is the general one.**
+/// [applyCharacterEdit] works on anything holding a creature record, which is
+/// both documents this app opens; [applyEdit] adds the handful of edits that
+/// only a savegame can take.
 library;
 
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 
-/// [gam] with [command] applied, as a new savegame.
+/// [document] with [command] applied, as a new document of the same kind.
+///
+/// **Generic over [CreatureDocument]**, so one implementation serves a savegame
+/// and an exported character alike — they wrap the same creature record, and an
+/// edit that behaved differently in one of them would reach the user as "that
+/// field only works when I open the save".
+///
+/// The type parameter is the concrete document rather than the interface, so
+/// editing a `Chr` yields a `Chr` and an editor's undo stack stays a
+/// `List<Chr>`.
 ///
 /// Never mutates: the result is a patched copy, and everything this project
 /// does not understand about the file survives untouched.
 ///
 /// The `switch` is **exhaustive over a sealed hierarchy**, so a new kind of
-/// edit does not compile until it is handled here — which is the whole reason
-/// commands are sealed rather than a bag of closures.
+/// character edit does not compile until it is handled here.
 ///
 /// Throws [InvalidEditException] if the value is outside what the stat
 /// accepts. The check is here rather than only at the format boundary because
 /// the field is the looser gate of the two: a Strength of 200 fits its byte.
-Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
+T applyCharacterEdit<T extends CreatureDocument<T>>(
+  T document,
+  CharacterEditCommand command,
+) => switch (command) {
   SetCharacterStat(:final creOffset, :final stat, :final value) => () {
     if (!stat.holds(value)) {
       throw InvalidEditException(
@@ -44,7 +60,7 @@ Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
         maximum: stat.maximum,
       );
     }
-    return gam.withCreatureField(
+    return document.withCreatureField(
       creOffset: creOffset,
       field: stat.field,
       value: value,
@@ -69,13 +85,55 @@ Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
           maximum: EffectV2Field.parameter1.maximum,
         );
       }
-      return gam.withEffectField(
+      return document.withEffectField(
         creOffset: creOffset,
         effectStart: effectOffset,
         field: EffectV2Field.parameter1,
         value: pips,
       );
     }(),
+  SetPortrait(:final creOffset, :final baseName) => () {
+    // ⚠️ Checked here rather than left to the codec, because the codec sees
+    // the *suffixed* resref and would report a limit of 8 for a name the
+    // player typed at 7. The bound is the base name's, and it comes from the
+    // game's own naming: base plus one letter must fit an 8-byte field.
+    if (baseName.length > portraitBaseNameLimit) {
+      throw InvalidEditException(
+        what: 'a portrait name',
+        value: baseName.length,
+        minimum: 0,
+        maximum: portraitBaseNameLimit,
+      );
+    }
+    final portrait = SetPortrait(creOffset: creOffset, baseName: baseName);
+    return document
+        .withCreatureText(
+          creOffset: creOffset,
+          field: CreHeaderField.portraitMedium,
+          value: portrait.medium,
+        )
+        .withCreatureText(
+          creOffset: creOffset,
+          field: CreHeaderField.portraitLarge,
+          value: portrait.large,
+        );
+  }(),
+};
+
+/// The longest a portrait's base name may be.
+///
+/// Seven, so the `L`/`M`/`S` variant suffix fits an 8-byte resref. Measured
+/// across all 210 portraits the game ships: every one that is part of a triple
+/// has a base of seven characters or fewer.
+const int portraitBaseNameLimit = 7;
+
+/// [gam] with [command] applied, as a new savegame.
+///
+/// Every character edit is handed straight to [applyCharacterEdit], so there is
+/// exactly one implementation of what an edit does to a creature record. What
+/// is left here is what only a savegame has.
+Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
+  final CharacterEditCommand edit => applyCharacterEdit(gam, edit),
   SetPartyGold(:final value) => () {
     if (!GamHeaderField.partyGold.holds(value)) {
       throw InvalidEditException(

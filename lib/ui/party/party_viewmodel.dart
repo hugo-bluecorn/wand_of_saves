@@ -21,8 +21,11 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/data/party_projection.dart';
+import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
+import 'package:wand_of_saves/data/rules_catalogues.dart';
 import 'package:wand_of_saves/data/save_editor.dart';
 import 'package:wand_of_saves/domain/character.dart';
+import 'package:wand_of_saves/domain/character_file.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
@@ -175,11 +178,9 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
 
   /// The proficiency table, named, resolved once at load.
   ///
-  /// The second cross-repository merge in this ViewModel, and it is here for
-  /// the same reason the first is: the architecture allows either a use-case
-  /// or the ViewModel, and exactly one ViewModel needs both. It moves to a
-  /// use-case when a *second* ViewModel does — the item and spell pickers are
-  /// the likely trigger, not this.
+  /// ⚠️ **The merge itself has moved out** — see `loadRulesCatalogues`. It sat
+  /// here under a note saying it would go to a use-case when a second ViewModel
+  /// needed it, and `CharacterFileViewModel` is that second one.
   ProficiencyCatalogue _proficiencies = ProficiencyCatalogue.empty;
 
   /// Which thief skills this character's class may allocate, resolved once at
@@ -210,14 +211,12 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
           await strings.lookup(member.nameStrref) ?? member.creResref;
     }
 
-    final resources = ref.watch(resourceRepositoryProvider);
-    _skills = await resources.thiefSkills();
-    final catalogue = await resources.proficiencies();
-    _proficiencies = catalogue.withNames({
-      for (final entry in catalogue.entries.values)
-        if (entry.nameStrref case final int strref)
-          if (await strings.lookup(strref) case final String name) strref: name,
-    });
+    final catalogues = await loadRulesCatalogues(
+      resources: ref.watch(resourceRepositoryProvider),
+      strings: strings,
+    );
+    _proficiencies = catalogues.proficiencies;
+    _skills = catalogues.skills;
 
     return _projected(slot, selectedIndex: 0);
   }
@@ -275,6 +274,41 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
     state = AsyncData(
       _projected(current.slot, selectedIndex: current.selectedIndex),
     );
+  }
+
+  /// Writes the selected member to `characters/` as [fileName].
+  ///
+  /// **The other output path, and the safer one** — it creates a new file and
+  /// never touches the savegame. It is also how the player gets a character out
+  /// of one game and into another: BG:EE's own EXPORT button is on the Record
+  /// screen of a saved game, and its IMPORT button starts a new one.
+  ///
+  /// ⚠️ **Exports the working copy, unsaved edits included.** That is the
+  /// workflow: change the character, then export. Writing the on-disk copy
+  /// instead would silently drop the edit the player is looking at.
+  ///
+  /// ⚠️ **Not a save.** The dirty marker is deliberately untouched, so someone
+  /// who exports and then closes the window is still warned about the savegame
+  /// edits they have not written.
+  ///
+  /// Throws [CharacterFileExistsException] if the name is taken, and
+  /// [StateError] if there is no character selected to export.
+  Future<CharacterFile> export(String fileName) async {
+    final current = state.value;
+    final working = _working;
+    if (current == null || working == null) {
+      throw StateError('there is no savegame open to export from');
+    }
+
+    final members = working.partyMembers;
+    final index = current.selectedIndex;
+    if (index < 0 || index >= members.length) {
+      throw StateError('there is no character selected to export');
+    }
+
+    return ref
+        .read(characterFileRepositoryProvider)
+        .create(fileName, ChrCodec.exportOf(members[index]));
   }
 
   void _step({required List<Gam> from, required List<Gam> to}) {

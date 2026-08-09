@@ -17,6 +17,7 @@ import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/party_projection.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 
+import '../support/fakes.dart';
 import '../support/synthetic_save.dart';
 
 void main() {
@@ -198,6 +199,47 @@ void main() {
 
         expect(charactersFrom(gam, slot).single.proficiencies, isEmpty);
       });
+    });
+  });
+
+  group('the portrait a record names', () {
+    test('strips the variant letter to give a base name', () {
+      // BDTMIM gives BDTMI, so one name serves both the M the sheet shows and
+      // the L a picker would offer.
+      final gam = GamCodec.decode(buildSave());
+      final character = charactersFrom(gam, fakeSlot('last')).single;
+
+      expect(character.portraitBaseName, isEmpty);
+    });
+
+    test('is empty when the record names none, not a stray letter', () {
+      // ⚠️ A blind chop would turn an empty resref into something, and six of
+      // the game's own 210 portraits carry no variant suffix at all.
+      final gam = GamCodec.decode(buildSave());
+      final edited = gam.withCreatureText(
+        creOffset: gam.partyMembers.single.creOffset,
+        field: CreHeaderField.portraitMedium,
+        value: '',
+      );
+
+      expect(
+        charactersFrom(edited, fakeSlot('last')).single.portraitBaseName,
+        isEmpty,
+      );
+    });
+
+    test('reads what the record actually holds', () {
+      final gam = GamCodec.decode(buildSave());
+      final edited = gam.withCreatureText(
+        creOffset: gam.partyMembers.single.creOffset,
+        field: CreHeaderField.portraitMedium,
+        value: 'BDTMIM',
+      );
+
+      expect(
+        charactersFrom(edited, fakeSlot('last')).single.portraitBaseName,
+        'BDTMI',
+      );
     });
   });
 }

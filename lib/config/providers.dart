@@ -23,11 +23,19 @@
 /// why the repository is an interface.
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Riverpod keeps the family provider *types* in its own `misc` library, since
+// they are rarely written out. `specify_nonobvious_property_types` requires
+// naming this one, so the import is the honest way to satisfy it (D8).
+import 'package:flutter_riverpod/misc.dart';
+import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
 import 'package:wand_of_saves/data/repositories/string_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
+import 'package:wand_of_saves/data/services/recycle_service.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 
 /// Locates the game installation and save directory on this machine.
@@ -40,6 +48,26 @@ final saveGameRepositoryProvider = Provider<SaveGameRepository>(
   (ref) => FileSaveGameRepository(
     profile: ref.watch(gameProfileServiceProvider),
   ),
+);
+
+/// Source of truth for exported characters — the `.chr` files beside the saves.
+///
+/// A peer of [saveGameRepositoryProvider], not a detail of it: a character file
+/// is a document in its own right, and one this app creates never came from a
+/// savegame at all.
+final characterFileRepositoryProvider = Provider<CharacterFileRepository>(
+  (ref) => FileCharacterFileRepository(
+    profile: ref.watch(gameProfileServiceProvider),
+  ),
+);
+
+/// Moves deleted saves and characters somewhere they can be fetched back from.
+///
+/// ⚠️ **Deletion is the only operation in this app with no `.bak`**, so it gets
+/// one of its own: nothing is unlinked, everything is moved beside the save
+/// root where neither this app nor the game will look.
+final recycleServiceProvider = Provider<RecycleService>(
+  (ref) => RecycleService(profile: ref.watch(gameProfileServiceProvider)),
 );
 
 /// The game's own rules tables.
@@ -67,6 +95,23 @@ final gameRulesProvider = Provider<GameRules>(
 final resourceRepositoryProvider = Provider<ResourceRepository>(
   (ref) => ResourceRepository(ref.watch(gameProfileServiceProvider)),
 );
+
+/// A character's portrait, by base name — the picture the record names.
+///
+/// ⚠️ **Not the same thing as a save's `PORTRT<n>.bmp`.** That sidecar is what
+/// the engine drew when the file was written, hit points baked in, and it goes
+/// stale as soon as anything is edited; an exported character has none at all.
+/// This is the clean portrait the creature record points at, and it is the only
+/// one that responds to a change.
+///
+/// Keyed by base name, so the `…M` variant is chosen here rather than at every
+/// call site. `null` when there is no game installed, no such portrait, or the
+/// character names none — all ordinary, and all drawn as a placeholder.
+final FutureProviderFamily<Uint8List?, String> portraitProvider =
+    FutureProvider.family<Uint8List?, String>((ref, baseName) {
+      if (baseName.isEmpty) return Future.value();
+      return ref.watch(resourceRepositoryProvider).portrait('${baseName}M');
+    });
 
 /// Source of truth for the game's displayable text.
 ///

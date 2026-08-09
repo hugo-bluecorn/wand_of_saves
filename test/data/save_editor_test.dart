@@ -242,4 +242,205 @@ void main() {
       expect(proficiency.label, contains('114'));
     });
   });
+
+  group('the same command against an exported character', () {
+    // One character sheet drives both documents, so an edit that works on a
+    // savegame must do exactly the same thing to a .chr. A field that behaved
+    // differently in one would reach the user as "this only works when I open
+    // the save".
+    Chr openCharacter() => ChrCodec.decode(buildCharacterFile(name: 'Aurel'));
+
+    test('writes the stat into the record', () {
+      final chr = openCharacter();
+
+      final edited = applyCharacterEdit(
+        chr,
+        SetCharacterStat(
+          creOffset: chr.creOffset,
+          stat: CharacterStat.strength,
+          value: 19,
+        ),
+      );
+
+      expect(CreCodec.decode(edited.creBytes).strength, 19);
+    });
+
+    test('returns the concrete document, not the interface', () {
+      // What the type parameter on CreatureDocument buys: an editor's undo
+      // stack is a List<Chr>, not a list of things that might be savegames.
+      final chr = openCharacter();
+
+      final Chr edited = applyCharacterEdit(
+        chr,
+        SetCharacterStat(
+          creOffset: chr.creOffset,
+          stat: CharacterStat.strength,
+          value: 19,
+        ),
+      );
+
+      expect(edited, isA<Chr>());
+    });
+
+    test('raises a pip in an effect', () {
+      final chr = ChrCodec.decode(
+        buildCharacterFile(
+          character: const SyntheticCharacter(proficiencies: {114: 2}),
+        ),
+      );
+      final effect = CreCodec.decode(chr.creBytes).effects.single;
+
+      final edited = applyCharacterEdit(
+        chr,
+        SetProficiency(
+          creOffset: chr.creOffset,
+          effectOffset: effect.start,
+          proficiencyId: 114,
+          pips: 3,
+        ),
+      );
+
+      expect(CreCodec.decode(edited.creBytes).proficiencies, {114: 3});
+    });
+
+    test('refuses a value the stat does not accept', () {
+      final chr = openCharacter();
+
+      expect(
+        () => applyCharacterEdit(
+          chr,
+          SetCharacterStat(
+            creOffset: chr.creOffset,
+            stat: CharacterStat.strength,
+            value: 300,
+          ),
+        ),
+        throwsA(isA<InvalidEditException>()),
+      );
+    });
+
+    test('a savegame takes the same command through the same path', () {
+      // The shared route is not a second implementation: applyEdit hands every
+      // character edit to applyCharacterEdit.
+      final gam = openSave();
+      final command = SetCharacterStat(
+        creOffset: creOffsetOf(gam),
+        stat: CharacterStat.strength,
+        value: 19,
+      );
+
+      expect(
+        applyEdit(gam, command).bytes,
+        applyCharacterEdit(gam, command).bytes,
+      );
+    });
+  });
+
+  group('party gold is a savegame edit and only a savegame edit', () {
+    test('is not a character edit, so a .chr cannot be given one', () {
+      // ⚠️ Enforced by the type system rather than by a runtime throw. A .chr
+      // has no party, and a document that had to refuse this at run time is
+      // exactly the bug a sealed hierarchy prevents at compile time.
+      expect(const SetPartyGold(1), isNot(isA<CharacterEditCommand>()));
+      expect(
+        const SetCharacterStat(
+          creOffset: 0,
+          stat: CharacterStat.strength,
+          value: 18,
+        ),
+        isA<CharacterEditCommand>(),
+      );
+    });
+  });
+
+  group('SetPortrait', () {
+    // The first edit that writes text rather than a number, and it is
+    // fixed-width like every other one here: two 8-byte resrefs that exactly
+    // fill the gap the spec leaves between effectVersion and reputation.
+    test('writes both variants from one base name', () {
+      final gam = openSave();
+
+      final edited = applyEdit(
+        gam,
+        SetPortrait(creOffset: creOffsetOf(gam), baseName: 'AJANTIS'),
+      );
+
+      final cre = creatureIn(edited);
+      expect(cre.portraitMedium, 'AJANTISM');
+      expect(cre.portraitLarge, 'AJANTISL');
+    });
+
+    test('moves only those sixteen bytes', () {
+      final gam = openSave();
+
+      final edited = applyEdit(
+        gam,
+        SetPortrait(creOffset: creOffsetOf(gam), baseName: 'AJANTIS'),
+      );
+
+      final moved = [
+        for (var i = 0; i < gam.bytes.length; i++)
+          if (gam.bytes[i] != edited.bytes[i]) i,
+      ];
+      expect(moved, hasLength(16));
+      expect(
+        moved.first,
+        creOffsetOf(gam) + CreHeaderField.portraitMedium.offset,
+      );
+    });
+
+    test('an empty name clears both fields', () {
+      final gam = applyEdit(
+        openSave(),
+        SetPortrait(creOffset: creOffsetOf(openSave()), baseName: 'AJANTIS'),
+      );
+
+      final cleared = applyEdit(
+        gam,
+        SetPortrait(creOffset: creOffsetOf(gam), baseName: ''),
+      );
+
+      expect(creatureIn(cleared).portraitMedium, isEmpty);
+      expect(creatureIn(cleared).portraitLarge, isEmpty);
+    });
+
+    test('refuses a base name too long to carry a variant letter', () {
+      // ⚠️ Seven, not eight: the suffix has to fit an 8-byte resref. Checked
+      // against the base name so the message names the limit the player typed
+      // against, rather than the field's.
+      final gam = openSave();
+
+      expect(
+        () => applyEdit(
+          gam,
+          SetPortrait(creOffset: creOffsetOf(gam), baseName: 'TOOLONGX'),
+        ),
+        throwsA(
+          isA<InvalidEditException>().having((e) => e.maximum, 'maximum', 7),
+        ),
+      );
+    });
+
+    test('works the same on an exported character', () {
+      final chr = ChrCodec.decode(buildCharacterFile());
+
+      final edited = applyCharacterEdit(
+        chr,
+        SetPortrait(creOffset: chr.creOffset, baseName: 'AJANTIS'),
+      );
+
+      expect(CreCodec.decode(edited.creBytes).portraitMedium, 'AJANTISM');
+    });
+
+    test('says what it did, by name', () {
+      expect(
+        const SetPortrait(creOffset: 0, baseName: 'AJANTIS').label,
+        contains('AJANTIS'),
+      );
+      expect(
+        const SetPortrait(creOffset: 0, baseName: '').label,
+        contains('Clear'),
+      );
+    });
+  });
 }

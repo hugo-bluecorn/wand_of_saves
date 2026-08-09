@@ -41,8 +41,12 @@ void main() {
     ResourceRepository? resourceRepository,
     int partyReputationTimesTen = 110,
     bool slotExists = true,
+    FakeCharacterFileRepository? characterFiles,
   }) => ProviderContainer.test(
     overrides: [
+      characterFileRepositoryProvider.overrideWithValue(
+        characterFiles ?? FakeCharacterFileRepository(),
+      ),
       saveGameRepositoryProvider.overrideWithValue(
         FakeSaveGameRepository(
           slots: slotExists ? [fakeSlot('last')] : const [],
@@ -549,6 +553,89 @@ void main() {
         0,
         reason: 'the selection must stay on something that exists',
       );
+    });
+  });
+
+  group('exporting a character', () {
+    test('writes the selected member as a .chr', () async {
+      final files = FakeCharacterFileRepository();
+      final container = containerWith(
+        party: const [
+          SyntheticCharacter(),
+          SyntheticCharacter(displayName: 'Imoen', partyOrder: 1),
+        ],
+        characterFiles: files,
+      );
+      await container.read(partyProvider(slotName).future);
+      final notifier = container.read(partyProvider(slotName).notifier)
+        ..select(1);
+
+      final created = await notifier.export('imoen.chr');
+
+      expect(created.character.name, 'Imoen');
+      expect(files.created.single.$1, 'imoen.chr');
+      expect(files.created.single.$2.name, 'Imoen');
+    });
+
+    test('exports what is on screen, unsaved edits included', () async {
+      // The whole "produce over a save" workflow: change the character, then
+      // export. Exporting the on-disk copy would silently drop the edit the
+      // player just made and is looking at.
+      final files = FakeCharacterFileRepository();
+      final container = containerWith(
+        party: const [SyntheticCharacter(strength: 12)],
+        characterFiles: files,
+      );
+      final state = await container.read(partyProvider(slotName).future);
+      final notifier = container.read(partyProvider(slotName).notifier)
+        ..edit(
+          SetCharacterStat(
+            creOffset: state.members.single.creOffset,
+            stat: CharacterStat.strength,
+            value: 18,
+          ),
+        );
+      await notifier.export('aard.chr');
+
+      final exported = CreCodec.decode(files.created.single.$2.creBytes);
+      expect(exported.strength, 18);
+    });
+
+    test('does not write the savegame while exporting', () async {
+      // Export is the one output path that never touches the player's save.
+      final container = containerWith(
+        party: const [SyntheticCharacter()],
+      );
+      await container.read(partyProvider(slotName).future);
+
+      await container.read(partyProvider(slotName).notifier).export('a.chr');
+
+      final saves =
+          container.read(saveGameRepositoryProvider) as FakeSaveGameRepository;
+      expect(saves.written, isEmpty);
+    });
+
+    test('leaves the dirty marker alone', () async {
+      // Exporting is not saving. A player who exports and then closes the
+      // window must still be warned about the edits they have not written.
+      final files = FakeCharacterFileRepository();
+      final container = containerWith(
+        party: const [SyntheticCharacter()],
+        characterFiles: files,
+      );
+      final state = await container.read(partyProvider(slotName).future);
+      final notifier = container.read(partyProvider(slotName).notifier)
+        ..edit(
+          SetCharacterStat(
+            creOffset: state.members.single.creOffset,
+            stat: CharacterStat.strength,
+            value: 17,
+          ),
+        );
+
+      await notifier.export('a.chr');
+
+      expect(container.read(partyProvider(slotName)).value?.isDirty, isTrue);
     });
   });
 }

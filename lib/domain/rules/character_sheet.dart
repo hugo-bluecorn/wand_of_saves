@@ -60,7 +60,7 @@ class CharacterSheet {
   String get identity => [
     rules.genderName(character.genderId),
     rules.raceName(character.raceId),
-    _classOrKit,
+    classOrKitName,
     rules.alignmentName(character.alignmentId),
   ].nonNulls.join(' · ');
 
@@ -76,7 +76,7 @@ class CharacterSheet {
   /// Measured on a mage school, which is the only kit any fixture carries.
   /// BG:EE names the other kits the same way — a kitted fighter reads
   /// `Berserker` — but that part is convention here until one turns up.
-  String? get _classOrKit => kitName ?? rules.className(character.classId);
+  String? get classOrKitName => kitName ?? rules.className(character.classId);
 
   /// The character's kit, or `null` when they have none.
   ///

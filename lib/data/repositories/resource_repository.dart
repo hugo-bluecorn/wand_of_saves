@@ -14,6 +14,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
@@ -57,6 +58,20 @@ class ResourceRepository {
   ProficiencyCatalogue? _proficiencies;
   SkillCatalogue? _thiefSkills;
 
+  /// The parsed `chitin.key`, read once.
+  ///
+  /// ⚠️ **This used to be re-read and re-parsed on every lookup** — 37,342
+  /// entries, plus the whole containing archive, per call. Two calls at load
+  /// made that invisible; a grid of portraits would have made it a stall. The
+  /// index cannot change while the app is open, so it is read once.
+  KeyIndex? _index;
+  bool _indexRead = false;
+
+  /// Archives opened so far, by path relative to the installation.
+  ///
+  /// `PORTRAIT.BIF` is 24 MB and every portrait comes out of it.
+  final Map<String, BifArchive> _archives = {};
+
   /// Every proficiency the player's `weapprof.2da` names.
   ///
   /// Names are left as strrefs: resolving them needs the talk table, which is
@@ -79,47 +94,205 @@ class ResourceRepository {
   Future<SkillCatalogue> thiefSkills() async =>
       _thiefSkills ??= thiefSkillsFrom(await _table(thiefSkillTable));
 
+  /// The bitmap named [resref], or `null` if there is none.
+  ///
+  /// ⚠️ **The player's own `portraits/` folder is searched before the game's
+  /// archives**, which is the order the engine itself uses and is the whole of
+  /// what "custom portrait" means: a loose file that shadows a packed one. A
+  /// portrait is named by resref either way, so there is no separate field,
+  /// flag or code path — only a different place to look first.
+  ///
+  /// **Never throws.** A missing installation, an unreadable file and an
+  /// unknown resref are all ordinary, and a card without a picture is a far
+  /// better outcome than a screen that fails to draw.
+  Future<Uint8List?> portrait(String resref) async {
+    if (resref.isEmpty) return null;
+
+    final custom = _customPortrait(resref);
+    if (custom != null) return custom;
+
+    return _resource(resref, ResourceType.bitmap);
+  }
+
+  /// Base names of every portrait the game ships, plus the player's own.
+  ///
+  /// ⚠️ **Filtered by *archive*, not by name shape.** `data/PORTRAIT.BIF` is a
+  /// dedicated archive of exactly 210 bitmaps, so asking which resources live
+  /// in it is exact — where guessing at names puts `CMISC4S` in the list
+  /// because it happens to end in `S`.
+  ///
+  /// Returns base names with the `L`/`M`/`S` suffix removed and duplicates
+  /// collapsed, so one entry is one portrait rather than three.
+  Future<List<String>> portraitNames() async {
+    final index = await _keyIndex();
+    final names = <String>{};
+
+    if (index != null) {
+      final archive = index.archiveNamed(portraitArchive);
+      for (final resref in index.resrefsOf(
+        ResourceType.bitmap,
+        archive: archive,
+      )) {
+        names.add(_baseNameOf(resref));
+      }
+    }
+    names.addAll(_customPortraitNames());
+
+    return names.toList()..sort();
+  }
+
+  /// The creature record named [resref], or `null` if there is none.
+  ///
+  /// Used for exactly one thing so far: [characterTemplate], the seed every
+  /// protagonist is built from.
+  ///
+  /// **Never throws.** A machine with no game installed simply cannot create a
+  /// character, and the screen says so rather than failing to draw.
+  Future<Uint8List?> creature(String resref) =>
+      _resource(resref, ResourceType.creature);
+
   /// The `2DA` named [resref], or an empty table if it cannot be read.
   ///
   /// **Never throws.** A missing or unreadable installation is an ordinary
   /// state — the app opens saves on machines with no game on them — and the
   /// panel degrades to numbers without names rather than failing to draw.
   Future<Table2da> _table(String resref) async {
-    final game = _profile.findGameDirectory();
-    if (game == null) return Table2da.parse('');
-
-    final separator = Platform.pathSeparator;
+    final bytes = await _resource(resref, ResourceType.table2da);
+    if (bytes == null) return Table2da.parse('');
     try {
-      final index = KeyIndex.parse(
-        await File(
-          '$game$separator${GameProfileService.gameMarker}',
-        ).readAsBytes(),
-        source: GameProfileService.gameMarker,
-      );
-      final where = index.locate(resref, ResourceType.table2da);
-      if (where == null) return Table2da.parse('');
-
-      // The key file writes archive paths in the engine's own notation, which
-      // is Windows-separated whatever the host is.
-      final archive = index.archives[where.archive].replaceAll(
-        r'\',
-        separator,
-      );
-      final bif = BifArchive.parse(
-        await File('$game$separator$archive').readAsBytes(),
-        source: archive,
-      );
-      return Table2da.parse(utf8.decode(bif.resource(where.file)));
-    } on FileSystemException {
-      return Table2da.parse('');
-    } on InfinityFormatException {
-      return Table2da.parse('');
+      return Table2da.parse(utf8.decode(bytes));
     } on FormatException {
       // A 2DA that is not UTF-8. Every BG:EE table is, but a mod's need not
       // be, and a rules table is not worth failing an app launch over.
       return Table2da.parse('');
     }
   }
+
+  /// The bytes of [resref] of [type] from the game's archives, or `null`.
+  ///
+  /// One lookup path for every kind of resource, so the index and the archives
+  /// are cached in one place rather than once per caller.
+  Future<Uint8List?> _resource(String resref, ResourceType type) async {
+    final game = _profile.findGameDirectory();
+    final index = await _keyIndex();
+    if (game == null || index == null) return null;
+
+    final where = index.locate(resref, type);
+    if (where == null) return null;
+
+    final archive = await _archive(game, index.archives[where.archive]);
+    if (archive == null) return null;
+
+    // Checked rather than caught: `BifArchive.resource` reports a bad index
+    // with a `RangeError`, which is an Error and not ours to swallow. The key
+    // file and the archive disagreeing is corrupt data, and the honest answer
+    // here is the same as for an unknown resref -- no such resource.
+    if (where.file < 0 || where.file >= archive.resourceCount) return null;
+
+    try {
+      return archive.resource(where.file);
+    } on InfinityFormatException {
+      return null;
+    }
+  }
+
+  Future<KeyIndex?> _keyIndex() async {
+    if (_indexRead) return _index;
+    _indexRead = true;
+
+    final game = _profile.findGameDirectory();
+    if (game == null) return null;
+    try {
+      _index = KeyIndex.parse(
+        await File(
+          '$game${Platform.pathSeparator}${GameProfileService.gameMarker}',
+        ).readAsBytes(),
+        source: GameProfileService.gameMarker,
+      );
+    } on FileSystemException {
+      _index = null;
+    } on InfinityFormatException {
+      _index = null;
+    }
+    return _index;
+  }
+
+  Future<BifArchive?> _archive(String game, String path) async {
+    final cached = _archives[path];
+    if (cached != null) return cached;
+
+    // The key file writes archive paths in the engine's own notation, which is
+    // Windows-separated whatever the host is.
+    final relative = path.replaceAll(r'\', Platform.pathSeparator);
+    try {
+      return _archives[path] = BifArchive.parse(
+        await File('$game${Platform.pathSeparator}$relative').readAsBytes(),
+        source: relative,
+      );
+    } on FileSystemException {
+      return null;
+    } on InfinityFormatException {
+      return null;
+    }
+  }
+
+  /// A portrait from the player's own folder, or `null`.
+  Uint8List? _customPortrait(String resref) {
+    final root = _profile.findPortraitRoot();
+    if (root == null) return null;
+
+    final file = File(
+      '$root${Platform.pathSeparator}$resref$portraitFileExtension',
+    );
+    try {
+      return file.existsSync() ? file.readAsBytesSync() : null;
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  /// Base names of the portraits in the player's own folder.
+  Set<String> _customPortraitNames() {
+    final root = _profile.findPortraitRoot();
+    if (root == null) return const {};
+
+    final dir = Directory(root);
+    if (!dir.existsSync()) return const {};
+    return {
+      for (final file in dir.listSync().whereType<File>())
+        if (file.path.toLowerCase().endsWith(portraitFileExtension))
+          _baseNameOf(
+            file.path.split(Platform.pathSeparator).last.split('.').first,
+          ),
+    };
+  }
+}
+
+/// The creature the engine builds every protagonist from.
+///
+/// ⚠️ **The game's own template, read at run time — never vendored.** The same
+/// rule as D11: it is the player's game data, and it is why every player
+/// character's resref reads `*HARBASE`, the engine having overwritten the first
+/// byte with `*`. Creating a character means loading this and editing it.
+const String characterTemplate = 'CHARBASE';
+
+/// The archive holding every portrait the game ships.
+const String portraitArchive = 'PORTRAIT.BIF';
+
+/// The extension a loose portrait file carries.
+const String portraitFileExtension = '.bmp';
+
+/// [resref] with its `L`/`M`/`S` variant letter removed.
+///
+/// ⚠️ **Only when there is one.** Six of the game's own 210 portraits are not
+/// part of a triple — `MBAS_GR`, `NOPORTMD` and `TESTPOR` carry no variant
+/// suffix at all — so a blind chop would rename them.
+String _baseNameOf(String resref) {
+  if (resref.isEmpty) return resref;
+  final last = resref[resref.length - 1].toUpperCase();
+  return last == 'M' || last == 'L' || last == 'S'
+      ? resref.substring(0, resref.length - 1)
+      : resref;
 }
 
 /// The resref of the weapon-proficiency table.
