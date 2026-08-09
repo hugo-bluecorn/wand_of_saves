@@ -403,7 +403,20 @@ output is committed.
 >   wrong** — but it is inference from a rounded figure and the deciding reading (a Fighter 2 /
 >   Mage 1's displayed maximum against a stored 12) has not been taken yet.
 >
-> **The predicted `+8 / +6 / +4` table below stands**; the run so far favours **+6**.
+> **✅ SETTLED the same day, and the answer was already on disk.** Draa — the levelled Aard,
+> imported into a new game at Fighter 2 / Mage 1 — carries a stored maximum of **12**, and the
+> hit points BG:EE bakes into `PORTRT0.bmp` read **18 / 18**. The bonus is **6**, so:
+>
+> ⚠️ **The Constitution bonus multiplies by the MEAN of the class levels, not the highest.**
+> `CharacterSheet.hitPointBonus` is wrong and must be fixed.
+>
+> The two hypotheses were never rivals: `bonus × Σlevels ÷ nClasses` **is**
+> `bonus × mean(levels)`, identically, for any number of classes. There was one alternative to
+> "highest", and it won. **For a single-class character mean and highest are the same number**,
+> which is why every earlier run agreed and this sat open for two days.
+>
+> **Residual unknown:** how the engine rounds when the mean is not exact — Constitution 17 (+3)
+> at 2/1 gives 4.5. Not guessed at in code.
 
 **Decision: do not add level editing, and do not edit a level to answer an open question.**
 

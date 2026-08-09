@@ -773,9 +773,26 @@ in use, Aard's Fighter 1→2 would have stored **+7**; it stored **+5**, which i
 
 **The level-up screen's figure includes Constitution; the stored bytes do not.** BG:EE announced
 `Additional Hit Points Gained: 7` while the stored maximum went 40 → **45**. The missing 2 is the
-Constitution bonus for an 18 (+4, warrior column) **halved for a two-class character** — the
-strongest evidence yet on the multiplier D10 asks about, and it points at *per class level,
-halved* rather than *highest class level*.
+Constitution bonus for an 18 (+4, warrior column) **halved for a two-class character**.
+
+### ✅ The multi-class Constitution multiplier — SETTLED 2026-08-09, closing D10
+
+Draa, imported at Fighter 2 / Mage 1 with Constitution 18, stores a maximum of **12** and the game
+draws **18 / 18** into `PORTRT0.bmp`. Bonus = **6**.
+
+⚠️ **The bonus multiplies by the MEAN of the class levels, not the highest.** `4 × 1.5 = 6`, where
+highest would give `4 × 2 = 8` and show 20.
+
+The two competing readings were never rivals: `bonus × Σlevels ÷ nClasses` **is**
+`bonus × mean(levels)`, identically. And **for a single-class character mean and highest are the
+same number** — which is why every earlier run agreed and this stayed open.
+
+**Residual unknown:** the rounding when the mean is not exact. Constitution 17 (+3) at 2/1 gives
+4.5. Not guessed at in code.
+
+⚠️ **The oracle was on disk the whole time.** No screenshot was needed — the engine bakes the hit
+points into the portrait it saves beside every game. This file says so under §Oracles; it went
+unused for two days while runs were requested instead.
 
 ### The engine does not level a character on load — 2026-08-09
 
