@@ -387,6 +387,24 @@ output is committed.
 
 ## D10 — Level editing is deferred; the multi-class question waits for play · CLOSED (2026-08-08)
 
+> ### 🔶 Update, 2026-08-09 — the window opened, and the route worked exactly as designed
+>
+> The user set Aard's total experience to **4000** in this app. The decision held: no level was
+> written, and the engine did the rest. What that run produced, in `docs/findings/`:
+>
+> - ⚠️ **The engine does not level a character on load.** It printed `Ready to Level Up` and
+>   changed nothing until the button was pressed. This entry said the question "answers itself"
+>   at 4000–5000 experience; the *condition* arrives on its own, the *answer* needs a click.
+> - **Fighter 2 / Mage 1 confirmed**, from an even 2000/2000 split against thresholds of 2000 and
+>   2500 — exactly as predicted above.
+> - **The stored maximum went 40 → 45 while the screen announced `+7`.** The 5 is `d10 ÷ 2`; the
+>   missing 2 is the Constitution bonus **halved for a two-class character**. That points at
+>   *per class level, halved* — i.e. **`hitPointBonus` reading "highest class level" is probably
+>   wrong** — but it is inference from a rounded figure and the deciding reading (a Fighter 2 /
+>   Mage 1's displayed maximum against a stored 12) has not been taken yet.
+>
+> **The predicted `+8 / +6 / +4` table below stands**; the run so far favours **+6**.
+
 **Decision: do not add level editing, and do not edit a level to answer an open question.**
 
 ### What was being asked for

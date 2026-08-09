@@ -534,7 +534,24 @@ writing an orphan would be novel behaviour rather than something it already tole
 would have pushed the `E` out. It is on the non-party structs too, not just recruited members.
 
 **Consequence: the resref is not a usable identity key** — one character of it is simply gone.
-`dialogFile` at `0x02cc` survives intact (`IMOEN2`, `MONTAJ`, `XZARJ`) and is what to key on.
+
+⚠️ **And it is worse than that: it is not unique either.** Aard and Aurel are different characters
+in different campaigns and **both** are `*HARBASE`, because both are the player's own character
+built from the same `CHARBASE` template. Corrected 2026-08-09.
+
+⚠️ **`dialogFile` is not the answer on its own either.** An earlier revision of this note said
+`dialogFile` at `0x02cc` "survives intact (`IMOEN2`, `MONTAJ`, `XZARJ`) and is what to key on".
+That is true of **companions** and false of **the protagonist**, whose copy is eight zero bytes —
+checked 2026-08-09 across all three saves, on Aard twice and Aurel once. The two are
+**complementary**, and together they are an identity:
+
+| | GAM `displayName` | CRE `dialogFile` | CRE `longNameStrref` |
+|---|---|---|---|
+| protagonist | `Aard`, `Aurel` | empty | `-1` |
+| companion | empty | `IMOEN2`, `MONTAJ`, `XZARJ` | names them in the talk table |
+
+So the key is **`displayName` if it is non-empty, otherwise `dialogFile`** — the same shape as the
+name resolution the app already does, and for the same reason.
 
 #### Recruiting moves the struct between arrays — 2026-08-08
 
@@ -691,6 +708,130 @@ fields with no gaps ending at 724.
 `lib/src/spec/cre_v1_0.dart` therefore records a **verified subset** rather than all 126 fields, and
 takes its assurance from the chain check above instead of an exact-fit invariant. That is a
 deliberate departure from `GamNpcField`, whose table is mechanical enough to transcribe wholesale.
+
+## CHR V2.0 — exported characters, and what import does to them
+
+Measured 2026-08-09 against `characters/aurel.chr`, `aard.chr` and `Aard1.chr`, each paired with
+the savegame it came from.
+
+### Layout: a 100-byte header, then a plain CRE
+
+`CHR ` / `V2.0`, a 32-byte name at `0x08`, the CRE offset at `0x28`, its length at `0x2c`. On every
+file measured the offset is **100** and `100 + creLength == fileLength` exactly.
+
+⚠️ **IESDP's CHR V2.0 page says the embedded file is a "CRE v2.0". On BG:EE it is `CRE V1.0`** —
+the record `CreCodec` already reads. Dispatch on the **embedded signature**, never on the CHR
+version.
+
+⚠️ **`dialogFile` is eight zero bytes in a `.chr`**, and `longNameStrref` is `-1`. The 32-byte
+header name is where the character's name lives — the protagonist's shape, which is what an
+exported character always is.
+
+### Export copies the record verbatim; import rebuilds part of it
+
+**Export runs from a saved game** — the Record screen's EXPORT button — and copies the party
+member's CRE byte for byte. Three matched pairs:
+
+| `.chr` | matches | CRE bytes |
+|---|---|---|
+| `aurel.chr` | `000000101-Aurel Start` | 6,924 |
+| `aard.chr` | `000000020-start` | 6,660 |
+| `Aard1.chr` | Aard immediately after his level-up | 6,884 |
+
+**Import is the character-creation screen's IMPORT button, and it starts a *new game*.** It carries
+more than expected and silently rebuilds two things:
+
+| | carried | rebuilt |
+|---|---|---|
+| experience, class levels | ✅ 4000, Fighter 2 / Mage 1 | |
+| THAC0, ability scores, proficiencies, Lore, AI script, effects | ✅ **including values this app had edited** | |
+| **hit points** | | ⚠️ stored **45 → 12** |
+| **percentile strength** | | ⚠️ **19/100 → 19/0** |
+
+⚠️ **Editing hit points and exporting is pointless** — the engine discards the stored maximum and
+recomputes it from class and level. Strength 19 and THAC0 15, both written by this app in earlier
+sessions, survived into the new game untouched. So *some* edits cross the import boundary and
+others do not, and which is which is not guessable.
+
+⚠️ **The percentile is normalised.** Only a Strength of exactly 18 has one; the engine zeroes it
+otherwise. A stored `19/100` is junk, and this app was faithfully displaying it.
+
+### How hit points are actually built — 2026-08-09
+
+Draa, imported at Fighter 2 / Mage 1, arrived with a stored maximum of **12**:
+
+    2 × (d10 ÷ 2)  +  1 × (d4 ÷ 2)  =  10 + 2  =  12
+
+on Normal difficulty, where hit-point rolls are maximised (stated by the difficulty screen and
+independently by Haeravon's walkthrough). So hit points are computed **per class** — each class
+contributes half its own die per *its own* level.
+
+⚠️ **This contradicts `HPFM.2da`, and the engine wins.** That table gives a Fighter/Mage
+`SIDES 7, ROLLS 1, MODIFIER 0` — a single pre-averaged `1d7`, which is `(10+4)/2`. Were it the die
+in use, Aard's Fighter 1→2 would have stored **+7**; it stored **+5**, which is `d10 ÷ 2`. **What
+`HPFM` is for is open.**
+
+**The level-up screen's figure includes Constitution; the stored bytes do not.** BG:EE announced
+`Additional Hit Points Gained: 7` while the stored maximum went 40 → **45**. The missing 2 is the
+Constitution bonus for an 18 (+4, warrior column) **halved for a two-class character** — the
+strongest evidence yet on the multiplier D10 asks about, and it points at *per class level,
+halved* rather than *highest class level*.
+
+### The engine does not level a character on load — 2026-08-09
+
+Setting experience to 4000 on a Fighter/Mage produced `Ready to Level Up` on the Record screen and
+**nothing else**. Levels, hit points, THAC0 and saving throws were all unchanged until LEVEL UP was
+pressed. **An experience edit on its own changes nothing derived.**
+
+The experience split is even and confirmed on screen: 4000 → 2000 Fighter / 2000 Mage, against
+thresholds of 2000 and 2500, giving Fighter 2 / Mage 1.
+
+**Levelling does not resize the record** — 6,884 bytes before it, after it, and in the new game.
+
+### ⚠️ THAC0 survives a level-up, and why is OPEN
+
+`THAC0.2da` gives a Fighter 20/19/18/… by level and a Mage 20/20/20/19/…, and a multi-class takes
+the **better** row — so Aard at Fighter 2 computes to **19**. His record holds **15**, written by
+this app, and the Record screen still printed 15 after the level-up.
+
+Two readings fit, and 15 being *better* than 19 is exactly why they cannot be told apart:
+
+- the engine never recomputes THAC0 from class and level, or
+- it recomputes and keeps whichever is better — the same rule the walkthrough states for choosing
+  between a multi-class character's two classes.
+
+⚠️ **The experiment that separates them:** store a THAC0 *worse* than the computed value — 25 on
+this character — and look. `19` means it recalculates; `25` means the stored byte is taken as-is.
+
+`CLASTHAC.2da`, the per-class THAC0 bonus, is **all zeros** on BG:EE.
+
+### Proficiency slots are granted slowly — 2026-08-09
+
+`profsmax.2da` gives every class `FIRST_LEVEL 2`. Aard's Fighter 1→2 level-up screen showed
+`PROFICIENCY SLOTS 0`, with every `+` greyed. **The game bounds how many proficiencies a character
+may have long before the file format does.**
+
+#### What adding a proficiency actually costs
+
+Proficiencies are opcode 233 effects, so granting one the character lacks appends a 264-byte
+record. Measured on both saves:
+
+| | in a savegame | in a `.chr` |
+|---|---|---|
+| GAM header offsets | 3 | — |
+| later party `creOffset`s | 0–3 | — |
+| **non-party `creOffset`s** | **33–36** | — |
+| CHR header length field | — | 1 |
+| **total pointers to patch** | **39** | **1** |
+| bytes shifted | 81–93 KB | 0 |
+
+⚠️ **36 of those 39 are the `creOffset` embedded in each non-party NPC struct.** No earlier note
+mentioned them; a layout pass that patches only the GAM header corrupts the save silently.
+
+**The engine performs this resize constantly.** Aurel's record was **1,908 bytes** at
+`000000007-Prologue Start` and **6,924** by `000000101-Aurel Start`: the prologue attached 19
+opcode 187 (`Script: Store Local Variable`) effects, exactly 19 × 264 = 5,016 bytes. Of his 22
+effects only **3** are proficiencies.
 
 ## TLK (`dialog.tlk`)
 

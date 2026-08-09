@@ -2,6 +2,24 @@
 
 Phases 0–2 produce a genuinely useful tool. Everything after is breadth. Scope is BG1EE (D3).
 
+## The two workflows this tool serves — stated by the user 2026-08-09
+
+1. **Open a save → change the character → export them → start a new game from that file.**
+2. **Open a save → change the character → save it back.** Everything built so far.
+
+⚠️ **Workflow 1 was not in this roadmap and it changes what matters.** Export is not a Phase 7
+convenience; it is a **primary output path**, and the safer of the two — it never writes to the
+user's savegame at all.
+
+**It also splits the hard problem in half.** A `.chr` is the record plus a 100-byte header, with
+one length field and no GAM: adding a 264-byte effect there patches **1 pointer**, where doing it
+inside a save patches **39** and shifts ~90 KB (measured; see the findings). So *resizing* edits —
+granting a proficiency, adding an item — can ship through export long before they are safe in
+place. **Phase 1 is two deliveries, not one, and the smaller comes first.**
+
+⚠️ **But export is not a free pass.** Import rebuilds hit points and normalises percentile
+strength, so not every edit crosses that boundary. See the findings.
+
 ---
 
 ## Phase 0 — `infinity_formats` read path · **done**
