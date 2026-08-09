@@ -850,6 +850,116 @@ mentioned them; a layout pass that patches only the GAM header corrupts the save
 opcode 187 (`Script: Store Local Variable`) effects, exactly 19 × 264 = 5,016 bytes. Of his 22
 effects only **3** are proficiencies.
 
+## Portraits, and the resources a character names — measured 2026-08-09
+
+### The CRE names two portraits, and IESDP's names for them are misleading
+
+| offset | IESDP calls it | actually holds |
+|---|---|---|
+| `0x0034` | "Small Portrait" | the **`…M`** resref — `BDTMIM`, `IMOENM`, `MONTARM`, `XZARM` |
+| `0x003c` | "Large Portrait" | the **`…L`** resref — `BDTMIL`, `IMOENL`, `MONTARL`, `XZARL` |
+
+Verified on six records: all four members of `000000100-Party`, plus `aurel.chr` and `Aard1.chr`.
+⚠️ **Name these fields for what they hold.** A field called `smallPortrait` returning `BDTMIM` is a
+trap for the next reader. The two exactly fill the gap this spec leaves between `effectVersion`
+(`0x33`) and `reputation` (`0x44`), and neither is in `CreHeaderField` yet.
+
+⚠️ **The `…S` variant is not referenced by a CRE at all.** 54×84 is what the game bakes into
+`PORTRT<n>.bmp` beside a save — a different picture for a different purpose, and the one this
+project uses as an oracle.
+
+### The format, measured across all 210 in `data/PORTRAIT.BIF`
+
+**24-bit uncompressed BMP**, in `L`/`M`/`S` triples off a base name of at most seven characters so
+the suffix fits an 8-byte resref — `AJANTISL`, `AJANTISM`, `AJANTISS`.
+
+| variant | size | count |
+|---|---|---|
+| `L` | 210×330 | 67 |
+| `M` | 169×266 | 67 |
+| `S` | 54×84 | 65 |
+
+The remainder are older or odd — 38×60, 54×85, 110×170, 172×266, one 1×1 and one 32-bit — so **the
+engine tolerates variation** and a strict size check would be stricter than the game.
+
+`dart:ui` decodes BMP natively, already proven by the save browser, so **portraits need no BAM
+decoder and none of Phase 5**.
+
+### Custom portraits are loose files that shadow the packed ones
+
+`<user data>/portraits/` sits beside `save/` and `characters/` — present and empty on this machine.
+The engine looks there before the archives, and a portrait is named by resref either way, so
+**the same two CRE fields serve a built-in and a custom one**. There is no separate mechanism to
+build, only a different place to look first.
+
+### ⚠️ `CHARBASE` is in the archives, and it is the seed the engine uses
+
+The key file indexes **2,253 creatures**, `CHARBASE` among them. That is the template every
+protagonist is built from — which is *why* the resref of the player's own character always reads
+`*HARBASE`, and why Aard and Aurel, different characters in different campaigns, are **both** it.
+
+**Consequence: creating a character never means synthesising a CRE.** Load the engine's own
+template out of the player's installation and edit it.
+
+### ⚠️ `ResourceType.creature` is wrong — `0x03f9`, and CRE is `0x03f1`
+
+Confirmed against IESDP's own type table (`file_formats/general.htm`) and against the data: 2,253
+resources of type `0x03f1` including `CHARBASE`, and none at `0x03f9`. **Never fired**, because
+`KeyIndex.locate` is only ever called for `table2da` today. It would fire the first time anything
+asked for a creature.
+
+## Rules tables read from the player's installation — 2026-08-09
+
+⚠️ **IESDP ships `hpclass.2da` and none of the per-class tables it points at**, so these came from
+the installation. All are pure numbers, so D11's strref rule does not apply — but the *engine*
+outranks them, and in one case measurably does.
+
+### Hit dice — `HPCLASS.2DA` maps a class to its table
+
+| table | classes | die | from level 10 |
+|---|---|---|---|
+| `HPWAR` | Fighter, Ranger, Paladin | d10 | +3 |
+| `HPPRS` | Cleric, Druid, Monk | d8 | +2 |
+| `HPROG` | Thief, Bard | d6 | +2 |
+| `HPWIZ` | Mage, Sorcerer | d4 | +1 |
+| `HPBARB` | Barbarian | d12 | +3 |
+
+Each table rolls once per level through 9 and grants a flat modifier from 10 on.
+
+⚠️ **`HPCLASS` maps `FIGHTER_MAGE` to `HPFM`, a pre-averaged `1d7`, and the engine does not use
+it.** Measured twice: an imported Fighter 2 / Mage 1 arrived at **12**, which is `HPWAR`×2 and
+`HPWIZ`×1 each halved, and a Fighter 1→2 level-up stored **+5**, which is `HPWAR` halved. **What
+`HPFM` is for is open.**
+
+### Ability ranges — three tables, and the combination is derived exactly
+
+- `ABRACERQ.2da` — per race, `MIN_`/`MAX_` for all six abilities. Elf: `MIN_DEX 6, MAX_DEX 18`.
+- `ABRACEAD.2da` — racial adjustment. Elf: `MOD_DEX +1`, `MOD_CON −1`.
+- `ABCLASRQ.2da` — per class minimums only. Mage: `MIN_INT 9`. Fighter: `MIN_STR 9`.
+
+**6 to 18, plus 1, is 7 to 19 — exactly what BG:EE printed on Aurel's ABILITIES screen** for an
+Elf's Dexterity. Each table is measured; ⚠️ **flooring the racial minimum with the class one is an
+inference** until a case distinguishes it.
+
+### Proficiency slots — `profsmax.2da`
+
+Every class row gives `FIRST_LEVEL 2`, and **a multi-class sums its halves**: Aurel, a level-1
+Fighter/Mage, was offered **4** slots at creation and spent exactly four — War Hammer 1,
+Flail 1, Two-Weapon Style 2.
+
+⚠️ **The progression past level 1 does not parse cleanly.** The remaining columns read
+`OTHER_LEVELS 5` and then three headed `3 6 9` holding `3 4 5`. All that is measured is that a
+Fighter 1→2 level-up grants **none** — the screen read `PROFICIENCY SLOTS 0`.
+
+### Thief skill points — `thiefskl.2da`
+
+`START_POINTS` and `LEVEL_POINTS`: a Thief gets **40** then **25** a level, a Shadowdancer 30 then
+20, an Assassin 40 then 15. This bounds the *total* a character may have allocated, where
+`thiefscl.2da` only says *which* skills a class may have at all.
+
+⚠️ **`thiefskl` is not `thiefscl`.** The near-identical names have misled this project once
+already.
+
 ## TLK (`dialog.tlk`)
 
 Source: IESDP `file_formats/ie_formats/tlk_v1.htm`. ⚠️ That page's *Applies to* list covers the

@@ -2,12 +2,20 @@
 
 Phases 0–2 produce a genuinely useful tool. Everything after is breadth. Scope is BG1EE (D3).
 
-## The two workflows this tool serves — stated by the user 2026-08-09
+## The four workflows this tool serves — stated by the user 2026-08-09
 
-1. **Open a save → change the character → export them → start a new game from that file.**
-2. **Open a save → change the character → save it back.** Everything built so far.
+⚠️ **A character file is a document in its own right, not a savegame's by-product.** That is the
+correction this roadmap most needed, and it arrived in two halves over one afternoon.
 
-⚠️ **Workflow 1 was not in this roadmap and it changes what matters.** Export is not a Phase 7
+| | over a **save** | over a **character** |
+|---|---|---|
+| **edit** | open a save → change the character → save it back | select a char → change it → **save the char** |
+| **produce** | open a save → change the character → **export** → start a new game from that file | **`+` → create a char**, first step choosing a portrait |
+
+**Everything built so far serves exactly one cell — the top-left.** The other three are the
+approved, not-yet-started plan for a Characters lineup beside Saves.
+
+⚠️ **None of this was in the roadmap and it changes what matters.** Export is not a Phase 7
 convenience; it is a **primary output path**, and the safer of the two — it never writes to the
 user's savegame at all.
 
@@ -19,6 +27,11 @@ place. **Phase 1 is two deliveries, not one, and the smaller comes first.**
 
 ⚠️ **But export is not a free pass.** Import rebuilds hit points and normalises percentile
 strength, so not every edit crosses that boundary. See the findings.
+
+**Phase 7 is wrong about this too.** It files `.CHR` export beside journal editing and `.tot`/`.toh`
+names, as breadth to reach eventually. Two of the four workflows above are character-file work, so
+it belongs long before Phase 5's graphics — and it needs no BAM decoder, because portraits are
+plain 24-bit BMPs that `dart:ui` already reads.
 
 ---
 

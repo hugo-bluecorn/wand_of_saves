@@ -161,37 +161,41 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phases 0, 2 and 2.5 are done and merged. Work in progress: finishing the character sheet.**
-Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases.
+**Phases 0, 2 and 2.5 are done and merged. The character sheet is finished and tabbed.**
+Phase 1 is deferred on purpose — see below, and note that `planning/roadmap.md` now argues it is
+**two deliveries rather than one**, because a `.chr` needs 1 pointer patched where a savegame needs
+39. `planning/roadmap.md` has all seven phases and the four workflows they serve.
 
-> ### 🔶 Where the last session stopped, 2026-08-08
+> ### 🔶 Where the last session stopped, 2026-08-09
 >
-> **The character sheet is finished — format layer, domain, editing and panel — and every check
-> is green.** 207 app tests, 186 format tests, `analyze` clean, no suppressions.
+> **The character sheet is divided the way BG:EE divides it, and everything is pushed.** 249 app
+> tests, 186 format tests, `analyze` clean, no suppressions, `main` level with `origin`.
 >
-> The panel now shows and edits saving throws, resistances, the eight thief skills and Lore,
-> armour class modifiers, attacks, morale, luck, fatigue, intoxication, turn undead, tracking,
-> **and proficiencies** — the last of which are opcode 233 effects patched in place, named from
-> the player's own `weapprof.2da` through their own `dialog.tlk` (D11's reader, now built).
+> Four tabs named after the game's own creation steps — **Character · Abilities · Skills ·
+> Combat**. ⚠️ **`SKILLS` is the game's umbrella for weapon proficiencies too**, and for spells;
+> this panel used to file them separately and the game does not. Pips are now the game's own
+> control, dots with `[+]`/`[-]` greyed at the class ceiling, so the cap is stated *before* it is
+> met. Percentile strength reads out as `18/27`, the way the game writes it.
 >
-> **The in-game gate passed.** Xzar's Save vs. Spell 12 → 5 and Aard's Two-Weapon Style 2 → 3 went
-> in one save: **exactly two bytes changed**, the file did not resize, and BG:EE printed `Spell: 5`
-> with the other four saves untouched and `Two-Weapon Style +++`. The engine also *applied* the
-> pip — the off-hand THAC0 breakdown reads `Two-Weapon Style: +2`, which `stylbonu.2da` gives only
-> for three pips. Full write-up in `docs/findings/verified-format-offsets.md` §Write path.
+> **An approved plan is waiting, deliberately not started**:
+> `~/.claude/plans/ancient-finding-dragonfly.md` — a **Characters lineup beside Saves**, five
+> slices. Read it before planning anything else.
 >
-> That run also caught a defect in the panel and settled two long-standing assumptions — see
-> §What the game taught us. **Nothing is owed.**
+> **What the game taught us, and none of it was derivable from the code:**
 >
-> **What is deliberately not done**, and why, in the order a next session would want them:
+> - **There are four workflows, not two** — a character file is a document in its own right. See
+>   `planning/roadmap.md`, rewritten.
+> - **D10 is closed.** The Constitution bonus multiplies by the **mean** class level, not the
+>   highest; `hitPointBonus` was wrong and is fixed. ⚠️ It hid for two days because **mean and
+>   highest are the same number for a single class**, so no test could fail.
+> - **Maximum hit points now have a ceiling the game could actually produce**, because the engine
+>   discards one it could not: a character exported with 45 came back from import with **12**.
+> - **Two claims of ours were wrong.** `*HARBASE` is not merely mangled, it is **not unique**; and
+>   `dialogFile` "is what to key on" is true of companions and false of the protagonist.
 >
-> 1. **Granting a proficiency the character lacks** — adds an effect, resizes the CRE, moves
->    every GAM offset after it. That is Phase 1's layout pass, and inventory wants it too.
-> 2. **Derived skill and Lore values.** Showing Imoen's 35 beside her stored 15 needs
->    `skilldex.2da` and the class tables. The reader for those now exists — `ResourceRepository`
->    — so this is a small slice rather than a new capability.
-> 3. **The panel is long.** Six groups stacked, and the plan says tab it *when* it grows
->    unwieldy rather than pre-emptively. It has now grown; that judgement is due.
+> **Two cheap experiments are queued** for the next time the game is open, neither blocking: store
+> a THAC0 *worse* than the class table computes and see whether the engine overrides it, and check
+> whether a percentile of 100 really prints `18/00`.
 
 ### What exists
 
@@ -207,7 +211,7 @@ Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seve
 - **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. **The whole
   character sheet is editable** and writes back: sealed `EditCommand`s over a curated
   `CharacterStat` table of 49 fields, plus `SetProficiency` for the pips that live in effects;
-  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 229 tests.
+  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 249 tests.
   - **Only what the class can actually have is offered.** The seven thief skills are greyed out
     when the player's `thiefscl.2da` gives that class or kit 0% of them — a Fighter/Mage has none
     — and proficiency tiles show their ceiling (`max 3`) rather than only refusing a bad value.
@@ -295,7 +299,8 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | `PORTRT<n>` index mapping | **Closed 2026-08-08.** `PORTRT<n>` is the n-th party slot, fingerprinted by the hit points the game bakes into each image. |
 | Kit encoding | **Closed 2026-08-08.** `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and `0x4000` (`TRUECLASS`) both mean no kit. ⚠️ A kit **replaces** the class name — the game writes `Necromancer`, never `Mage (Necromancer)`. |
 | `hpconbon` warrior column | **Closed 2026-08-08.** Raised to Constitution 18 and loaded: the engine printed `Bonus Hit Points/Level: +4`, the warrior row, on a **Fighter/Mage**. `warriorRoots` was right, and the rule is *containment* — half a fighter is a warrior. |
-| Multi-class hit-point multiplier | **Open, and deferred on purpose — D10.** The bonus is *not* divided among classes and *not* softened for a half-mage, both measured. Whether it multiplies by the highest class level or averages needs a multi-class character **above level 1**. ⚠️ **Do not edit a level to find out** — that pulls the whole recalculation layer forward. It answers itself when the protagonist's total experience is between **4000 and 5000** (Fighter 2 / Mage 1). |
+| Multi-class hit-point multiplier | **Closed 2026-08-09 — the MEAN class level, not the highest.** D10's route worked exactly as written: experience was set to 4000, no level was written, and the engine did the rest. A Fighter 2 / Mage 1 at Constitution 18 stores 12 and the game draws **18 / 18** into its portrait, so the bonus is 6 where highest gives 8. ⚠️ It hid for two days because **mean and highest are the same number for a single class**. `hitPointBonus` is fixed. Residual: how it rounds when the mean is not exact. |
+| THAC0 after a level-up | **Open — two readings, one number, 2026-08-09.** `THAC0.2da` computes 19 for a Fighter 2; Aard's record holds an edited **15** and the screen still printed 15. So either the engine never recomputes THAC0, or it recomputes and keeps whichever is better — 15 beats 19 either way. ⚠️ **The experiment that separates them:** store a value *worse* than computed, say 25, and look. |
 | Who may Turn Undead, and who may Track | **Open, and deliberately not guessed at — 2026-08-08.** Every other editable field on the panel is now governed by a table: the seven thief skills by `thiefscl.2da`, proficiency pips by `weapprof.2da`. These two are governed by nothing that has been found — `tracking.2da` turns out to be per-area prose — so they stay editable rather than take an invented class rule. Cheap to settle: set Turn Undead on a mage and Tracking on a thief, and see whether BG:EE shows or ignores them. |
 
 ⚠️ **Seeing the screen is still the only way some defects surface.** The panel's stat tiles have
