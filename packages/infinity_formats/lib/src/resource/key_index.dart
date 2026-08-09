@@ -30,8 +30,20 @@ enum ResourceType {
   /// An `ITM` item, e.g. `AX1H03.ITM`.
   item(0x03ed),
 
-  /// A `CRE` creature.
-  creature(0x03f9);
+  /// A `CRE` creature, e.g. `CHARBASE`.
+  ///
+  /// ⚠️ **This was `0x03f9` and that is `.bs`, a script.** Corrected
+  /// 2026-08-09 against IESDP's own type table and against the data: a BG:EE
+  /// install indexes **2,253** resources at `0x03f1`, `CHARBASE` among them,
+  /// and **none at all** at `0x03f9`. The bug never fired because
+  /// [KeyIndex.locate] was only ever called for [table2da] — and it would not
+  /// have thrown when it did, it would have answered `null` forever.
+  creature(0x03f1),
+
+  /// A `BMP` bitmap, e.g. `AJANTISM`.
+  ///
+  /// Portraits are these. All 210 in `data/PORTRAIT.BIF` carry this type.
+  bitmap(0x0001);
 
   const ResourceType(this.code);
 
@@ -178,6 +190,35 @@ final class KeyIndex {
   /// files, and the CRE records that reference them are no more consistent.
   ResourceLocation? locate(String resref, ResourceType type) =>
       _locations['${type.code}/${resref.toUpperCase()}'];
+
+  /// Every resref of [type], upper-cased, in no particular order.
+  ///
+  /// Optionally narrowed to one [archive] by index into [archives].
+  ///
+  /// **The index had no way to enumerate until a picker needed one.** Choosing
+  /// a portrait means offering what the game ships, and the honest way to find
+  /// those is to ask which resources live in `data/PORTRAIT.BIF` — a dedicated
+  /// archive of exactly 210 bitmaps. Guessing at name shapes instead is how
+  /// `CMISC4S` ends up in a list of portraits because it happens to end in `S`.
+  List<String> resrefsOf(ResourceType type, {int? archive}) => [
+    for (final entry in _locations.entries)
+      if (entry.key.startsWith('${type.code}/'))
+        if (archive == null || entry.value.archive == archive)
+          entry.key.substring('${type.code}/'.length),
+  ];
+
+  /// The index of the archive whose path ends with [name], or `null`.
+  ///
+  /// Case-insensitive, and matched on the trailing path segment so a caller
+  /// says `PORTRAIT.BIF` rather than reproducing the engine's own `data\`
+  /// notation.
+  int? archiveNamed(String name) {
+    final wanted = name.toUpperCase();
+    for (var i = 0; i < archives.length; i++) {
+      if (archives[i].toUpperCase().split('/').last == wanted) return i;
+    }
+    return null;
+  }
 
   static void _requireWithin(
     Uint8List bytes,

@@ -51,3 +51,38 @@ String? fixtureGam(String slot, {String root = defaultFixtureSaveRoot}) {
 
 /// The savegame file inside a slot directory.
 const String gamFileName = 'BALDUR.gam';
+
+/// Where `sync_fixtures.dart` puts copied `.chr` files, relative to the
+/// package root.
+///
+/// A sibling of [defaultFixtureSaveRoot] because it is a sibling in the game's
+/// own user-data directory: `characters/` sits beside `save/`, not inside it.
+const String defaultFixtureCharacterRoot = 'test/fixtures/characters';
+
+/// The exported character file named [name], or `null` if it is not there.
+///
+/// [name] carries no extension — `fixtureChr('aurel')` finds `aurel.chr`.
+/// `null` rather than throwing, for the same reason as [fixtureGam]: a fresh
+/// clone has no fixtures and its suite must still be green.
+String? fixtureChr(String name, {String root = defaultFixtureCharacterRoot}) {
+  final file = File('$root${Platform.pathSeparator}$name.chr');
+  return file.existsSync() ? file.path : null;
+}
+
+/// Every exported character fixture on this machine, by bare name.
+///
+/// Lets a suite assert over *all* of them rather than a hardcoded pair — the
+/// set grows whenever the player exports another character, and a gate that
+/// only ever sees the two names someone typed in is a gate with a blind spot.
+List<String> fixtureChrNames({String root = defaultFixtureCharacterRoot}) {
+  final dir = Directory(root);
+  if (!dir.existsSync()) return const [];
+  return dir
+      .listSync()
+      .whereType<File>()
+      .map((f) => f.path.split(Platform.pathSeparator).last)
+      .where((n) => n.toLowerCase().endsWith('.chr'))
+      .map((n) => n.substring(0, n.length - 4))
+      .toList()
+    ..sort();
+}

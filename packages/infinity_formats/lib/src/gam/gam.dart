@@ -18,6 +18,8 @@ import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/gam/gam_npc.dart';
 import 'package:infinity_formats/src/spec/cre_v1_0.dart';
+import 'package:infinity_formats/src/spec/creature_document.dart';
+import 'package:infinity_formats/src/spec/field_patch.dart';
 import 'package:infinity_formats/src/spec/format_field.dart';
 import 'package:infinity_formats/src/spec/gam_v2_0.dart';
 import 'package:infinity_formats/src/text/fixed_field.dart';
@@ -33,11 +35,16 @@ import 'package:infinity_formats/src/text/fixed_field.dart';
 ///
 /// [bytes] is an unmodifiable view, so that guarantee is enforced rather than
 /// documented.
-final class Gam {
+///
+/// Implements [CreatureDocument] because a savegame is one of the two files
+/// that wrap an editable creature record — see there for why the type
+/// parameter is `Gam` itself.
+final class Gam implements CreatureDocument<Gam> {
   /// Wraps [bytes], which must already be validated and unmodifiable.
   const Gam.trusted(this.bytes);
 
   /// The complete file, exactly as read. Unmodifiable.
+  @override
   final Uint8List bytes;
 
   int _u32(GamHeaderField field) =>
@@ -155,6 +162,7 @@ final class Gam {
   /// the field would land outside the file. Both are refused rather than
   /// truncated or allowed to wrap: a savegame that loads and is quietly wrong
   /// is worse than one that fails loudly.
+  @override
   Gam withCreatureField({
     required int creOffset,
     required CreHeaderField field,
@@ -164,6 +172,26 @@ final class Gam {
     field: field,
     value: value,
     what: '$field of the creature at $creOffset',
+  );
+
+  /// A copy with the text [field] of the creature at [creOffset] set to
+  /// [value] — a portrait resref, so far.
+  ///
+  /// Fixed-width like every other edit here: the field is a fixed run of bytes
+  /// and nothing moves.
+  @override
+  Gam withCreatureText({
+    required int creOffset,
+    required CreHeaderField field,
+    required String value,
+  }) => Gam.trusted(
+    patchedTextField(
+      bytes: bytes,
+      base: creOffset,
+      field: field,
+      value: value,
+      what: '$field of the creature at $creOffset',
+    ),
   );
 
   /// Writes [value] into [field] of the effect at [effectStart] inside the
@@ -179,6 +207,7 @@ final class Gam {
   /// and [creOffset] is absolute, as `GamNpc.creOffset` does. Adding them here
   /// rather than at the call site keeps the two conventions from being mixed
   /// by whoever calls next.
+  @override
   Gam withEffectField({
     required int creOffset,
     required int effectStart,
@@ -191,58 +220,25 @@ final class Gam {
     what: '$field of the effect at $effectStart in the creature at $creOffset',
   );
 
-  /// One patch routine for every fixed-width field, whatever declares it.
+  /// Delegates to [patchedField], which both documents share.
   ///
-  /// Keyed on [FormatField] so width and signedness always come from the
-  /// layout table (D6) and never from the call site. Two copies of this
-  /// `switch` would be two chances to disagree with the reader.
+  /// One implementation, deliberately: a savegame and an exported character
+  /// carry the same creature record, so patching a field in one has to mean
+  /// exactly what it means in the other.
   Gam _withField({
     required int base,
     required FormatField field,
     required int value,
     required String what,
-  }) {
-    final at = base + field.offset;
-    if (base < 0 || at + field.length > bytes.length) {
-      throw InfinityFormatException.truncated(
-        what: what,
-        expected: at + field.length,
-        actual: bytes.length,
-        offset: at,
-      );
-    }
-    if (!field.holds(value)) {
-      throw InfinityFormatException.valueOutOfRange(
-        what: '$field',
-        value: value,
-        minimum: field.minimum,
-        maximum: field.maximum,
-      );
-    }
-
-    final copy = Uint8List.fromList(bytes);
-    final view = ByteData.sublistView(copy);
-    switch ((field.length, field.signed)) {
-      case (1, false):
-        view.setUint8(at, value);
-      case (1, true):
-        view.setInt8(at, value);
-      case (2, false):
-        view.setUint16(at, value, Endian.little);
-      case (2, true):
-        view.setInt16(at, value, Endian.little);
-      case (4, false):
-        view.setUint32(at, value, Endian.little);
-      case (4, true):
-        view.setInt32(at, value, Endian.little);
-      case _:
-        throw InfinityFormatException.unreadableField(
-          what: '$field',
-          length: field.length,
-        );
-    }
-    return Gam.trusted(copy.asUnmodifiableView());
-  }
+  }) => Gam.trusted(
+    patchedField(
+      bytes: bytes,
+      base: base,
+      field: field,
+      value: value,
+      what: what,
+    ),
+  );
 
   Gam _patchU32(GamHeaderField field, int value) {
     final copy = Uint8List.fromList(bytes);

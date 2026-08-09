@@ -78,6 +78,38 @@ final class GamNpc {
   Uint8List get creBytes =>
       Uint8List.sublistView(_gam, creOffset, creOffset + creLength);
 
+  /// The 32 raw bytes of [displayName], as a view.
+  ///
+  /// **For copying, not for reading** — use [displayName] for that. An export
+  /// writes this field into the CHR header verbatim: measured byte-identical on
+  /// both matched pairs of savegame and `.chr` on the developer's machine, and
+  /// putting a decoded `String` back through an encoder would be a second
+  /// chance to differ for no gain.
+  Uint8List get displayNameBytes => _field(GamNpcField.displayName);
+
+  /// The quick weapon, spell and item slots — 52 bytes as a view.
+  ///
+  /// ⚠️ **The same 52 bytes a CHR header carries at `0x30`.** Measured
+  /// 2026-08-09 across three exported characters against the party members they
+  /// came from: `0x8c`-`0xbf` here is byte-identical to `0x30`-`0x63` there, in
+  /// every comparison, including across different characters and different
+  /// saves. That is what makes an export a copy rather than a translation.
+  ///
+  /// IESDP names the middle group differently on its two pages — "Show Quick
+  /// Weapon 1" on the CHR page against "quick weapon slot ability" here — which
+  /// is a naming disagreement, not a layout one.
+  Uint8List get quickSlotBytes => Uint8List.sublistView(
+    _gam,
+    structOffset + GamNpcField.quickWeaponSlot1.offset,
+    structOffset + GamNpcField.displayName.offset,
+  );
+
+  Uint8List _field(GamNpcField field) => Uint8List.sublistView(
+    _gam,
+    structOffset + field.offset,
+    structOffset + field.offset + field.length,
+  );
+
   @override
   String toString() => 'GamNpc($creResref "$displayName" @$structOffset)';
 }

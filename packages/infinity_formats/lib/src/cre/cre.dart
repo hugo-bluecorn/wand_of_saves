@@ -260,6 +260,26 @@ final class Cre {
   /// The kit dword. `0x40000000` means no kit.
   int get kitId => _read(CreHeaderField.kit);
 
+  /// Resref of the medium portrait, e.g. `BDTMIM`.
+  ///
+  /// ⚠️ **IESDP calls this field "Small Portrait" and it is not** — see
+  /// `CreHeaderField.portraitMedium`. This is the one a character sheet shows.
+  ///
+  /// Empty when the record names none, which is an ordinary state for a
+  /// creature that is not a character.
+  String get portraitMedium => decodeFixedString(
+    bytes,
+    CreHeaderField.portraitMedium.offset,
+    CreHeaderField.portraitMedium.length,
+  );
+
+  /// Resref of the large portrait, e.g. `BDTMIL`.
+  String get portraitLarge => decodeFixedString(
+    bytes,
+    CreHeaderField.portraitLarge.offset,
+    CreHeaderField.portraitLarge.length,
+  );
+
   /// Resref of this creature's dialogue file.
   String get dialogFile => decodeFixedString(
     bytes,

@@ -19,6 +19,8 @@
 /// See `planning/architecture.md`.
 library;
 
+export 'src/chr/chr.dart';
+export 'src/chr/chr_codec.dart';
 export 'src/cre/cre.dart';
 export 'src/cre/cre_codec.dart';
 export 'src/cre/effect.dart';
@@ -29,12 +31,11 @@ export 'src/gam/gam_npc.dart';
 export 'src/io/atomic_file.dart';
 export 'src/resource/bif_archive.dart';
 export 'src/resource/key_index.dart';
+export 'src/spec/chr_v2_0.dart';
 export 'src/spec/cre_v1_0.dart';
+export 'src/spec/creature_document.dart';
 export 'src/spec/format_field.dart';
 export 'src/spec/gam_v2_0.dart';
 export 'src/tables/ids_map.dart';
 export 'src/tables/table_2da.dart';
 export 'src/tlk/tlk.dart';
-
-// Phase 0 continues here: GamCodec, CreCodec.
-// The remaining read path still lives in tool/spike/gam_cre_tlk_spike.dart.

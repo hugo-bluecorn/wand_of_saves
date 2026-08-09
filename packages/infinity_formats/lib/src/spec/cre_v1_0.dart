@@ -83,6 +83,25 @@ enum CreHeaderField implements FormatField {
   /// declared length. Get it wrong and the CRE does not parse.
   effectVersion(0x33, 1),
 
+  /// Resref of the **medium** portrait — the one a character sheet shows.
+  ///
+  /// ⚠️ **IESDP calls this "Small Portrait" and it is not.** Measured on eight
+  /// records: it holds the `…M` variant — `BDTMIM`, `IMOENM`, `MONTARM`,
+  /// `XZARM` — which is 169×266. A field named `smallPortrait` returning
+  /// `BDTMIM` is a trap for the next reader, so this is named for what it
+  /// holds.
+  ///
+  /// ⚠️ **The `…S` variant is referenced by no CRE at all.** 54×84 is what the
+  /// game bakes into `PORTRT<n>.bmp` beside a save — a different picture for a
+  /// different purpose, and the one this project uses as an oracle.
+  portraitMedium(0x34, 8),
+
+  /// Resref of the **large** portrait, 210×330.
+  ///
+  /// ⚠️ IESDP calls this "Large Portrait", which is right — but only by
+  /// accident of the pair being swapped. See [portraitMedium].
+  portraitLarge(0x3c, 8),
+
   /// Reputation, stored **times ten** — `110` means 11.0.
   ///
   /// **Unsigned, against IESDP's "1 (signed byte)".** The two claims on that
