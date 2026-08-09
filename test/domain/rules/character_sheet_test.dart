@@ -32,6 +32,8 @@ void main() {
     // shape of the slots -- 1/1/1 against 1/1/0 -- not one field at a time.
     List<int> levels = const [1, 1, 0],
     int kitId = 0x40000000,
+    int strength = 18,
+    int strengthBonus = 0,
   }) => CharacterSheet(
     character: fakeCharacter().copyWith(
       classId: classId,
@@ -42,6 +44,8 @@ void main() {
       abilities: fakeCharacter().abilities.copyWith(
         constitution: constitution,
         dexterity: dexterity,
+        strength: strength,
+        strengthBonus: strengthBonus,
       ),
     ),
     rules: const GeneratedGameRules(),
@@ -548,4 +552,35 @@ void main() {
       expect(sheetOf().maximumHitPointsAllowed, isNull);
     });
   });
+
+  group(
+    'percentile strength — one value on screen, two bytes in the record',
+    () {
+      test('writes it the way the game writes it', () {
+        // Straight off BG:EE's character-creation summary, which reads
+        // "Strength: 18/27" where the record keeps 18 and 27 in separate bytes.
+        expect(sheetOf(strengthBonus: 27).strengthInGame, '18/27');
+      });
+
+      test('pads to two digits, because the game does', () {
+        expect(sheetOf(strengthBonus: 3).strengthInGame, '18/03');
+      });
+
+      test('says nothing when there is no percentile to write', () {
+        // A Strength of 18 with a percentile of zero is written plainly, and
+        // the engine consults strmodex.2da at no other Strength at all.
+        expect(sheetOf().strengthInGame, isNull);
+        expect(sheetOf(strength: 17, strengthBonus: 27).strengthInGame, isNull);
+      });
+
+      test('writes 100 as 00 — the one part of this not measured', () {
+        // ⚠️ The player's own strmodex.2da runs 0 to 100 and keeps 100 as its
+        // own top row, so the engine *stores* 100. That 18/00 is how it prints
+        // is the percentile-dice convention and nothing here has shown it.
+        // Rendered rather than withheld: a wrong rendering can be falsified on
+        // screen, an omission cannot. One look at an 18/00 character settles it.
+        expect(sheetOf(strengthBonus: 100).strengthInGame, '18/00');
+      });
+    },
+  );
 }

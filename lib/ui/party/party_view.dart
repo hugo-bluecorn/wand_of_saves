@@ -564,6 +564,15 @@ class _Abilities extends StatelessWidget {
                 enabled:
                     stat != CharacterStat.strengthBonus ||
                     character.abilities.strength == 18,
+                // The two bytes read out as the one value the game prints,
+                // under the first of them. Both stay editable; this only says
+                // what the game would show.
+                helper: stat == CharacterStat.strength
+                    ? switch (sheet.strengthInGame) {
+                        final String written => '$written in game',
+                        null => null,
+                      }
+                    : null,
               ),
           ],
         ),
@@ -1041,6 +1050,7 @@ class _StatField extends StatefulWidget {
     required this.onCommitted,
     this.enabled = true,
     this.hint,
+    this.helper,
   }) : super(key: ValueKey('${character.creOffset}:${stat.name}'));
 
   final Character character;
@@ -1054,6 +1064,13 @@ class _StatField extends StatefulWidget {
   final void Function(CharacterStat, int) onCommitted;
   final bool enabled;
   final String? hint;
+
+  /// A line under the field, on the row the error message already reserves.
+  ///
+  /// For something true of the value as it stands rather than a warning — the
+  /// game's own reading of it, say. Costs no layout, because that row is
+  /// reserved whether or not anything is on it.
+  final String? helper;
 
   @override
   State<_StatField> createState() => _StatFieldState();
@@ -1136,6 +1153,7 @@ class _StatFieldState extends State<_StatField> {
           label: widget.label,
           hasHint: widget.hint != null,
           error: _errorText,
+          helper: widget.helper,
         ),
       ),
     );

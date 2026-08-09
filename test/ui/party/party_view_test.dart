@@ -57,6 +57,8 @@ void main() {
       classId: 4,
       kitId: 0,
       levelThirdClass: 1,
+      // Aurel's percentile, off the character-creation screen.
+      strengthBonus: 27,
       moveSilently: 15,
       findTraps: 25,
       lore: 3,
@@ -68,6 +70,8 @@ void main() {
       partyOrder: 2,
       classId: 9,
       levelThirdClass: 1,
+      // Below 18, so there is no percentile to write.
+      strength: 16,
       hideInShadows: 10,
       moveSilently: 20,
       proficiencies: {91: 2, 107: 2},
@@ -447,6 +451,31 @@ void main() {
             matching: find.byType(IconButton),
           ),
         );
+
+    testWidgets('writes percentile strength the way the game writes it', (
+      tester,
+    ) async {
+      // BG:EE writes one value, "Strength: 18/27", where the record keeps two
+      // bytes. Both stay editable — they are two real bytes — and this is only
+      // how the pair reads out.
+      await showParty(tester);
+      await openTab(tester, 'Abilities');
+      await select(tester, 'Imoen');
+
+      expect(find.text('18/27 in game'), findsOneWidget);
+    });
+
+    testWidgets('says nothing when there is no percentile to write', (
+      tester,
+    ) async {
+      // Montaron's Strength is 16, and the engine consults strmodex.2da at no
+      // Strength but 18.
+      await showParty(tester);
+      await openTab(tester, 'Abilities');
+      await select(tester, 'Montaron');
+
+      expect(find.textContaining('in game'), findsNothing);
+    });
 
     testWidgets('draws pips the way the game draws them', (tester) async {
       // BG:EE puts gold dots beside the proficiency name and a [+]/[-] pair

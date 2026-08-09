@@ -202,6 +202,31 @@ class CharacterSheet {
     return entry?.name ?? entry?.identifier ?? 'Proficiency $proficiencyId';
   }
 
+  /// Strength as the game writes it — `18/27` — or `null` when there is no
+  /// percentile to write.
+  ///
+  /// **One value on screen, two bytes in the record.** BG:EE's own
+  /// character-creation summary reads `Strength: 18/27` where the record keeps
+  /// 18 at `0x238` and 27 at `0x239`. Both bytes stay separately editable,
+  /// because both are real; this is only how the pair is *read out*.
+  ///
+  /// Only a Strength of exactly 18 has a percentile — the engine consults
+  /// `strmodex.2da` nowhere else — so every other score is written plainly.
+  ///
+  /// ⚠️ **The 100 case is the one part of this not measured.** The player's
+  /// own `strmodex.2da` runs 0 to 100 and keeps **100 as its own top row**
+  /// (`TO_HIT 2, DAMAGE 4`), so the engine plainly *stores* 100; that it
+  /// *prints* `18/00` is the percentile-dice convention, and no fixture or
+  /// screenshot here has shown it. Rendered rather than withheld — a wrong
+  /// rendering on screen can be falsified, an omission cannot — and one look
+  /// at a character with a percentile of 100 settles it.
+  String? get strengthInGame {
+    final percentile = character.abilities.strengthBonus;
+    if (character.abilities.strength != 18 || percentile == 0) return null;
+    final written = percentile == 100 ? 0 : percentile;
+    return '18/${written.toString().padLeft(2, '0')}';
+  }
+
   /// What Dexterity does to armour class, or `null` off the table.
   int? get armourClassModifier =>
       rules.armourClassFromDexterity(character.abilities.dexterity);
