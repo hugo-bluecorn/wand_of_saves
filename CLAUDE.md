@@ -161,41 +161,47 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phases 0, 2 and 2.5 are done and merged. The character sheet is finished and tabbed.**
-Phase 1 is deferred on purpose — see below, and note that `planning/roadmap.md` now argues it is
-**two deliveries rather than one**, because a `.chr` needs 1 pointer patched where a savegame needs
-39. `planning/roadmap.md` has all seven phases and the four workflows they serve.
+**Phases 0, 2 and 2.5 are done. The Characters plan is done: all six slices.**
+Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
+four workflows they serve.
 
 > ### 🔶 Where the last session stopped, 2026-08-09
 >
-> **The character sheet is divided the way BG:EE divides it, and everything is pushed.** 249 app
-> tests, 186 format tests, `analyze` clean, no suppressions, `main` level with `origin`.
+> **All four workflows now have a screen.** 347 app tests, 234 format tests, `analyze` clean, no
+> suppressions.
 >
-> Four tabs named after the game's own creation steps — **Character · Abilities · Skills ·
-> Combat**. ⚠️ **`SKILLS` is the game's umbrella for weapon proficiencies too**, and for spells;
-> this panel used to file them separately and the game does not. Pips are now the game's own
-> control, dots with `[+]`/`[-]` greyed at the class ceiling, so the cap is stated *before* it is
-> met. Percentile strength reads out as `18/27`, the way the game writes it.
+> The home screen is **two sections** — Characters above Saves — and a `.chr` is a document in its
+> own right: listed, opened, edited, saved, exported, deleted and created.
 >
-> **An approved plan is waiting, deliberately not started**:
-> `~/.claude/plans/ancient-finding-dragonfly.md` — a **Characters lineup beside Saves**, five
-> slices. Read it before planning anything else.
+> - **`ChrCodec`** — `CHR V2.0`, a 100-byte header around a plain `CRE V1.0`. Round-trip byte
+>   identity on all three real `.chr` files. ⚠️ **`V2.1` is refused by name**, because this app can
+>   provoke it: the engine writes it past `startare.2da`'s `START_XP_CAP` of **161,000**.
+> - **Export** — `ChrCodec.exportOf`, and it synthesises nothing. **The CHR header is a byte-for-byte
+>   copy of the GAM NPC struct**: name from `0xc0`, quick slots from `0x8c`–`0xbf`. Asserted against
+>   the engine's own exports. ⚠️ The *record* will not match — `0x27c`/`0x27e` are actor enumeration
+>   values the session assigns.
+> - **Delete moves, never unlinks.** `RecycleService` puts a save's whole directory and a character
+>   *with its `.bio`* into `deleted/` beside the save root, never overwriting. Emptying is separate
+>   and says plainly it cannot be undone.
+> - **One character sheet, two documents.** `CharacterPanel` takes a `Character` and an `onEdit`
+>   callback; `CreatureDocument<T>` is the F-bounded interface `Gam` and `Chr` share, and
+>   `applyCharacterEdit` is generic over it. ⚠️ **`SetPartyGold` sits outside `CharacterEditCommand`
+>   deliberately** — a `.chr` has no party, and the type system is where that is said.
+> - **Portraits come from the record**, not from the save's sidecar. ⚠️ **That reverses a documented
+>   decision**: the rail used to draw `PORTRT<n>.bmp`. It still does the one job only it can — it is
+>   a picture of what the engine *believed*, and it closed D10 — but it is not the character's face.
+> - **`+` creates a character** from the engine's own `CHARBASE`, portrait first.
 >
-> **What the game taught us, and none of it was derivable from the code:**
+> **What was left out, and why:** the picker offers the game's 210 and whatever is already in
+> `portraits/`, but there is **no "Add a portrait…" file import** — that needs a file-picker
+> dependency, which is a decision worth taking deliberately rather than in passing.
 >
-> - **There are four workflows, not two** — a character file is a document in its own right. See
->   `planning/roadmap.md`, rewritten.
-> - **D10 is closed.** The Constitution bonus multiplies by the **mean** class level, not the
->   highest; `hitPointBonus` was wrong and is fixed. ⚠️ It hid for two days because **mean and
->   highest are the same number for a single class**, so no test could fail.
-> - **Maximum hit points now have a ceiling the game could actually produce**, because the engine
->   discards one it could not: a character exported with 45 came back from import with **12**.
-> - **Two claims of ours were wrong.** `*HARBASE` is not merely mangled, it is **not unique**; and
->   `dialogFile` "is what to key on" is true of companions and false of the protagonist.
+> **Two cheap experiments are still queued** for the next time the game is open, neither blocking:
+> store a THAC0 *worse* than the class table computes and see whether the engine overrides it, and
+> check whether a percentile of 100 really prints `18/00`.
 >
-> **Two cheap experiments are queued** for the next time the game is open, neither blocking: store
-> a THAC0 *worse* than the class table computes and see whether the engine overrides it, and check
-> whether a percentile of 100 really prints `18/00`.
+> ⚠️ **The gate for export and creation is one trip into BG:EE**: New Game → IMPORT accepting a
+> character this app exported, and one it created.
 
 ### What exists
 

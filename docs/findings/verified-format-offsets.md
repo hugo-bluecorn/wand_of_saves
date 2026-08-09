@@ -1316,3 +1316,72 @@ Prefer verification over reasoning from a spec. Four are available, with differe
    cannot answer these questions.
 3. **The game itself.** Final authority: load the edited save and see. Slow, but the only test that
    matters for "did we corrupt it".
+
+## Export, measured against the engine's own — 2026-08-09
+
+### The CHR header is a copy of the GAM NPC struct, byte for byte
+
+Compared three characters BG:EE itself exported against the party members they came from.
+
+| CHR header | comes from | measured |
+|---|---|---|
+| `0x08` name, 32 bytes | `GamNpcField.displayName` (`0xc0`) | **identical** |
+| `0x30`–`0x63` quick slots, 52 bytes | GAM NPC `0x8c`–`0xbf` | **identical in every comparison** |
+| the record | `GamNpc.creBytes` | copied verbatim |
+
+Only the CRE offset and length are written rather than copied, and both are facts about the file
+being built. **An export synthesises nothing.** ⚠️ IESDP names the middle group differently on its
+two pages — "Show Quick Weapon 1" on the CHR page against "quick weapon slot ability" on the GAM
+page — which is a naming disagreement, not a layout one.
+
+`ChrCodec.exportOf` is asserted against all three real `.chr` files: our header equals theirs.
+
+### ⚠️ An exported CRE is NOT byte-identical to the save's
+
+Measured on both matched pairs: the records differ at **`0x27c` and `0x27e`**, which IESDP calls
+the **global and local actor enumeration values** — engine bookkeeping assigned per session. Aard's
+pair differs in three more, all explained by play continuing after the export (hit points at
+`0x24`/`0x26`, first-class level at `0x234`).
+
+**Consequence for tests:** assert that the header is built as measured and the record is copied
+from `GamNpc.creBytes`. Do **not** assert that a file we write matches a file the engine wrote in a
+different session.
+
+### No `.bio` is written, and that is a decision
+
+All three `.bio` files on disk are **byte-identical** — the shipped default biography. Nothing in
+GAM, CRE or CHR holds a biography; IESDP documents them only in the `.tot`/`.toh` talk-table
+override, and no save on this machine has one. Writing that text ourselves would be inventing a
+biography; omitting the file lets the engine fall back to the same default.
+
+### ⚠️ `CHR V2.1` is reachable from this app's own edits
+
+IESDP: the engine writes V2.1 once experience reaches `START_MP_XP_CAP`. The player's own
+`startare.2da` gives **`START_XP_CAP 161000`** — ⚠️ note the row label is `START_XP_CAP`, not the
+walkthrough's `START_MP_XP_CAP` — and this app can set experience. `ChrCodec` refuses V2.1 **by
+name** rather than reading it as a V2.0; add it when a real V2.1 file has been measured.
+
+That also closes the experience row in the validation table: the BG1EE cap is **161,000**.
+
+## Portraits — corrections to the 2026-08-09 measurements
+
+### ⚠️ They are NOT uniformly 24-bit
+
+Re-measured across all 210 in `data/PORTRAIT.BIF`: **208 are 24-bit uncompressed; `NOPORTLL` is
+32-bit `BI_BITFIELDS` and `MBAS_GR` is 8-bit.** Eleven depart from 24-bit/uncompressed/conventional
+size in total — `HELMS`, `HVLNS`, `SKANS` at 54×85; `NBODHIS`, `NELLES`, `NOPORTSM`, `TESTPOR` at
+38×60; `NOPORTLM` 172×266; `NOPORTMD` 110×170; `MBAS_GR` 1×1.
+
+**So a bit-depth check would be stricter than the engine, exactly as a size check would.** The only
+hard requirement is a **base name of at most seven characters**, so the `L`/`M`/`S` suffix fits an
+8-byte resref.
+
+### ⚠️ Not all are `L`/`M`/`S` triples
+
+68 complete triples. `NBODHI` and `NELLE` are S-only, `NOPORTS` is M-only, and `MBAS_GR`,
+`NOPORTMD` and `TESTPOR` carry no variant suffix at all. A picker that groups strictly by triple
+loses six bases; one that chops the last letter unconditionally renames three.
+
+### The resource type of a portrait is `0x0001`
+
+Not in `ResourceType` until this session. All 210 in `PORTRAIT.BIF` carry it.
