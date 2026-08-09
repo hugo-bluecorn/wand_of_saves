@@ -573,6 +573,20 @@ class _Abilities extends StatelessWidget {
                         null => null,
                       }
                     : null,
+                // ⚠️ A disabled field still showing 100 reads as a bug unless
+                // it says why. Measured 2026-08-09: a character stored 19/100
+                // and arrived in a new game as 19/0, so this is junk the
+                // engine discards — but it is junk the record really holds,
+                // and hiding it would be the editor lying about the file.
+                hint:
+                    stat == CharacterStat.strengthBonus &&
+                        character.abilities.strength != 18
+                    ? 'Only a Strength of exactly 18 has a percentile — the '
+                          'engine reads strmodex.2da at no other score, and '
+                          'zeroes this field when a character is exported and '
+                          'imported. Shown because the record really does '
+                          'hold it.'
+                    : null,
               ),
           ],
         ),

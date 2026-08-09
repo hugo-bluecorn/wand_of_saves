@@ -84,6 +84,14 @@ abstract interface class GameRules {
     required int constitution,
     required bool warrior,
   });
+
+  /// The most hit points one class can have **rolled** by [level], before
+  /// Constitution — or `null` for a class the tables do not name.
+  ///
+  /// [classIdentifier] is a single `CLASS.IDS` name such as `FIGHTER`, never a
+  /// multi-class one: a `FIGHTER_MAGE` rolls its two halves separately, and
+  /// composing them belongs to the caller.
+  int? maximumRolledHitPoints(String classIdentifier, int level);
 }
 
 /// [GameRules] backed by the tables generated from IESDP.
@@ -235,6 +243,55 @@ class GeneratedGameRules implements GameRules {
   }) => warrior
       ? constitutionHitPointsWarrior[constitution]
       : constitutionHitPointsOther[constitution];
+
+  /// The die each class rolls, and what it gets instead once rolling stops.
+  ///
+  /// **Transcribed from the player's own installation, 2026-08-09**, because
+  /// IESDP ships `hpclass.2da` but none of the per-class dice tables it points
+  /// at — a gap the roadmap already recorded. `HPCLASS.2DA` maps every class
+  /// to a table; each table gives `SIDES ROLLS MODIFIER` per level, rolling
+  /// once through level 9 and granting a flat modifier from 10 on:
+  ///
+  /// | table | classes | die | from level 10 |
+  /// |---|---|---|---|
+  /// | `HPWAR` | Fighter, Ranger, Paladin | d10 | +3 |
+  /// | `HPPRS` | Cleric, Druid, Monk | d8 | +2 |
+  /// | `HPROG` | Thief, Bard | d6 | +2 |
+  /// | `HPWIZ` | Mage, Sorcerer | d4 | +1 |
+  /// | `HPBARB` | Barbarian | d12 | +3 |
+  ///
+  /// ⚠️ **`HPFM` and its multi-class siblings are deliberately absent.** The
+  /// game maps `FIGHTER_MAGE` to `HPFM`, a pre-averaged `1d7`, and the engine
+  /// measurably does not use it: an imported Fighter 2 / Mage 1 arrived with
+  /// **12**, which is `HPWAR`×2 and `HPWIZ`×1 each halved, and a Fighter 1→2
+  /// level-up stored **+5**, which is `HPWAR` halved. What `HPFM` is for is an
+  /// open question in the findings.
+  static const Map<String, (int die, int afterNine)> classHitDice = {
+    'FIGHTER': (10, 3),
+    'RANGER': (10, 3),
+    'PALADIN': (10, 3),
+    'CLERIC': (8, 2),
+    'DRUID': (8, 2),
+    'MONK': (8, 2),
+    'THIEF': (6, 2),
+    'BARD': (6, 2),
+    'MAGE': (4, 1),
+    'SORCERER': (4, 1),
+    'BARBARIAN': (12, 3),
+  };
+
+  /// The last level at which a class rolls a die rather than taking a flat
+  /// modifier. Every table in the installation turns over at the same place.
+  static const int lastRollingLevel = 9;
+
+  @override
+  int? maximumRolledHitPoints(String classIdentifier, int level) {
+    final entry = classHitDice[classIdentifier];
+    if (entry == null || level < 1) return null;
+    final (die, afterNine) = entry;
+    final rolled = level < lastRollingLevel ? level : lastRollingLevel;
+    return die * rolled + afterNine * (level - rolled);
+  }
 
   /// `FIGHTER_MAGE` → `['Fighter', 'Mage']`.
   ///

@@ -149,11 +149,13 @@ void main() {
       expect(sheetOf().maximumHitPointsInGame, 9);
     });
 
-    test('multiplies the bonus by the highest class level', () {
-      // Confirmed at level 1 and nowhere else -- see the note on the getter.
+    test('multiplies the bonus by the mean of the class levels', () {
+      // ⚠️ This test asserted the *highest* class level until 2026-08-09, when
+      // an imported Fighter 2 / Mage 1 measured 6 where highest gives 8. Mean
+      // of 5 and 3 is 4. See the note on hitPointBonus.
       expect(
         sheetOf(levels: const [5, 3, 0]).maximumHitPointsInGame,
-        7 + 2 * 5,
+        7 + 2 * 4,
       );
     });
 
@@ -237,9 +239,11 @@ void main() {
         sheetOf().upperBoundFor(CharacterStat.strength),
         CharacterStat.strength.maximum,
       );
+      // Maximum hit points used to be here. It has a bound of its own now —
+      // what the class dice could have rolled — covered below.
       expect(
-        sheetOf().upperBoundFor(CharacterStat.maximumHitPoints),
-        CharacterStat.maximumHitPoints.maximum,
+        sheetOf().upperBoundFor(CharacterStat.experience),
+        CharacterStat.experience.maximum,
       );
     });
 
@@ -543,16 +547,6 @@ void main() {
     });
   });
 
-  group('what the tables cannot answer', () {
-    test('no maximum hit points are suggested', () {
-      // What the maximum *should* be needs the per-class dice tables
-      // (hpwar.2da and friends). IESDP ships only a template for them, so the
-      // rules-based cap is not computable from what we have — it waits for
-      // Phase 3 reading the player's own files.
-      expect(sheetOf().maximumHitPointsAllowed, isNull);
-    });
-  });
-
   group(
     'percentile strength — one value on screen, two bytes in the record',
     () {
@@ -583,4 +577,81 @@ void main() {
       });
     },
   );
+
+  group('the multi-class Constitution multiplier — settled 2026-08-09', () {
+    test('multiplies by the MEAN class level, not the highest', () {
+      // Draa, imported at Fighter 2 / Mage 1 with Constitution 18: the record
+      // stores a maximum of 12 and BG:EE drew 18/18 into his portrait. So the
+      // bonus is 6 — 4 x 1.5 — where the highest class level gives 8 and would
+      // have shown 20.
+      expect(
+        sheetOf(constitution: 18, levels: const [2, 1, 0]).hitPointBonus,
+        6,
+      );
+    });
+
+    test(
+      'a single class is unaffected, which is why this hid for two days',
+      () {
+        // Mean and highest are the same number for one class, so every earlier
+        // run agreed and D10 stayed open. Asserted against the per-level rate
+        // rather than a literal, so this stays about the multiplier.
+        final sheet = sheetOf(classId: 4, levels: const [2, 1, 1]);
+        expect(sheet.hitPointBonus, sheet.hitPointBonusPerLevel! * 2);
+      },
+    );
+
+    test('the per-level rate is still not halved', () {
+      // The party settled that separately: at 1/1 the engine printed the full
+      // +4, not 2. It is the multiplier that is a mean, not the rate.
+      expect(
+        sheetOf(constitution: 18).hitPointBonus,
+        4,
+      );
+    });
+  });
+
+  group('a maximum the game could actually produce', () {
+    test('is each class rolled to its own level, then split between them', () {
+      // Fighter 2 rolls HPWAR 10 + 10 = 20; Mage 1 rolls HPWIZ 4. Split
+      // between two classes: 10 + 2 = 12 — exactly what BG:EE gave the
+      // imported character, so this is the measured number and not a model.
+      expect(
+        sheetOf(levels: const [2, 1, 0]).upperBoundFor(
+          CharacterStat.maximumHitPoints,
+        ),
+        12,
+      );
+    });
+
+    test('a single class keeps its whole die', () {
+      expect(
+        sheetOf(classId: 4, levels: const [3, 1, 1]).upperBoundFor(
+          CharacterStat.maximumHitPoints,
+        ),
+        18,
+        reason: 'THIEF rolls HPROG d6, three times',
+      );
+    });
+
+    test('falls back to the field width when the tables cannot say', () {
+      // The same rule the rest of this sheet follows: a bound nobody could
+      // look up is no bound, not a bound of zero.
+      expect(
+        sheetOf(classId: 173).upperBoundFor(CharacterStat.maximumHitPoints),
+        CharacterStat.maximumHitPoints.maximum,
+      );
+    });
+
+    test('flags a stored maximum the game would never have produced', () {
+      // ⚠️ The point of the whole thing. Aard carried 40 at Fighter 1 / Mage 1
+      // because an earlier session wrote it; on export and import the engine
+      // threw it away and recomputed 12. A value the engine will discard is
+      // one the editor should refuse to pretend is ordinary.
+      expect(
+        sheetOf().isWithinBounds(CharacterStat.maximumHitPoints, 40),
+        isFalse,
+      );
+    });
+  });
 }

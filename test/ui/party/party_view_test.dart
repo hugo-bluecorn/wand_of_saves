@@ -452,6 +452,28 @@ void main() {
           ),
         );
 
+    testWidgets('says why a percentile the engine ignores is still shown', (
+      tester,
+    ) async {
+      // Montaron's Strength is 16 and his record still holds a percentile of
+      // 100. The engine zeroes that on import — measured, 19/100 arrived as
+      // 19/0 — so the field is disabled, and a disabled field showing a
+      // number nobody can reconcile reads as a bug unless it explains itself.
+      await showParty(tester);
+      await openTab(tester, 'Abilities');
+      await select(tester, 'Montaron');
+
+      expect(
+        find.byTooltip(
+          'Only a Strength of exactly 18 has a percentile — the engine reads '
+          'strmodex.2da at no other score, and zeroes this field when a '
+          'character is exported and imported. Shown because the record '
+          'really does hold it.',
+        ),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('writes percentile strength the way the game writes it', (
       tester,
     ) async {

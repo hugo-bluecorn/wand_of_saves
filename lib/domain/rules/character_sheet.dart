@@ -93,16 +93,6 @@ class CharacterSheet {
   /// component stores `0x4000`, so `0x4000` cannot be a school.
   String? get kitName => rules.kitName(character.kitId);
 
-  /// The highest maximum hit points the rules would allow, or `null`.
-  ///
-  /// **Always `null` for now, deliberately.** Working it out needs the
-  /// per-class dice tables — `hpwar.2da`, `hpwiz.2da` and the rest — which
-  /// `hpclass.2da` merely points at. IESDP ships a *template* for their shape
-  /// (`hpx.2da`, shown as `hpmonk.2da`) and none of the real ones, so the cap
-  /// cannot be computed from the data available. Phase 3, reading the
-  /// player's own installation, is where it becomes possible.
-  int? get maximumHitPointsAllowed => null;
-
   /// The highest value [stat] may take **on this character**.
   ///
   /// A stat's own range is a property of one field — Strength is 1 to 25
@@ -116,6 +106,13 @@ class CharacterSheet {
   /// not editing, it is theatre.
   int upperBoundFor(CharacterStat stat) => switch (stat) {
     CharacterStat.currentHitPoints => character.maximumHitPoints,
+    // A maximum the game could actually have produced, rather than whatever
+    // fits the field. Editing this to 1000 is not editing: measured
+    // 2026-08-09, the engine threw away a stored 45 on import and recomputed
+    // 12 from class and level. Falls back to the field's width when the
+    // tables cannot name the class — the same rule the rest of this sheet
+    // follows, since a bound nobody could look up is no bound at all.
+    CharacterStat.maximumHitPoints => maximumRolledHitPoints ?? stat.maximum,
     _ => stat.maximum,
   };
 
@@ -274,33 +271,67 @@ class CharacterSheet {
 
   /// Total hit points Constitution adds.
   ///
-  /// **The multi-class rule here is inferred, not measured.** The bonus is
-  /// multiplied by the *highest* class level, which is right for a
-  /// single-class character and right for every fixture available — the
-  /// four-member party is level 1 throughout, where every reading gives the
-  /// same answer. A higher-level multi-class character would tell us whether
-  /// the engine averages it instead, and none exists on this machine.
+  /// **Multiplied by the MEAN of the class levels. Measured 2026-08-09,
+  /// closing D10.** Draa — a Fighter 2 / Mage 1 at Constitution 18 — stores a
+  /// maximum of 12, and BG:EE draws **18 / 18** into the portrait it saves
+  /// beside the game. The bonus is 6: `4 × 1.5`. The *highest* class level,
+  /// which this getter used until then, gives 8 and would have shown 20.
   ///
-  /// **Do not answer it by editing a level** — D10. A level is not a field:
-  /// hit dice, THAC0, saving throws, proficiency and spell slots are all
-  /// granted on level-up, so writing one produces a character the engine
-  /// disagrees with. The answer arrives free once the protagonist's *total*
-  /// experience is between 4000 and 5000, where the Fighter half has reached
-  /// level 2 and the Mage half has not.
+  /// The two candidate rules were never rivals — `bonus × Σlevels ÷ nClasses`
+  /// **is** `bonus × mean(levels)`, identically, for any number of classes.
   ///
-  /// What the party *did* settle is that the bonus is **not divided among
-  /// classes**: Aard is a Fighter/Mage and took the full +2 at Constitution
-  /// 16, Montaron a Fighter/Thief and took the full +1 at 15 — and at 18 the
-  /// engine printed the full **+4** for Aard, where a halved reading gives 2.
-  /// Nor is the *column* softened for a half-mage: +4 is the warrior row.
+  /// ⚠️ **For a single class the mean and the highest are the same number**,
+  /// which is why every earlier reading agreed and this stayed wrong for two
+  /// days without a test failing.
+  ///
+  /// The *rate* is still not divided: Aard took the full +2 at Constitution 16
+  /// and the engine printed the full **+4** at 18, where a halved rate gives
+  /// 2. Nor is the column softened for a half-mage — +4 is the warrior row.
+  /// It is the multiplier that is a mean, not the rate.
+  ///
+  /// **Residual unknown, not guessed at:** how the engine rounds when the mean
+  /// is not exact. Constitution 17 (+3) at 2/1 gives 4.5. Integer division
+  /// truncates here; nothing has measured which way the engine goes.
   int? get hitPointBonus {
     final perLevel = hitPointBonusPerLevel;
     if (perLevel == null) return null;
     // classLevels, not the raw slots: a junk 1 in an unused slot must not be
-    // able to become the "highest" level.
+    // allowed to drag the mean.
     final levels = classLevels;
     if (levels.isEmpty) return null;
-    return perLevel * levels.reduce((a, b) => a > b ? a : b);
+    return perLevel * levels.reduce((a, b) => a + b) ~/ levels.length;
+  }
+
+  /// The most hit points this character could have **rolled**, before
+  /// Constitution — or `null` when the tables cannot name their class.
+  ///
+  /// **Each class rolls its own die to its own level, and the total is split
+  /// between them.** Measured: an imported Fighter 2 / Mage 1 arrived with
+  /// exactly `(10 + 10) ÷ 2 + 4 ÷ 2` = **12**, and a Fighter 1→2 level-up
+  /// stored **+5**, which is `HPWAR` halved. See
+  /// [GeneratedGameRules.classHitDice] for why the game's own `HPFM` table is
+  /// not what this uses.
+  ///
+  /// **Rounded up.** A ceiling a point low refuses a value the game would
+  /// happily produce, and refusing legitimate edits is the friction this
+  /// exists to remove; a ceiling a point high merely fails to catch one
+  /// absurd value.
+  int? get maximumRolledHitPoints {
+    final identifier = rules.classIdentifier(character.classId);
+    if (identifier == null) return null;
+    final classes = identifier.split('_');
+    final levels = classLevels;
+    // A name and a slot count that disagree mean one of them is junk, and
+    // inventing a ceiling from junk is worse than having none.
+    if (classes.length != levels.length) return null;
+
+    var total = 0;
+    for (var i = 0; i < classes.length; i++) {
+      final own = rules.maximumRolledHitPoints(classes[i], levels[i]);
+      if (own == null) return null;
+      total += own;
+    }
+    return (total + classes.length - 1) ~/ classes.length;
   }
 
   /// Current hit points as the game will show them.
