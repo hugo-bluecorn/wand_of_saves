@@ -435,17 +435,58 @@ void main() {
       expect(fieldFor(tester, 'Tracking').enabled, isTrue);
     });
 
-    testWidgets('a proficiency shows its ceiling without being asked', (
-      tester,
-    ) async {
-      // The other half of the complaint: the cap was enforced but invisible
-      // until a value was refused. A Fighter/Mage tops out at 3 in Two-Weapon
-      // Style, and the tile now says so up front.
+    /// The `[+]`/`[-]` button labelled [tooltip].
+    ///
+    /// Reached through its tooltip rather than its icon, because both icons
+    /// repeat once per proficiency on screen. `IconButton` builds the tooltip
+    /// *inside* itself, so the finder has to climb back out to the button.
+    IconButton pipButton(WidgetTester tester, String tooltip) =>
+        tester.widget<IconButton>(
+          find.ancestor(
+            of: find.byTooltip(tooltip),
+            matching: find.byType(IconButton),
+          ),
+        );
+
+    testWidgets('draws pips the way the game draws them', (tester) async {
+      // BG:EE puts gold dots beside the proficiency name and a [+]/[-] pair
+      // next to them. Dots alone reach nobody using a screen reader, so the
+      // count is spoken as well as drawn.
+      // Disposed at the end of the body: the framework checks for a live
+      // handle *before* tear-downs run, so addTearDown cannot satisfy it.
+      final semantics = tester.ensureSemantics();
+
       await showParty(tester);
       await openTab(tester, 'Skills');
 
-      expect(find.text('max 3'), findsOneWidget);
-      expect(find.text('max 2'), findsOneWidget);
+      expect(find.bySemanticsLabel('Two-Weapon Style, 2 of 3'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Flail / Morning Star, 2 of 2'),
+        findsOneWidget,
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('states the ceiling by refusing to offer another pip', (
+      tester,
+    ) async {
+      // ⚠️ The complaint this answers: the cap was enforced but invisible
+      // until a value was refused, which is a worse experience than no cap.
+      // A Fighter/Mage tops out at 3 in Two-Weapon Style and 2 in Flail, and
+      // Aard sits at 2 in both — so one [+] is live and its neighbour is not,
+      // on the same screen, from the same table.
+      await showParty(tester);
+      await openTab(tester, 'Skills');
+
+      expect(
+        pipButton(tester, 'One more pip in Two-Weapon Style').onPressed,
+        isNotNull,
+      );
+      expect(
+        pipButton(tester, 'One more pip in Flail / Morning Star').onPressed,
+        isNull,
+        reason: 'weapprof.2da caps a Fighter/Mage at 2 here',
+      );
     });
 
     testWidgets('calls the thief skills what they are', (tester) async {
@@ -523,52 +564,47 @@ void main() {
       // The second half of the owed in-game run, as far as a test can take
       // it: Aard's Two-Weapon Style from 2 to 3, which is a dword patched
       // inside an effect rather than a header byte.
+      // Disposed at the end of the body: the framework checks for a live
+      // handle *before* tear-downs run, so addTearDown cannot satisfy it.
+      final semantics = tester.ensureSemantics();
+
       await showParty(tester);
       await openTab(tester, 'Skills');
 
-      await tester.enterText(
-        find.ancestor(
-          of: find.text('Two-Weapon Style'),
-          matching: find.byType(TextField),
-        ),
-        '3',
-      );
-      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.tap(find.byTooltip('One more pip in Two-Weapon Style'));
       await tester.pumpAndSettle();
 
+      expect(find.bySemanticsLabel('Two-Weapon Style, 3 of 3'), findsOneWidget);
       expect(
         find.widgetWithText(AppBar, 'last •'),
         findsOneWidget,
         reason: 'the dot is how the shell says there is something to save',
       );
+      semantics.dispose();
     });
 
-    testWidgets('refuses a pip count above what the class allows', (
-      tester,
-    ) async {
-      // A Fighter/Mage caps at 3 in Two-Weapon Style, and the ceiling is the
-      // game's own table rather than a number invented here. Refuse rather
-      // than clamp: quietly turning 5 into 3 is what makes an editor
-      // untrustworthy.
+    testWidgets('takes the last pip away and then stops', (tester) async {
+      // The lower bound is the one a stepper can still walk into. Imoen has a
+      // single pip in Short Sword; spending it leaves nothing to remove, and
+      // the control has to say so rather than write a negative into a dword
+      // the record stores unsigned.
+      // Disposed at the end of the body: the framework checks for a live
+      // handle *before* tear-downs run, so addTearDown cannot satisfy it.
+      final semantics = tester.ensureSemantics();
+
       await showParty(tester);
       await openTab(tester, 'Skills');
+      await select(tester, 'Imoen');
 
-      await tester.enterText(
-        find.ancestor(
-          of: find.text('Two-Weapon Style'),
-          matching: find.byType(TextField),
-        ),
-        '5',
-      );
-      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.tap(find.byTooltip('One less pip in Short Sword'));
       await tester.pumpAndSettle();
 
-      expect(find.text('0–3'), findsOneWidget);
+      expect(find.bySemanticsLabel('Short Sword, 0 of 1'), findsOneWidget);
       expect(
-        find.widgetWithText(AppBar, 'last •'),
-        findsNothing,
-        reason: 'a refused value must not reach the savegame',
+        pipButton(tester, 'One less pip in Short Sword').onPressed,
+        isNull,
       );
+      semantics.dispose();
     });
   });
 

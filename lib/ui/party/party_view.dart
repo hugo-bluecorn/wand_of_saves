@@ -1145,15 +1145,23 @@ class _StatFieldState extends State<_StatField> {
   }
 }
 
-/// One proficiency's pip count.
+/// One proficiency's pip count, drawn the way the game draws it.
 ///
 /// Its own widget rather than a [_StatField] because a pip is not a header
 /// field and has no [CharacterStat]: it is parameter 1 of an opcode 233
 /// effect, and its ceiling comes from the player's own `weapprof.2da` rather
-/// than from IESDP. Everything else — commit on Enter and on blur, refuse
-/// rather than clamp — is deliberately identical, because two number fields on
-/// one screen behaving differently is its own kind of bug.
-class _PipField extends StatefulWidget {
+/// than from IESDP.
+///
+/// **A stepper, not a number field, and that is the game's choice rather than
+/// a preference.** BG:EE's proficiency screen draws gold dots beside each name
+/// with `[+]` and `[-]` next to them, greyed at their bounds. Two things
+/// follow. The cap is stated *before* it is reached, where a text box could
+/// only refuse a value after it was typed — which is the complaint this
+/// answers, since a constraint you meet only by breaking it is worse than
+/// none. And there is no invalid value to refuse at all, so this widget has no
+/// error state, no controller and no commit-on-blur: it is stateless, and the
+/// pip count it draws is always the one in the record.
+class _PipField extends StatelessWidget {
   const _PipField({
     required this.label,
     required this.pips,
@@ -1163,16 +1171,20 @@ class _PipField extends StatefulWidget {
     super.key,
   });
 
+  /// What the game calls this weapon or fighting style.
   final String label;
+
+  /// Pips the record holds.
   final int pips;
 
   /// The most this character may have, or `null` when the table cannot say.
   ///
-  /// `null` on a machine with no game installed. The field then accepts what
-  /// the record can physically hold, which is the honest bound rather than a
+  /// `null` on a machine with no game installed. `[+]` then stays live, which
+  /// is the honest reading: no ceiling was found, rather than a ceiling of
   /// zero that would refuse everything.
   final int? maximum;
 
+  /// Called with the new count when either button is pressed.
   final void Function(int) onCommitted;
 
   /// Whether the class may have this proficiency at all — a ceiling of `0` in
@@ -1180,67 +1192,11 @@ class _PipField extends StatefulWidget {
   final bool enabled;
 
   @override
-  State<_PipField> createState() => _PipFieldState();
-}
-
-class _PipFieldState extends State<_PipField> {
-  late final TextEditingController _controller = TextEditingController(
-    text: '${widget.pips}',
-  );
-  final FocusNode _focus = FocusNode();
-  String? _error;
-
-  /// Pips cannot be negative: the record stores them in an unsigned dword.
-  static const int _minimum = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() {
-      if (!_focus.hasFocus) _commit();
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _PipField old) {
-    super.didUpdateWidget(old);
-    if (widget.pips != old.pips && !_focus.hasFocus) {
-      _controller.text = '${widget.pips}';
-      _error = null;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  bool _accepts(int value) {
-    if (value < _minimum) return false;
-    final maximum = widget.maximum;
-    return maximum == null || value <= maximum;
-  }
-
-  String get _range {
-    final maximum = widget.maximum;
-    return maximum == null ? '$_minimum or more' : '$_minimum–$maximum';
-  }
-
-  void _commit() {
-    final typed = int.tryParse(_controller.text.trim());
-    if (typed == null || !_accepts(typed)) {
-      setState(() => _error = _range);
-      return;
-    }
-    setState(() => _error = null);
-    if (typed != widget.pips) widget.onCommitted(typed);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final maximum = widget.maximum;
+    final maximum = this.maximum;
+    final canAdd = enabled && (maximum == null || pips < maximum);
+    final canRemove = enabled && pips > 0;
+
     final hint = maximum == null
         ? 'Pips in this weapon or style. The game caps them per class, but '
               'that table lives in the game files and none were found on this '
@@ -1253,30 +1209,123 @@ class _PipFieldState extends State<_PipField> {
 
     return Tooltip(
       message: hint,
-      child: _FieldShell(
-        label: widget.label,
-        hasHint: true,
-        child: TextField(
-          controller: _controller,
-          focusNode: _focus,
-          enabled: widget.enabled,
-          keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _commit(),
-          decoration: _statDecoration(
-            context,
-            label: widget.label,
-            hasHint: true,
-            error: _error ?? (_accepts(widget.pips) ? null : _range),
-            // The ceiling, stated up front rather than only when a value is
-            // refused. The helper line is already reserved to stop a refusal
-            // shoving the row down, so this costs no layout.
-            helper: maximum == null ? null : 'max $maximum',
+      child: Semantics(
+        // The dots carry the value visually and reach nobody otherwise, so
+        // the count is spoken too. `explicitChildNodes` keeps the two buttons
+        // as nodes of their own — without it their labels are folded into
+        // this one and the tile announces itself three times over.
+        container: true,
+        explicitChildNodes: true,
+        label: maximum == null ? '$label, $pips' : '$label, $pips of $maximum',
+        child: _FieldShell(
+          label: label,
+          hasHint: true,
+          child: InputDecorator(
+            decoration: _statDecoration(context, label: label, hasHint: true),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _Pips(pips: pips, maximum: maximum, enabled: enabled),
+                ),
+                _PipButton(
+                  icon: Icons.remove,
+                  tooltip: 'One less pip in $label',
+                  onPressed: canRemove ? () => onCommitted(pips - 1) : null,
+                ),
+                _PipButton(
+                  icon: Icons.add,
+                  tooltip: 'One more pip in $label',
+                  onPressed: canAdd ? () => onCommitted(pips + 1) : null,
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// The row of dots: filled for pips taken, hollow for pips still available.
+///
+/// The game draws only the filled ones. The hollows are the one addition, and
+/// they earn their place by making the ceiling countable at a glance instead
+/// of only discoverable by finding `[+]` greyed out.
+///
+/// ⚠️ **Never fewer slots than pips.** A record holding more pips than the
+/// table allows is an anomaly the panel still has to draw honestly, and
+/// clipping the dots would hide exactly the case worth seeing.
+class _Pips extends StatelessWidget {
+  const _Pips({
+    required this.pips,
+    required this.maximum,
+    required this.enabled,
+  });
+
+  final int pips;
+  final int? maximum;
+  final bool enabled;
+
+  /// Diameter of one dot.
+  static const double _size = 9;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final ceiling = maximum ?? pips;
+    final slots = pips > ceiling ? pips : ceiling;
+    final taken = enabled
+        ? colors.primary
+        : colors.onSurface.withValues(alpha: 0.38);
+
+    return Wrap(
+      spacing: 5,
+      runSpacing: 5,
+      children: [
+        for (var i = 0; i < slots; i++)
+          Container(
+            width: _size,
+            height: _size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: i < pips ? taken : null,
+              border: i < pips
+                  ? null
+                  : Border.all(color: colors.outlineVariant),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// One of the pair, sized to sit inside a stat tile.
+///
+/// A default [IconButton] is 48 points square, which two of would leave no
+/// room for the dots in the [_tileWidth] every tile shares.
+class _PipButton extends StatelessWidget {
+  const _PipButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+
+  /// `null` disables the button, which is how a bound is stated.
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    icon: Icon(icon),
+    iconSize: 18,
+    visualDensity: VisualDensity.compact,
+    padding: EdgeInsets.zero,
+    constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+    tooltip: tooltip,
+    onPressed: onPressed,
+  );
 }
 
 class _EmptyParty extends StatelessWidget {
