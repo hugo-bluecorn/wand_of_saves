@@ -131,6 +131,32 @@ final saveGameRepositoryProvider = Provider<SaveGameRepository>(
 final partyProvider = NotifierProvider<PartyNotifier, Party>(PartyNotifier.new);
 ```
 
+### Queries — where a repository *read* lives
+
+⚠️ **A repository read the UI depends on is a provider, never an `await` inside a ViewModel's
+`build()`.** This section did not say so, and its absence cost three defects in one afternoon — a
+stale lineup, a portrait race and a selection cleared by refreshing. See **D12**.
+
+```dart
+// queries — one per read the UI depends on, watched by ViewModels
+final saveSlotsProvider = FutureProvider<List<SaveSlot>>(
+  retry: neverRetry,
+  (ref) => ref.watch(saveGameRepositoryProvider).listSlots(),
+);
+```
+
+- A write **invalidates exactly the query it changed** — `ref.refresh(…future)` when the caller
+  awaits, `ref.invalidate` otherwise.
+- Families take `isAutoDispose: true`; the two editor families deliberately do not, because they
+  hold an open document with unsaved edits.
+- ⚠️ **`retry: neverRetry` everywhere.** Riverpod retries ten times with a backoff to 6.4 seconds;
+  every source here is the local filesystem, and "no game installed" is an ordinary answer.
+
+**The exception, and it is deliberate: an editor does not watch a list query, and its editing
+session is not a provider.** An editor holds unsaved work, and `build` awaits — so anything that
+rebuilds it either discards the player's edits or turns a keystroke into a spinner. The session is
+one immutable `EditSession` value the ViewModel replaces whole.
+
 Views are `ConsumerWidget`s and read ViewModels, never repositories directly. **Overrides are the
 testing seam:** `ProviderScope(overrides: [saveGameRepositoryProvider.overrideWithValue(fake)])` is
 why repositories are interfaces and why ViewModels never touch `infinity_formats` themselves.

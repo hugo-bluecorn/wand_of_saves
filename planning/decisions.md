@@ -517,3 +517,71 @@ with nothing above it changing"*. That is now the plan of record for names, not 
 The generated tables stay. Regenerating from IESDP remains correct for numeric rules, and a fresh
 clone still builds without the game installed — an absent installation degrades to showing a
 resref rather than failing, the same way an absent `dialog.tlk` already degrades.
+
+---
+
+## D12 — Repository reads are **queries**; Riverpod's retry and `Mutation` are declined · CLOSED (2026-08-09)
+
+**Decision: every repository read the UI depends on is a `FutureProvider` the ViewModel watches.
+Providers never retry. `Mutation` is not adopted while it is experimental.**
+
+### What forced it
+
+Three defects in one afternoon, all from the same gap. `planning/architecture.md` showed services →
+repositories → ViewModels and **never said where a repository *read* lives**, so every ViewModel
+invented one: an `await repository.listX()` inside `build()`. A read that is a method call can be
+neither invalidated nor shared, so each consequence was patched by hand:
+
+| Symptom | What the missing provider forced |
+|---|---|
+| Changing a portrait, going back, the lineup shows the **old face** | a global "something changed" counter |
+| Home screen shows **one portrait and two blanks** | a hand-rolled repository cache, which raced |
+| Ticking cards then pressing **refresh clears the ticks** | selection derived from a read |
+
+The third was found by reading the code, not by anyone hitting it — which is the argument for
+treating this as a rule rather than three fixes.
+
+### The rule
+
+- A repository read the UI depends on is a query provider, declared with the rest of the graph in
+  `lib/config/providers.dart` (D7).
+- A write **invalidates exactly the query it changed**. `ref.refresh(…future)` when the caller
+  awaits completion, `ref.invalidate` otherwise.
+- A family gets `isAutoDispose: true` — Riverpod's own rule, since one state per parameter
+  combination is a leak. ⚠️ **Two deliberate exceptions:** `partyProvider` and
+  `characterFileProvider` hold an open document with unsaved edits, and discarding that to save
+  memory would lose the player's work.
+
+### ⚠️ Providers never retry, and this is not optional
+
+Riverpod retries a failing provider **up to ten times with a backoff reaching 6.4 seconds**. Every
+data source here is the local filesystem, where failure does not heal by waiting — and "no
+Baldur's Gate installed" is an *ordinary* state this app is built to handle, not a transient fault.
+Without `retry: neverRetry` the screen spins for thirteen seconds before admitting it.
+
+It is declared **on each query as well as on the `ProviderScope`**, because a test container does
+not inherit the app's scope — and a suite exercising different behaviour from the app is exactly
+how the default went unnoticed until a read became a provider.
+
+### ⚠️ `Mutation` is declined while experimental
+
+Riverpod 3.4.2 ships `Mutation`, which is the framework's own answer to "write, then let the UI
+react". Its documentation opens: *"Mutations are experimental, and the API may change in a breaking
+way without a major version bump."* This application writes to files representing tens of hours of
+play; an experimental API on that path is not a trade worth making.
+
+**Reopen when the API leaves experimental.** Recorded so the next reader knows it was considered
+rather than missed.
+
+### ⚠️ An editing session is NOT a provider of its own, and that was measured
+
+The tidier shape — a session provider per open document, with the ViewModel projecting it — was
+built and reverted. It makes every edit an *asynchronous* rebuild of the ViewModel, because `build`
+awaits its queries, so the editor passes through `AsyncLoading` on every committed keystroke: a
+spinner where a number should be. The session is one **immutable** `EditSession` value held by the
+ViewModel and replaced whole, which is what the docs actually argue for — *"`Notifier`/
+`AsyncNotifier`, in combination with immutable state, can lead to better design choices and less
+errors"* — without making a keystroke asynchronous.
+
+The 74 existing editor tests caught this within a minute of the attempt, unmodified. That is the
+argument for holding a public command API still while rewiring what is behind it.

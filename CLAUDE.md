@@ -64,6 +64,12 @@ to undo.
   This is a *declared deviation* from `context/flutter-ai-rules.md`'s native-first default;
   everywhere else, a disagreement with `context/` is still a defect. See
   `planning/architecture.md` §The provider graph.
+- ⚠️ **A repository read the UI depends on is a query provider, never an `await` inside a
+  ViewModel's `build()`** (D12). A read that is a method call can be neither invalidated nor
+  shared, and that gap produced three defects in one afternoon. A write invalidates exactly the
+  query it changed. **Providers never retry** — Riverpod's default is ten attempts over 6.4
+  seconds, and every data source here is the local filesystem where "no game installed" is an
+  ordinary answer rather than a transient fault.
 - **Code generation is decided per dependency** (D9), and the repo now contains three kinds — so
   D2 is emphatically *not* a project-wide ban, however it reads:
   - `*.mapper.dart` — `dart_mappable`, for domain models. Via `build_runner`.
