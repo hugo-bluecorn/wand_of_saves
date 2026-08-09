@@ -385,6 +385,37 @@ void main() {
     });
   });
 
+  testWidgets('never shows the slot index, not even while loading', (
+    tester,
+  ) async {
+    // ⚠️ **Found by watching the app open a save.** The title fell back to the
+    // route parameter until the savegame had been read, so `000000022-last`
+    // flashed for a frame before settling on `last`. `SaveSlot.label` exists
+    // precisely because those digits are an index the player never sees — and
+    // the loading state has to obey that rule too.
+    tester.view
+      ..physicalSize = const Size(1600, 2200)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final container = containerWith(party);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: PartyView(slotDirectoryName: slotName)),
+      ),
+    );
+
+    // The first frame, before anything has been read.
+    expect(find.text(slotName), findsNothing);
+    expect(find.text('last'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.text(slotName), findsNothing);
+  });
+
   testWidgets('the rail draws the portrait the record names', (tester) async {
     // ⚠️ **This reverses what the rail used to do.** It drew PORTRT<n>.bmp,
     // the picture the engine baked beside the save -- correct while nothing

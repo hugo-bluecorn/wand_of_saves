@@ -38,20 +38,6 @@ class BrowserStateMapper extends ClassMapperBase<BrowserState> {
     opt: true,
     def: const [],
   );
-  static Set<DocumentRef> _$selected(BrowserState v) => v.selected;
-  static const Field<BrowserState, Set<DocumentRef>> _f$selected = Field(
-    'selected',
-    _$selected,
-    opt: true,
-    def: const {},
-  );
-  static bool _$isSelecting(BrowserState v) => v.isSelecting;
-  static const Field<BrowserState, bool> _f$isSelecting = Field(
-    'isSelecting',
-    _$isSelecting,
-    opt: true,
-    def: false,
-  );
   static bool _$hasDeleted(BrowserState v) => v.hasDeleted;
   static const Field<BrowserState, bool> _f$hasDeleted = Field(
     'hasDeleted',
@@ -64,8 +50,6 @@ class BrowserStateMapper extends ClassMapperBase<BrowserState> {
   final MappableFields<BrowserState> fields = const {
     #characters: _f$characters,
     #saves: _f$saves,
-    #selected: _f$selected,
-    #isSelecting: _f$isSelecting,
     #hasDeleted: _f$hasDeleted,
   };
 
@@ -73,8 +57,6 @@ class BrowserStateMapper extends ClassMapperBase<BrowserState> {
     return BrowserState(
       characters: data.dec(_f$characters),
       saves: data.dec(_f$saves),
-      selected: data.dec(_f$selected),
-      isSelecting: data.dec(_f$isSelecting),
       hasDeleted: data.dec(_f$hasDeleted),
     );
   }
@@ -152,8 +134,6 @@ abstract class BrowserStateCopyWith<$R, $In extends BrowserState, $Out>
   $R call({
     List<CharacterFile>? characters,
     List<SaveSlot>? saves,
-    Set<DocumentRef>? selected,
-    bool? isSelecting,
     bool? hasDeleted,
   });
   BrowserStateCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(Then<$Out2, $R2> t);
@@ -189,15 +169,11 @@ class _BrowserStateCopyWithImpl<$R, $Out>
   $R call({
     List<CharacterFile>? characters,
     List<SaveSlot>? saves,
-    Set<DocumentRef>? selected,
-    bool? isSelecting,
     bool? hasDeleted,
   }) => $apply(
     FieldCopyWithData({
       if (characters != null) #characters: characters,
       if (saves != null) #saves: saves,
-      if (selected != null) #selected: selected,
-      if (isSelecting != null) #isSelecting: isSelecting,
       if (hasDeleted != null) #hasDeleted: hasDeleted,
     }),
   );
@@ -205,8 +181,6 @@ class _BrowserStateCopyWithImpl<$R, $Out>
   BrowserState $make(CopyWithData data) => BrowserState(
     characters: data.get(#characters, or: $value.characters),
     saves: data.get(#saves, or: $value.saves),
-    selected: data.get(#selected, or: $value.selected),
-    isSelecting: data.get(#isSelecting, or: $value.isSelecting),
     hasDeleted: data.get(#hasDeleted, or: $value.hasDeleted),
   );
 

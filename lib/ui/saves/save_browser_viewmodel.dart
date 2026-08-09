@@ -38,8 +38,6 @@ class BrowserState with BrowserStateMappable {
   const BrowserState({
     this.characters = const [],
     this.saves = const [],
-    this.selected = const {},
-    this.isSelecting = false,
     this.hasDeleted = false,
   });
 
@@ -53,19 +51,6 @@ class BrowserState with BrowserStateMappable {
   /// Save slots, newest first.
   final List<SaveSlot> saves;
 
-  /// What is ticked, across **both** sections.
-  ///
-  /// One selection rather than two, so clearing out stale saves and old
-  /// characters together is a single pass.
-  final Set<DocumentRef> selected;
-
-  /// Whether the cards are showing tick boxes.
-  ///
-  /// Separate from `selected.isEmpty` on purpose: turning selection on and
-  /// ticking nothing is a state the player can be in, and a mode that
-  /// disappeared the moment they unticked the last card would be unusable.
-  final bool isSelecting;
-
   /// Whether anything has been deleted and not yet emptied.
   ///
   /// Drives whether "Empty deleted items" is offered at all — an irreversible
@@ -78,17 +63,18 @@ class BrowserState with BrowserStateMappable {
   /// something to open, and telling them the app found nothing would be false.
   bool get isEmpty => characters.isEmpty && saves.isEmpty;
 
-  /// Whether [ref] is ticked.
-  bool isSelected(DocumentRef ref) => selected.contains(ref);
-
-  /// The saves that would be deleted, by label, in the order shown.
-  List<String> get selectedSaveLabels => [
+  /// The saves in [selected], by label, in the order shown.
+  ///
+  /// Takes the selection rather than holding it: **ticking a card must not
+  /// re-read the disk.** Selection changes on every tap and these lists change
+  /// when a file does, so they are watched separately and combined here.
+  List<String> selectedSaveLabels(Set<DocumentRef> selected) => [
     for (final slot in saves)
       if (selected.contains(SaveRef(slot.directoryName))) slot.label,
   ];
 
-  /// The characters that would be deleted, by file name, in the order shown.
-  List<String> get selectedCharacterNames => [
+  /// The characters in [selected], by file name, in the order shown.
+  List<String> selectedCharacterNames(Set<DocumentRef> selected) => [
     for (final file in characters)
       if (selected.contains(CharacterRef(file.fileName))) file.fileName,
   ];
@@ -102,15 +88,24 @@ class BrowserState with BrowserStateMappable {
 class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
   @override
   Future<BrowserState> build() async {
-    // Both watched *before* the first await, so this rebuilds when either
-    // repository is replaced. Watching across an async gap subscribes to
-    // whatever the container holds by then, which is not the same thing.
-    final saves = ref.watch(saveGameRepositoryProvider);
-    final characters = ref.watch(characterFileRepositoryProvider);
+    // ⚠️ **Watched queries, not repository calls.** A card shows what is
+    // *inside* a document — a character's portrait, level and class; a save's
+    // gold and party size — so a lineup drawn before an edit shows the player
+    // their own change missing. Watching means an editor can invalidate
+    // exactly the list it changed and this re-reads by itself.
+    //
+    // `await ref.watch(other.future)` is the documented shape for one async
+    // provider depending on another.
+    // ⚠️ **Selection is deliberately not watched here.** It changes on every
+    // tap, and this rebuild awaits two disk reads — so deriving it would put
+    // the whole screen through an async rebuild each time a box is ticked, and
+    // flash the loading state. The view watches selection directly; the two
+    // change on completely different schedules and are combined where they are
+    // drawn.
     final recycler = ref.watch(recycleServiceProvider);
     return BrowserState(
-      saves: await saves.listSlots(),
-      characters: await characters.listFiles(),
+      saves: await ref.watch(saveSlotsProvider.future),
+      characters: await ref.watch(characterFilesProvider.future),
       hasDeleted: recycler.hasRecycled,
     );
   }
@@ -120,30 +115,30 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
   /// Saves and characters both change underneath us — the game is very likely
   /// running while this app is open, and exporting a character is something a
   /// player does mid-session.
+  ///
+  /// ⚠️ **`refresh`, not `invalidate`.** The app bar's button awaits this;
+  /// `invalidate` returns before the read does, so the spinner would stop
+  /// while the disk was still being read.
   Future<void> refresh() async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(_read);
+    await Future.wait([
+      ref.refresh(saveSlotsProvider.future),
+      ref.refresh(characterFilesProvider.future),
+    ]);
   }
 
   /// Turns on the tick boxes.
-  void startSelecting() => _update((s) => s.copyWith(isSelecting: true));
+  ///
+  /// Delegated, so the view's command API is unchanged while the state moves
+  /// somewhere a re-read cannot reach it.
+  void startSelecting() => ref.read(documentSelectionProvider.notifier).start();
 
   /// Turns them off and forgets what was ticked. Moves nothing.
   void cancelSelection() =>
-      _update((s) => s.copyWith(isSelecting: false, selected: const {}));
+      ref.read(documentSelectionProvider.notifier).cancel();
 
   /// Ticks [document] if it is not ticked, and unticks it if it is.
-  ///
-  /// ⚠️ **Does not turn selection off when the last card is unticked.** A mode
-  /// that vanished on an empty selection would take the player's mind-changing
-  /// away from them.
-  void toggle(DocumentRef document) => _update(
-    (s) => s.copyWith(
-      selected: s.selected.contains(document)
-          ? ({...s.selected}..remove(document))
-          : {...s.selected, document},
-    ),
-  );
+  void toggle(DocumentRef document) =>
+      ref.read(documentSelectionProvider.notifier).toggle(document);
 
   /// Moves everything ticked out of the way, then re-reads.
   ///
@@ -156,13 +151,14 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
   /// made to say how it is deleted.
   Future<void> deleteSelected() async {
     final current = state.value;
-    if (current == null || current.selected.isEmpty) return;
+    final selected = ref.read(documentSelectionProvider).selected;
+    if (current == null || selected.isEmpty) return;
 
     final recycler = ref.read(recycleServiceProvider);
     final saves = {for (final s in current.saves) s.directoryName: s.path};
     final characters = {for (final c in current.characters) c.fileName: c.path};
 
-    for (final document in current.selected) {
+    for (final document in selected) {
       switch (document) {
         case SaveRef(:final directoryName):
           final path = saves[directoryName];
@@ -173,6 +169,15 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
       }
     }
 
+    // ⚠️ **Leaving selection mode is stated, not inherited.** It used to happen
+    // by accident: `refresh()` rebuilt the whole state from defaults, which
+    // dropped the ticks along with everything else. Once the lists became
+    // queries that rebuild on their own schedule, that accident stopped
+    // happening and the app sat in selection mode over documents it had just
+    // moved. Selection is the player's, so ending it is a decision.
+    cancelSelection();
+
+    // Both lists, because a selection spans both sections.
     await refresh();
   }
 
@@ -215,7 +220,7 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
     final file = await ref
         .read(characterFileRepositoryProvider)
         .create(fileName, created);
-    await refresh();
+    ref.invalidate(characterFilesProvider);
     return file;
   }
 
@@ -226,18 +231,6 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
   Future<void> emptyDeleted() async {
     await ref.read(recycleServiceProvider).empty();
     await refresh();
-  }
-
-  Future<BrowserState> _read() async => BrowserState(
-    saves: await ref.read(saveGameRepositoryProvider).listSlots(),
-    characters: await ref.read(characterFileRepositoryProvider).listFiles(),
-    hasDeleted: ref.read(recycleServiceProvider).hasRecycled,
-  );
-
-  void _update(BrowserState Function(BrowserState) change) {
-    final current = state.value;
-    if (current == null) return;
-    state = AsyncData(change(current));
   }
 }
 

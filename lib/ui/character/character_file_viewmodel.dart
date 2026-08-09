@@ -28,6 +28,7 @@ import 'package:wand_of_saves/domain/character_file.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
+import 'package:wand_of_saves/ui/edit_session.dart';
 
 part 'character_file_viewmodel.mapper.dart';
 
@@ -107,81 +108,52 @@ class CharacterFileViewModel extends AsyncNotifier<CharacterFileState> {
   /// The character file the route named.
   final String fileName;
 
-  /// The document as edited so far.
+  /// The character being edited, and everything the player could take back.
   ///
-  /// **Private, and never placed in [CharacterFileState].** No
-  /// `infinity_formats` type reaches a widget; the session state has to live
-  /// somewhere, and this is it.
-  Chr? _working;
-
-  /// The document as the file has it — identical to [_working] when clean.
+  /// **One immutable value, replaced whole**, where this used to keep four
+  /// mutable fields that could disagree. `EditSession` is the same type the
+  /// party shell uses, so undo, redo and "dirty" mean exactly the same thing in
+  /// both editors — which matters, because one character sheet drives both.
   ///
-  /// Compared by identity, which is exactly right: undoing back to the loaded
-  /// snapshot restores *that same object*, so "nothing to save" needs no byte
-  /// comparison.
-  Chr? _onDisk;
-
-  /// Snapshots to go back to, oldest first.
+  /// ⚠️ **Held here rather than in a provider of its own** — see
+  /// `PartyViewModel` for why: a session provider makes every edit an
+  /// asynchronous rebuild, and the sheet would flash its loading state on every
+  /// committed keystroke.
   ///
-  /// Whole documents rather than inverse commands — and a `.chr` is about 7 KB,
-  /// so this is cheaper here than on the savegame side where it is already
-  /// cheap enough.
-  final List<Chr> _undoStack = [];
+  /// It never reaches a widget: [CharacterFileState] carries domain models
+  /// only.
+  EditSession<Chr>? _session;
 
-  /// Snapshots to go forward to.
-  final List<Chr> _redoStack = [];
-
-  ProficiencyCatalogue _proficiencies = ProficiencyCatalogue.empty;
-  SkillCatalogue _skills = SkillCatalogue.empty;
   CharacterFile? _file;
 
   @override
   Future<CharacterFileState> build() async {
     final files = ref.watch(characterFileRepositoryProvider);
-    final resources = ref.watch(resourceRepositoryProvider);
-    final strings = ref.watch(stringRepositoryProvider);
 
     final file = await files.fileNamed(fileName);
     if (file == null) throw CharacterFileNotFoundException(fileName);
 
-    final chr = await files.load(file);
     _file = file;
-    _working = chr;
-    _onDisk = chr;
-    _undoStack.clear();
-    _redoStack.clear();
+    _session = EditSession.opened(await files.load(file));
 
-    final catalogues = await loadRulesCatalogues(
-      resources: resources,
-      strings: strings,
-    );
-    _proficiencies = catalogues.proficiencies;
-    _skills = catalogues.skills;
-
-    return _projected();
+    // One query, watched by both editors, rather than the same
+    // cross-repository merge run once per editor.
+    final catalogues = await ref.watch(rulesCataloguesProvider.future);
+    return _projected(catalogues);
   }
 
   /// Applies [command] to the working copy.
   ///
   /// Nothing is written to disk here — [save] does that. Throws
   /// [InvalidEditException] if the value is outside what the stat accepts.
-  void edit(CharacterEditCommand command) {
-    final working = _working;
-    if (working == null) return;
-
-    _undoStack.add(working);
-    _working = applyCharacterEdit(working, command);
-    // A redo stack kept across a fresh edit would reapply an edit onto a
-    // history it was never taken from.
-    _redoStack.clear();
-    state = AsyncData(_projected());
-  }
+  void edit(CharacterEditCommand command) =>
+      _change((s) => s.edited(applyCharacterEdit(s.document, command)));
 
   /// Takes back the most recent edit.
-  void undo() => _step(from: _undoStack, to: _redoStack);
+  void undo() => _change((s) => s.undone());
 
   /// Puts back the most recently undone edit.
-  void redo() => _step(from: _redoStack, to: _undoStack);
+  void redo() => _change((s) => s.redone());
 
   /// Writes the working copy over the file, leaving a `.bak`.
   ///
@@ -189,43 +161,59 @@ class CharacterFileViewModel extends AsyncNotifier<CharacterFileState> {
   /// modification time, so an idle write would reorder it for no reason.
   Future<void> save() async {
     final file = _file;
-    final working = _working;
-    if (file == null || working == null || working == _onDisk) return;
+    final session = _session;
+    if (file == null || session == null || !session.isDirty) return;
 
-    await ref.read(characterFileRepositoryProvider).write(file, working);
-    _onDisk = working;
-    state = AsyncData(_projected());
+    await ref
+        .read(characterFileRepositoryProvider)
+        .write(file, session.document);
+    _session = session.saved();
+    final current = state.value;
+    if (current != null) state = AsyncData(current.copyWith(isDirty: false));
+    // ⚠️ The lineup's card carries this character's portrait, level and class.
+    // Without this, changing a portrait here and going back showed the old
+    // face — the player's own edit, apparently lost. Exactly this list: the
+    // savegames did not move.
+    ref.invalidate(characterFilesProvider);
   }
 
-  void _step({required List<Chr> from, required List<Chr> to}) {
-    final working = _working;
-    if (working == null || from.isEmpty) return;
+  /// Applies [next] to the session and republishes the view state.
+  ///
+  /// **Synchronously** — see [_session].
+  void _change(EditSession<Chr> Function(EditSession<Chr>) next) {
+    final current = state.value;
+    final session = _session;
+    if (current == null || session == null) return;
 
-    to.add(working);
-    _working = from.removeLast();
-    state = AsyncData(_projected());
+    _session = next(session);
+    state = AsyncData(
+      _projected((
+        proficiencies: current.proficiencies,
+        skills: current.skills,
+      )),
+    );
   }
 
   /// The working copy as the view sees it.
-  CharacterFileState _projected() {
-    final working = _working!;
+  CharacterFileState _projected(RulesCatalogues catalogues) {
+    final session = _session!;
     return CharacterFileState(
       file: _file!,
       // ⚠️ The name comes from the CHR header, never from the record: an
       // exported character's `dialogFile` is eight zero bytes and its
       // `longNameStrref` is -1, so there is no name inside the creature.
       character: characterFrom(
-        CreCodec.decode(working.creBytes, source: fileName),
-        name: working.name,
+        CreCodec.decode(session.document.creBytes, source: fileName),
+        name: session.document.name,
         creResref: '',
-        creOffset: working.creOffset,
-        creLength: working.creLength,
+        creOffset: session.document.creOffset,
+        creLength: session.document.creLength,
       ),
-      proficiencies: _proficiencies,
-      skills: _skills,
-      isDirty: working != _onDisk,
-      canUndo: _undoStack.isNotEmpty,
-      canRedo: _redoStack.isNotEmpty,
+      proficiencies: catalogues.proficiencies,
+      skills: catalogues.skills,
+      isDirty: session.isDirty,
+      canUndo: session.canUndo,
+      canRedo: session.canRedo,
     );
   }
 }
@@ -235,6 +223,10 @@ class CharacterFileViewModel extends AsyncNotifier<CharacterFileState> {
 /// Keyed by file name rather than holding a [CharacterFile], so the route
 /// parameter is enough to rebuild this from scratch after a reload — exactly as
 /// `partyProvider` is keyed by slot directory.
+///
+/// ⚠️ **Deliberately NOT `isAutoDispose`**, for the same reason as
+/// `partyProvider`: this holds an open document with unsaved edits, and losing
+/// it to save memory would be losing the player's work.
 final AsyncNotifierProviderFamily<
   CharacterFileViewModel,
   CharacterFileState,

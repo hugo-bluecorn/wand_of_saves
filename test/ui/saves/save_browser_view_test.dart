@@ -125,6 +125,20 @@ void main() {
     });
   });
 
+  group('a save with no screenshot', () {
+    testWidgets('says so, rather than looking broken', (tester) async {
+      // ⚠️ **Found by the user asking "why are there missing images?"** Two of
+      // their saves genuinely have no `BALDUR.bmp` — hand-made copies that took
+      // the savegame and left the picture — and the card drew an "image not
+      // supported" icon, which announces a failure. A save without a screenshot
+      // is ordinary; the card now says which of the two it is.
+      await showBrowser(tester);
+
+      expect(find.text('No screenshot'), findsWidgets);
+      expect(find.byIcon(Icons.broken_image_outlined), findsNothing);
+    });
+  });
+
   group('deleting', () {
     testWidgets('no tick boxes until selection is turned on', (tester) async {
       // Outside selection a card behaves exactly as it always did; changing

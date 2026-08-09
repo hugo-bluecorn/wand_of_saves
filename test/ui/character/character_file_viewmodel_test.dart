@@ -260,4 +260,30 @@ void main() {
       expect(files.written, isEmpty);
     });
   });
+
+  test('saving re-reads the character list, and only that list', () async {
+    // Otherwise the lineup keeps the portrait, level and class it was drawn
+    // with, and the player's own edit looks lost. ⚠️ Exactly this list — a
+    // character write leaves every savegame on disk alone, which a global
+    // "something changed" signal could not express.
+    final container = containerWith(
+      character: const SyntheticCharacter(strength: 12),
+    );
+    await container.read(characterFilesProvider.future);
+    final readsBefore = files.listCalls;
+
+    final state = await container.read(characterFileProvider(fileName).future);
+    final notifier = notifierOf(container)
+      ..edit(
+        SetCharacterStat(
+          creOffset: state.character.creOffset,
+          stat: CharacterStat.strength,
+          value: 18,
+        ),
+      );
+    await notifier.save();
+    await container.read(characterFilesProvider.future);
+
+    expect(files.listCalls, greaterThan(readsBefore));
+  });
 }

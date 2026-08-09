@@ -68,7 +68,17 @@ class SaveSlot with SaveSlotMappable {
   ///
   /// BG:EE names slots `<nine digits>-<label>`. The digits are an index the
   /// player never sees, so showing them would be showing plumbing.
-  String get label {
+  String get label => labelOf(directoryName);
+
+  /// The human-chosen part of [directoryName], without needing a loaded slot.
+  ///
+  /// ⚠️ **A static because the rule is needed before there is anything to
+  /// load.** The party shell titles itself from the route parameter while the
+  /// savegame is being read, and that parameter is the raw directory name — so
+  /// opening a save flashed `000000022-last` for a frame before settling on
+  /// `last`. The rule above says the digits are plumbing; the loading state has
+  /// to obey it too.
+  static String labelOf(String directoryName) {
     final dash = directoryName.indexOf('-');
     return dash == -1 ? directoryName : directoryName.substring(dash + 1);
   }

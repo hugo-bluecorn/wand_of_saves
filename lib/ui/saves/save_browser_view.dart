@@ -49,11 +49,18 @@ class SaveBrowserView extends ConsumerWidget {
 
     final state = browser.value;
     final notifier = ref.read(saveBrowserProvider.notifier);
-    final selecting = state?.isSelecting ?? false;
+    // ⚠️ **Watched here, not folded into `BrowserState`.** Selection changes on
+    // every tap; the lists change when a file does. Deriving one from the other
+    // would put the whole screen through an async rebuild each tick.
+    final selection = ref.watch(documentSelectionProvider);
 
     return Scaffold(
-      appBar: selecting
-          ? _SelectionBar(state: state!, notifier: notifier)
+      appBar: selection.isSelecting
+          ? _SelectionBar(
+              state: state!,
+              selected: selection.selected,
+              notifier: notifier,
+            )
           : AppBar(
               title: const Text('Wand of Saves'),
               actions: [
@@ -78,7 +85,11 @@ class SaveBrowserView extends ConsumerWidget {
       body: browser.when(
         data: (found) => found.isEmpty
             ? const _NothingFound()
-            : _Sections(state: found, notifier: notifier),
+            : _Sections(
+                state: found,
+                selection: selection,
+                notifier: notifier,
+              ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _LoadFailed(error: error),
       ),
@@ -92,9 +103,14 @@ class SaveBrowserView extends ConsumerWidget {
 /// one nobody reads; a bar that says how many are ticked, beside a Delete that
 /// then lists them by name, is one that can actually be checked.
 class _SelectionBar extends StatelessWidget implements PreferredSizeWidget {
-  const _SelectionBar({required this.state, required this.notifier});
+  const _SelectionBar({
+    required this.state,
+    required this.selected,
+    required this.notifier,
+  });
 
   final BrowserState state;
+  final Set<DocumentRef> selected;
   final SaveBrowserViewModel notifier;
 
   @override
@@ -102,7 +118,7 @@ class _SelectionBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count = state.selected.length;
+    final count = selected.length;
 
     return AppBar(
       leading: IconButton(
@@ -115,7 +131,7 @@ class _SelectionBar extends StatelessWidget implements PreferredSizeWidget {
         FilledButton.icon(
           onPressed: count == 0
               ? null
-              : () => _confirm(context, state, notifier),
+              : () => _confirm(context, state, selected, notifier),
           icon: const Icon(Icons.delete_outline),
           label: const Text('Delete'),
         ),
@@ -127,11 +143,13 @@ class _SelectionBar extends StatelessWidget implements PreferredSizeWidget {
   static Future<void> _confirm(
     BuildContext context,
     BrowserState state,
+    Set<DocumentRef> selected,
     SaveBrowserViewModel notifier,
   ) async {
     final go = await showDialog<bool>(
       context: context,
-      builder: (context) => _ConfirmDeleteDialog(state: state),
+      builder: (context) =>
+          _ConfirmDeleteDialog(state: state, selected: selected),
     );
     if (go ?? false) await notifier.deleteSelected();
   }
@@ -139,14 +157,15 @@ class _SelectionBar extends StatelessWidget implements PreferredSizeWidget {
 
 /// Names what will move, and where, rather than asking "are you sure?".
 class _ConfirmDeleteDialog extends StatelessWidget {
-  const _ConfirmDeleteDialog({required this.state});
+  const _ConfirmDeleteDialog({required this.state, required this.selected});
 
   final BrowserState state;
+  final Set<DocumentRef> selected;
 
   @override
   Widget build(BuildContext context) {
-    final saves = state.selectedSaveLabels;
-    final characters = state.selectedCharacterNames;
+    final saves = state.selectedSaveLabels(selected);
+    final characters = state.selectedCharacterNames(selected);
 
     return AlertDialog(
       title: const Text('Delete these?'),
@@ -267,9 +286,14 @@ class _OverflowMenu extends StatelessWidget {
 /// that appears only once a character exists is a feature nobody discovers —
 /// and the empty line under it is where the `+` card will live.
 class _Sections extends StatelessWidget {
-  const _Sections({required this.state, required this.notifier});
+  const _Sections({
+    required this.state,
+    required this.selection,
+    required this.notifier,
+  });
 
   final BrowserState state;
+  final DocumentSelectionState selection;
   final SaveBrowserViewModel notifier;
 
   @override
@@ -277,12 +301,12 @@ class _Sections extends StatelessWidget {
     return CustomScrollView(
       slivers: [
         const _SectionHeading('Characters'),
-        if (state.characters.isEmpty && !state.isSelecting)
+        if (state.characters.isEmpty && !selection.isSelecting)
           const _SectionEmpty(
             'No characters yet. The game writes these from the Record '
             'screen’s EXPORT button — or make one with the ＋ card.',
           ),
-        if (!(state.characters.isEmpty && state.isSelecting))
+        if (!(state.characters.isEmpty && selection.isSelecting))
           _CardGrid(
             // A portrait is taller than it is wide, unlike a screenshot, so a
             // character card is narrower and taller than a save card. Both
@@ -296,7 +320,8 @@ class _Sections extends StatelessWidget {
             // lineup rather than a button elsewhere because creating a
             // character *is* filling an empty slot, which is how the game
             // presents it too.
-            childCount: state.characters.length + (state.isSelecting ? 0 : 1),
+            childCount:
+                state.characters.length + (selection.isSelecting ? 0 : 1),
             itemBuilder: (context, index) {
               if (index == state.characters.length) {
                 return const _NewCharacterCard();
@@ -305,8 +330,8 @@ class _Sections extends StatelessWidget {
               final document = CharacterRef(file.fileName);
               return _CharacterCard(
                 file: file,
-                selecting: state.isSelecting,
-                selected: state.isSelected(document),
+                selecting: selection.isSelecting,
+                selected: selection.selected.contains(document),
                 onToggle: () => notifier.toggle(document),
               );
             },
@@ -328,8 +353,8 @@ class _Sections extends StatelessWidget {
               final document = SaveRef(slot.directoryName);
               return _SaveSlotCard(
                 slot: slot,
-                selecting: state.isSelecting,
-                selected: state.isSelected(document),
+                selecting: selection.isSelecting,
+                selected: selection.selected.contains(document),
                 onToggle: () => notifier.toggle(document),
               );
             },
@@ -836,25 +861,59 @@ class _SaveScreenshot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final path = this.path;
-    if (path == null) return const _NoScreenshot();
+    // ⚠️ **Absent and unreadable are drawn differently, because they are
+    // different facts.** Both used to get the "image not supported" icon, which
+    // announces a failure — and a save with no screenshot is not a failure. Two
+    // of the developer's own saves have no `BALDUR.bmp` at all (hand-made
+    // copies that took the savegame and left the picture), and the card read as
+    // broken rather than as plain.
+    if (path == null) {
+      return const _NoScreenshot(
+        icon: Icons.image_outlined,
+        label: 'No screenshot',
+      );
+    }
 
     return Image.file(
       File(path),
       fit: BoxFit.cover,
-      errorBuilder: (context, _, _) => const _NoScreenshot(),
+      errorBuilder: (context, _, _) => const _NoScreenshot(
+        icon: Icons.broken_image_outlined,
+        label: 'Screenshot unreadable',
+      ),
     );
   }
 }
 
+/// Where a save's screenshot goes when there is none to draw, or none that
+/// will decode.
 class _NoScreenshot extends StatelessWidget {
-  const _NoScreenshot();
+  const _NoScreenshot({required this.icon, required this.label});
+
+  final IconData icon;
+
+  /// Said in words, not only in an icon: an unlabelled symbol on a card is
+  /// exactly what made a missing picture look like a bug.
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return ColoredBox(
-      color: colors.surfaceContainerHighest,
-      child: Icon(Icons.image_not_supported_outlined, color: colors.outline),
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: theme.colorScheme.outline),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

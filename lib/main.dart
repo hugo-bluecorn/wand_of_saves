@@ -15,6 +15,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/config/router.dart';
 import 'package:wand_of_saves/ui/core/theme.dart';
 
@@ -23,8 +24,15 @@ import 'package:wand_of_saves/ui/core/theme.dart';
 /// [ProviderScope] wraps the whole tree because Riverpod is this app's DI
 /// container (D2, D7) — every service, repository and viewmodel is reached
 /// through it.
+///
+/// ⚠️ **[neverRetry] is not optional.** Riverpod retries a failing provider up
+/// to ten times with a backoff reaching 6.4 seconds. Every data source in this
+/// app is the local filesystem, where a failure does not heal by waiting — and
+/// "no Baldur's Gate installed" is an ordinary state, not a transient fault.
 void main() {
-  runApp(const ProviderScope(child: WandOfSavesApp()));
+  runApp(
+    const ProviderScope(retry: neverRetry, child: WandOfSavesApp()),
+  );
 }
 
 /// The application root.

@@ -48,6 +48,10 @@ void main() {
     );
   }
 
+  /// Selection now lives apart from the lists, so a re-read cannot clear it.
+  DocumentSelectionState selectionIn(ProviderContainer c) =>
+      c.read(documentSelectionProvider);
+
   test('exposes the slots the repository returns', () async {
     final container = containerWith(
       FakeSaveGameRepository(slots: [fakeSlot('last'), fakeSlot('start')]),
@@ -136,6 +140,9 @@ void main() {
     repository.slots = [fakeSlot('last'), fakeSlot('newer')];
     characters.files = [fakeCharacterFile()];
     await container.read(saveBrowserProvider.notifier).refresh();
+    // The queries are fresh when `refresh` returns; the screen settles on the
+    // next rebuild, exactly as a widget sees it.
+    await container.read(saveBrowserProvider.future);
 
     expect(repository.listCalls, 2);
     expect(characters.listCalls, 2);
@@ -152,10 +159,11 @@ void main() {
     );
 
     test('starts with selection off and nothing ticked', () async {
-      final state = await populated().read(saveBrowserProvider.future);
+      final container = populated();
+      await container.read(saveBrowserProvider.future);
 
-      expect(state.isSelecting, isFalse);
-      expect(state.selected, isEmpty);
+      expect(selectionIn(container).isSelecting, isFalse);
+      expect(selectionIn(container).selected, isEmpty);
     });
 
     test('ticking spans both sections', () async {
@@ -170,9 +178,13 @@ void main() {
 
       final state = container.read(saveBrowserProvider).value!;
 
-      expect(state.isSelecting, isTrue);
-      expect(state.selectedSaveLabels, ['last']);
-      expect(state.selectedCharacterNames, ['aurel.chr']);
+      expect(selectionIn(container).isSelecting, isTrue);
+      final ticked = selectionIn(container).selected;
+      expect(state.selectedSaveLabels(ticked), ['last']);
+      expect(
+        state.selectedCharacterNames(ticked),
+        ['aurel.chr'],
+      );
       expect(notifier, isNotNull);
     });
 
@@ -184,7 +196,7 @@ void main() {
         ..toggle(const SaveRef('000000022-last'))
         ..toggle(const SaveRef('000000022-last'));
 
-      expect(container.read(saveBrowserProvider).value?.selected, isEmpty);
+      expect(selectionIn(container).selected, isEmpty);
     });
 
     test('selection mode survives unticking the last card', () async {
@@ -197,7 +209,7 @@ void main() {
         ..toggle(const SaveRef('000000022-last'))
         ..toggle(const SaveRef('000000022-last'));
 
-      expect(container.read(saveBrowserProvider).value?.isSelecting, isTrue);
+      expect(selectionIn(container).isSelecting, isTrue);
     });
 
     test('cancelling moves nothing and clears the ticks', () async {
@@ -208,10 +220,8 @@ void main() {
         ..toggle(const SaveRef('000000022-last'))
         ..cancelSelection();
 
-      final state = container.read(saveBrowserProvider).value!;
-
-      expect(state.isSelecting, isFalse);
-      expect(state.selected, isEmpty);
+      expect(selectionIn(container).isSelecting, isFalse);
+      expect(selectionIn(container).selected, isEmpty);
       expect(recycler.recycledSaves, isEmpty);
       expect(recycler.recycledCharacters, isEmpty);
     });
@@ -228,8 +238,8 @@ void main() {
 
       expect(recycler.recycledSaves, ['/tmp/last']);
       expect(recycler.recycledCharacters, ['/tmp/characters/aurel.chr']);
-      expect(container.read(saveBrowserProvider).value?.isSelecting, isFalse);
-      expect(container.read(saveBrowserProvider).value?.selected, isEmpty);
+      expect(selectionIn(container).isSelecting, isFalse);
+      expect(selectionIn(container).selected, isEmpty);
     });
 
     test('deleting nothing does nothing', () async {
@@ -350,6 +360,7 @@ void main() {
             fileName: 'aurel.chr',
             portraitName: 'AJANTIS',
           );
+      await container.read(saveBrowserProvider.future);
 
       expect(
         container.read(saveBrowserProvider).value?.characters,
@@ -390,6 +401,101 @@ void main() {
             ),
         throwsA(isA<CharacterFileExistsException>()),
       );
+    });
+  });
+
+  group('keeping up with the editors', () {
+    test('re-reads the lineup when the characters change', () async {
+      // ⚠️ **A card shows what is *inside* a document, not just its name.** A
+      // character's carries their portrait, level and class. Changing a
+      // portrait in the editor and coming back to a lineup drawn beforehand
+      // showed the old face — the player's own edit, apparently lost.
+      //
+      // The browser watches a *query*, so an editor invalidates exactly that
+      // query and nothing else. There is no global "something changed" signal
+      // to keep in step, which is what the first fix reached for.
+      final characters = FakeCharacterFileRepository();
+      final container = containerWith(
+        FakeSaveGameRepository(slots: [fakeSlot('last')]),
+        characters: characters,
+      );
+      await container.read(saveBrowserProvider.future);
+      expect(characters.listCalls, 1);
+
+      characters.files = [fakeCharacterFile()];
+      container.invalidate(characterFilesProvider);
+      await container.read(saveBrowserProvider.future);
+
+      expect(characters.listCalls, 2);
+      expect(
+        container.read(saveBrowserProvider).value?.characters,
+        hasLength(1),
+      );
+    });
+
+    test('a character write does not re-read the saves', () async {
+      // Precision is the point: a global signal re-read everything, so opening
+      // a character and saving it re-read every savegame on disk for nothing.
+      final saves = FakeSaveGameRepository(slots: [fakeSlot('last')]);
+      final container = containerWith(saves);
+      await container.read(saveBrowserProvider.future);
+      expect(saves.listCalls, 1);
+
+      container.invalidate(characterFilesProvider);
+      await container.read(saveBrowserProvider.future);
+
+      expect(saves.listCalls, 1);
+    });
+  });
+
+  group('selection outlives a re-read', () {
+    test('⚠️ ticking cards then refreshing keeps the ticks', () async {
+      // **Bug 3, and nobody ever hit it — it was found by reading `_read`.**
+      // Selection used to be a field on the state the browser rebuilt from
+      // disk, so anything that re-read the lists silently discarded the
+      // player's ticks. The refresh button did exactly that.
+      //
+      // Selection is the player's, not the filesystem's, so it lives apart
+      // from anything a re-read touches.
+      final container = containerWith(
+        FakeSaveGameRepository(slots: [fakeSlot('last'), fakeSlot('start')]),
+      );
+      await container.read(saveBrowserProvider.future);
+      container.read(saveBrowserProvider.notifier)
+        ..startSelecting()
+        ..toggle(const SaveRef('000000022-last'));
+
+      await container.read(saveBrowserProvider.notifier).refresh();
+      await container.read(saveBrowserProvider.future);
+
+      final state = container.read(saveBrowserProvider).value!;
+      expect(
+        selectionIn(container).isSelecting,
+        isTrue,
+        reason: 'the mode was still on',
+      );
+      expect(
+        state.selectedSaveLabels(selectionIn(container).selected),
+        ['last'],
+        reason: 'the tick was set',
+      );
+    });
+
+    test('a write from an editor does not clear the ticks either', () async {
+      // The same hazard by another route: an editor invalidating a list is a
+      // re-read too.
+      final container = containerWith(
+        FakeSaveGameRepository(slots: [fakeSlot('last')]),
+      );
+      await container.read(saveBrowserProvider.future);
+      container.read(saveBrowserProvider.notifier)
+        ..startSelecting()
+        ..toggle(const SaveRef('000000022-last'));
+
+      container.invalidate(characterFilesProvider);
+      await container.read(saveBrowserProvider.future);
+
+      expect(selectionIn(container).selected, hasLength(1));
     });
   });
 }

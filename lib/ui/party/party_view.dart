@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
 import 'package:wand_of_saves/domain/character.dart';
+import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/ui/character/character_panel.dart';
 import 'package:wand_of_saves/ui/character/portrait_image.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
@@ -53,7 +54,11 @@ class PartyView extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            '${state?.slot.label ?? slotDirectoryName}'
+            // ⚠️ **The label, even while loading.** Falling back to the route
+            // parameter showed `000000022-last` for a frame before settling on
+            // `last` — the index the player is never meant to see, flashed on
+            // every open. The rule does not depend on the file being read.
+            '${state?.slot.label ?? SaveSlot.labelOf(slotDirectoryName)}'
             '${(state?.isDirty ?? false) ? ' •' : ''}',
           ),
           actions: [

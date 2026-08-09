@@ -21,7 +21,6 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/data/party_projection.dart';
-import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
 import 'package:wand_of_saves/data/rules_catalogues.dart';
 import 'package:wand_of_saves/data/save_editor.dart';
 import 'package:wand_of_saves/domain/character.dart';
@@ -30,6 +29,7 @@ import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
+import 'package:wand_of_saves/ui/edit_session.dart';
 
 part 'party_viewmodel.mapper.dart';
 
@@ -127,6 +127,36 @@ class PartyState with PartyStateMappable {
   Character? get selected => members.elementAtOrNull(selectedIndex);
 }
 
+/// The names companions do not carry in the savegame, resolved once.
+///
+/// ⚠️ **A query, because the shell now rebuilds on every edit.** Editing a stat
+/// cannot change a name, and re-resolving the whole party through the talk
+/// table every time a digit is typed is exactly what the mutable `_names` map
+/// existed to avoid. Memoised by Riverpod instead of by hand.
+final FutureProviderFamily<Map<int, String>, String> partyNamesProvider =
+    FutureProvider.family<Map<int, String>, String>(
+      retry: neverRetry,
+      isAutoDispose: true,
+      (ref, directoryName) async {
+        final slot = await ref.watch(saveSlotProvider(directoryName).future);
+        if (slot == null) return const {};
+
+        final saves = ref.watch(saveGameRepositoryProvider);
+        final strings = ref.watch(stringRepositoryProvider);
+        final names = <int, String>{};
+        for (final member in charactersFrom(await saves.load(slot), slot)) {
+          if (member.name.isNotEmpty) continue;
+          // The chain is savegame → talk table → resref. Both of the first two
+          // legs occur in real data: the protagonist's name is in the savegame
+          // and their creature record says -1, while every recruitable
+          // companion is the other way round.
+          names[member.creOffset] =
+              await strings.lookup(member.nameStrref) ?? member.creResref;
+        }
+        return names;
+      },
+    );
+
 /// ViewModel for the party shell, paired 1:1 with `PartyView`.
 ///
 /// It merges two repositories — the savegame for the party, the talk table for
@@ -142,83 +172,45 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
   /// The save slot directory the route named.
   final String directoryName;
 
-  /// The savegame as edited so far.
+  /// The savegame being edited, and everything the player could take back.
   ///
-  /// **Private, and never placed in [PartyState].** The rule that no
-  /// `infinity_formats` type reaches a widget is what this preserves; the
-  /// session state has to live somewhere, and a second notifier behind this
-  /// one rebuilt on every edit, which snapped the selection back to the first
-  /// character mid-typing. One notifier with a private working copy keeps both
-  /// properties.
-  Gam? _working;
-
-  /// The savegame as the file has it — identical to [_working] when clean.
+  /// **One immutable value, replaced whole**, where this used to keep four
+  /// mutable fields — `_working`, `_onDisk`, `_undoStack`, `_redoStack` — that
+  /// could disagree with each other. `EditSession` is shared with the character
+  /// editor, so undo, redo and "dirty" are defined once for both documents and
+  /// tested on their own.
   ///
-  /// Compared by identity, which is exactly right: undoing back to the loaded
-  /// snapshot restores *that same object*, so "nothing to save" needs no
-  /// byte comparison.
-  Gam? _onDisk;
-
-  /// Snapshots to go back to, oldest first.
+  /// ⚠️ **Held here rather than in a provider of its own, and that was
+  /// measured rather than assumed.** A session provider is the tidier shape and
+  /// it was tried: it makes every edit an *asynchronous* rebuild of this
+  /// notifier, because `build` awaits three queries. The party shell would then
+  /// pass through `AsyncLoading` on every committed keystroke — a spinner where
+  /// a number should be. Editing has to update state synchronously; the
+  /// existing tests caught this within a minute of the attempt.
   ///
-  /// Whole savegames rather than inverse commands. A 96 KB buffer per edit
-  /// costs nothing, and an inverse command that reconstructs a previous value
-  /// is one more place to get a save subtly wrong.
-  final List<Gam> _undoStack = [];
+  /// It never reaches a widget: [PartyState] carries domain models only, so no
+  /// `infinity_formats` type crosses into the view layer.
+  EditSession<Gam>? _session;
 
-  /// Snapshots to go forward to.
-  final List<Gam> _redoStack = [];
-
-  /// Names resolved once at load, by creature offset.
-  ///
-  /// Editing a stat cannot change a name, so the talk-table lookups happen on
-  /// load and are reapplied afterwards — rather than re-resolving the whole
-  /// party every time a digit is typed.
-  final Map<int, String> _names = {};
-
-  /// The proficiency table, named, resolved once at load.
-  ///
-  /// ⚠️ **The merge itself has moved out** — see `loadRulesCatalogues`. It sat
-  /// here under a note saying it would go to a use-case when a second ViewModel
-  /// needed it, and `CharacterFileViewModel` is that second one.
-  ProficiencyCatalogue _proficiencies = ProficiencyCatalogue.empty;
-
-  /// Which thief skills this character's class may allocate, resolved once at
-  /// load. No talk-table merge: `thiefscl.2da` is numbers all the way down.
-  SkillCatalogue _skills = SkillCatalogue.empty;
+  /// Which member the detail pane is showing.
+  int _selectedIndex = 0;
 
   @override
   Future<PartyState> build() async {
-    final saves = ref.watch(saveGameRepositoryProvider);
-    final slot = await saves.slotNamed(directoryName);
+    final slot = await ref.watch(saveSlotProvider(directoryName).future);
     if (slot == null) throw SaveNotFoundException(directoryName);
 
-    final gam = await saves.load(slot);
-    _working = gam;
-    _onDisk = gam;
-    _undoStack.clear();
-    _redoStack.clear();
+    final gam = await ref.watch(saveGameRepositoryProvider).load(slot);
+    _session = EditSession.opened(gam);
+    _selectedIndex = 0;
 
-    final strings = ref.watch(stringRepositoryProvider);
-    _names.clear();
-    for (final member in charactersFrom(gam, slot)) {
-      if (member.name.isNotEmpty) continue;
-      // The chain is savegame → talk table → resref. Both of the first two
-      // legs occur in real data: the protagonist's name is in the savegame and
-      // their creature record says -1, while every recruitable companion is
-      // the other way round.
-      _names[member.creOffset] =
-          await strings.lookup(member.nameStrref) ?? member.creResref;
-    }
-
-    final catalogues = await loadRulesCatalogues(
-      resources: ref.watch(resourceRepositoryProvider),
-      strings: strings,
+    return _projected(
+      slot,
+      names: await ref.watch(partyNamesProvider(directoryName).future),
+      // One query, watched by both editors, rather than the same
+      // cross-repository merge run once per editor.
+      catalogues: await ref.watch(rulesCataloguesProvider.future),
     );
-    _proficiencies = catalogues.proficiencies;
-    _skills = catalogues.skills;
-
-    return _projected(slot, selectedIndex: 0);
   }
 
   /// Shows the member at [index] in the detail pane.
@@ -231,6 +223,7 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
     final current = state.value;
     if (current == null) return;
     if (index < 0 || index >= current.members.length) return;
+    _selectedIndex = index;
     state = AsyncData(current.copyWith(selectedIndex: index));
   }
 
@@ -239,26 +232,14 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
   /// Nothing is written to disk here — [save] does that. Throws
   /// [InvalidEditException] if the value is outside what the stat accepts;
   /// the view checks the range first so it can show the error in place.
-  void edit(EditCommand command) {
-    final current = state.value;
-    final working = _working;
-    if (current == null || working == null) return;
-
-    _undoStack.add(working);
-    _working = applyEdit(working, command);
-    // A redo stack kept across a fresh edit would reapply an edit onto a
-    // history it was never taken from.
-    _redoStack.clear();
-    state = AsyncData(
-      _projected(current.slot, selectedIndex: current.selectedIndex),
-    );
-  }
+  void edit(EditCommand command) =>
+      _change((s) => s.edited(applyEdit(s.document, command)));
 
   /// Takes back the most recent edit.
-  void undo() => _step(from: _undoStack, to: _redoStack);
+  void undo() => _change((s) => s.undone());
 
   /// Puts back the most recently undone edit.
-  void redo() => _step(from: _redoStack, to: _undoStack);
+  void redo() => _change((s) => s.redone());
 
   /// Writes the working copy over the savegame, leaving a `.bak`.
   ///
@@ -266,14 +247,19 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
   /// modification time, so an idle write would reorder the grid for no reason.
   Future<void> save() async {
     final current = state.value;
-    final working = _working;
-    if (current == null || working == null || working == _onDisk) return;
+    final session = _session;
+    if (current == null || session == null || !session.isDirty) return;
 
-    await ref.read(saveGameRepositoryProvider).write(current.slot, working);
-    _onDisk = working;
-    state = AsyncData(
-      _projected(current.slot, selectedIndex: current.selectedIndex),
-    );
+    await ref
+        .read(saveGameRepositoryProvider)
+        .write(current.slot, session.document);
+    _session = session.saved();
+    state = AsyncData(current.copyWith(isDirty: false));
+    // ⚠️ Exactly the list that changed. The browser's card for this save shows
+    // its gold and party size, so it has to re-read — but nothing about the
+    // characters moved, and re-reading those too was what a global signal
+    // could not avoid.
+    ref.invalidate(saveSlotsProvider);
   }
 
   /// Writes the selected member to `characters/` as [fileName].
@@ -290,59 +276,81 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
   /// ⚠️ **Not a save.** The dirty marker is deliberately untouched, so someone
   /// who exports and then closes the window is still warned about the savegame
   /// edits they have not written.
-  ///
-  /// Throws [CharacterFileExistsException] if the name is taken, and
-  /// [StateError] if there is no character selected to export.
   Future<CharacterFile> export(String fileName) async {
     final current = state.value;
-    final working = _working;
-    if (current == null || working == null) {
+    final session = _session;
+    if (current == null || session == null) {
       throw StateError('there is no savegame open to export from');
     }
 
-    final members = working.partyMembers;
+    final members = session.document.partyMembers;
     final index = current.selectedIndex;
     if (index < 0 || index >= members.length) {
       throw StateError('there is no character selected to export');
     }
 
-    return ref
+    final created = await ref
         .read(characterFileRepositoryProvider)
         .create(fileName, ChrCodec.exportOf(members[index]));
+    // A new character has appeared in the lineup.
+    ref.invalidate(characterFilesProvider);
+    return created;
   }
 
-  void _step({required List<Gam> from, required List<Gam> to}) {
+  /// Applies [next] to the session and republishes the view state.
+  ///
+  /// **Synchronously**, which is the whole reason the session lives here — see
+  /// [_session].
+  void _change(EditSession<Gam> Function(EditSession<Gam>) next) {
     final current = state.value;
-    final working = _working;
-    if (current == null || working == null || from.isEmpty) return;
+    final session = _session;
+    if (current == null || session == null) return;
 
-    to.add(working);
-    _working = from.removeLast();
+    _session = next(session);
     state = AsyncData(
-      _projected(current.slot, selectedIndex: current.selectedIndex),
+      _projected(
+        current.slot,
+        names: const {},
+        catalogues: (
+          proficiencies: current.proficiencies,
+          skills: current.skills,
+        ),
+        keepNamesFrom: current.members,
+      ),
     );
   }
 
   /// The working copy as the view sees it.
-  PartyState _projected(SaveSlot slot, {required int selectedIndex}) {
-    final members = charactersFrom(_working!, slot);
+  PartyState _projected(
+    SaveSlot slot, {
+    required Map<int, String> names,
+    required RulesCatalogues catalogues,
+    List<Character>? keepNamesFrom,
+  }) {
+    final resolved = {
+      for (final member in keepNamesFrom ?? const <Character>[])
+        member.creOffset: member.name,
+      ...names,
+    };
+    final session = _session!;
+
     return PartyState(
       slot: slot,
       members: [
-        for (final member in members)
+        for (final member in charactersFrom(session.document, slot))
           member.name.isNotEmpty
               ? member
               : member.copyWith(
-                  name: _names[member.creOffset] ?? member.creResref,
+                  name: resolved[member.creOffset] ?? member.creResref,
                 ),
       ],
-      reputation: _working!.reputation,
-      proficiencies: _proficiencies,
-      skills: _skills,
-      selectedIndex: selectedIndex,
-      isDirty: _working != _onDisk,
-      canUndo: _undoStack.isNotEmpty,
-      canRedo: _redoStack.isNotEmpty,
+      reputation: session.document.reputation,
+      proficiencies: catalogues.proficiencies,
+      skills: catalogues.skills,
+      selectedIndex: _selectedIndex,
+      isDirty: session.isDirty,
+      canUndo: session.canUndo,
+      canRedo: session.canRedo,
     );
   }
 }
@@ -351,6 +359,14 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
 ///
 /// Keyed by directory name rather than holding a `SaveSlot`, so the route
 /// parameter is enough to rebuild this from scratch after a reload.
+///
+/// ⚠️ **Deliberately NOT `isAutoDispose`, against the rule its being a family
+/// would otherwise imply.** Riverpod recommends automatic disposal for
+/// families because one state per parameter is a leak — but this state is an
+/// **open document with unsaved edits and an undo history**, and discarding it
+/// the moment no widget happens to be watching would throw away the player's
+/// work. The leak here is bounded by how many saves someone opens in a
+/// session; the alternative loses data.
 final AsyncNotifierProviderFamily<PartyViewModel, PartyState, String>
 partyProvider =
     AsyncNotifierProvider.family<PartyViewModel, PartyState, String>(
