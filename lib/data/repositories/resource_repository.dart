@@ -55,22 +55,27 @@ class ResourceRepository {
   /// one would be the interface leaking into its own substitutes.
   final GameProfileService _profile;
 
-  ProficiencyCatalogue? _proficiencies;
-  SkillCatalogue? _thiefSkills;
-
   /// The parsed `chitin.key`, read once.
   ///
   /// ⚠️ **This used to be re-read and re-parsed on every lookup** — 37,342
   /// entries, plus the whole containing archive, per call. Two calls at load
-  /// made that invisible; a grid of portraits would have made it a stall. The
-  /// index cannot change while the app is open, so it is read once.
-  KeyIndex? _index;
-  bool _indexRead = false;
+  /// made that invisible; a grid of portraits made it a stall.
+  ///
+  /// ⚠️⚠️ **The cache holds the *Future*, not the result, and that is the whole
+  /// point.** Caching the result meant setting a "read it already" flag before
+  /// the `await`, so every caller that arrived while the first was still
+  /// reading got `null` — and the home screen asks for several portraits at
+  /// once. It showed one picture and two blanks, and it looked like a decoding
+  /// problem rather than a caching one. Memoising the Future makes late callers
+  /// wait for the first read instead of racing past it.
+  Future<KeyIndex?>? _index;
 
   /// Archives opened so far, by path relative to the installation.
   ///
-  /// `PORTRAIT.BIF` is 24 MB and every portrait comes out of it.
-  final Map<String, BifArchive> _archives = {};
+  /// `PORTRAIT.BIF` is 24 MB and every portrait comes out of it, so the same
+  /// memoisation matters twice over here: without it, a grid of portraits reads
+  /// and parses that file once per picture.
+  final Map<String, Future<BifArchive?>> _archives = {};
 
   /// Every proficiency the player's `weapprof.2da` names.
   ///
@@ -79,20 +84,21 @@ class ResourceRepository {
   /// other. The merge happens in the ViewModel, exactly as it does for the
   /// names companions do not carry in the savegame.
   ///
-  /// Cached, because a rules table cannot change while the app is open.
+  /// ⚠️ **Not cached here.** `rulesCataloguesProvider` memoises the merged
+  /// result, and a second cache for one value is how two copies of it start
+  /// disagreeing. The parsed key file and archive underneath *are* cached,
+  /// which is the part that costs.
   Future<ProficiencyCatalogue> proficiencies() async =>
-      _proficiencies ??= proficienciesFrom(
-        await _table(weaponProficiencyTable),
-      );
+      proficienciesFrom(await _table(weaponProficiencyTable));
 
   /// Which thief skills each class and kit may allocate points to.
   ///
   /// No talk-table merge, unlike [proficiencies]: `thiefscl.2da` carries no
   /// strrefs, only numbers, so what comes back is already complete.
   ///
-  /// Cached, because a rules table cannot change while the app is open.
+  /// Not cached here either — see [proficiencies].
   Future<SkillCatalogue> thiefSkills() async =>
-      _thiefSkills ??= thiefSkillsFrom(await _table(thiefSkillTable));
+      thiefSkillsFrom(await _table(thiefSkillTable));
 
   /// The bitmap named [resref], or `null` if there is none.
   ///
@@ -196,36 +202,34 @@ class ResourceRepository {
     }
   }
 
-  Future<KeyIndex?> _keyIndex() async {
-    if (_indexRead) return _index;
-    _indexRead = true;
+  Future<KeyIndex?> _keyIndex() => _index ??= _readIndex();
 
+  Future<KeyIndex?> _readIndex() async {
     final game = _profile.findGameDirectory();
     if (game == null) return null;
     try {
-      _index = KeyIndex.parse(
+      return KeyIndex.parse(
         await File(
           '$game${Platform.pathSeparator}${GameProfileService.gameMarker}',
         ).readAsBytes(),
         source: GameProfileService.gameMarker,
       );
     } on FileSystemException {
-      _index = null;
+      return null;
     } on InfinityFormatException {
-      _index = null;
+      return null;
     }
-    return _index;
   }
 
-  Future<BifArchive?> _archive(String game, String path) async {
-    final cached = _archives[path];
-    if (cached != null) return cached;
+  Future<BifArchive?> _archive(String game, String path) =>
+      _archives[path] ??= _readArchive(game, path);
 
+  Future<BifArchive?> _readArchive(String game, String path) async {
     // The key file writes archive paths in the engine's own notation, which is
     // Windows-separated whatever the host is.
     final relative = path.replaceAll(r'\', Platform.pathSeparator);
     try {
-      return _archives[path] = BifArchive.parse(
+      return BifArchive.parse(
         await File('$game${Platform.pathSeparator}$relative').readAsBytes(),
         source: relative,
       );
