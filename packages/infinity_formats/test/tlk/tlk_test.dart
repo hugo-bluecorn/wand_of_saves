@@ -194,4 +194,51 @@ void main() {
       await expectLater(tlk.get(1), throwsA(isA<FileSystemException>()));
     });
   });
+
+  group('two callers at once', () {
+    // ⚠️ **A lookup is a seek and then a read**, which is two operations on one
+    // handle. Dart refuses a second while the first is in flight — "An async
+    // operation is currently pending" — so anything that lets two lookups
+    // overlap breaks both. Nothing in the API says a caller must not, and in
+    // the app two providers resolve names at the same time as a matter of
+    // course.
+    test('every lookup answers, whatever order they were asked in', () async {
+      final tlk = await open(['zero', 'one', 'two', 'three', 'four']);
+      addTearDown(tlk.close);
+
+      final answers = await Future.wait([
+        for (var i = 0; i < 5; i++) tlk.get(i),
+      ]);
+
+      expect(answers, ['zero', 'one', 'two', 'three', 'four']);
+    });
+
+    test('a cached and an uncached lookup do not collide', () async {
+      // The nastier shape: one caller returns immediately from the cache while
+      // another is mid-seek, so the two are not naturally serialised by
+      // awaiting the same thing.
+      final tlk = await open(['warm', 'cold', 'colder']);
+      addTearDown(tlk.close);
+      await tlk.get(0);
+
+      final answers = await Future.wait([tlk.get(0), tlk.get(1), tlk.get(2)]);
+
+      expect(answers, ['warm', 'cold', 'colder']);
+    });
+
+    test('a failure does not wedge the lookups queued behind it', () async {
+      // If serialising is done by chaining, a rejected link must not poison the
+      // chain — one truncated entry would otherwise cost every later name.
+      final tlk = await open(['fine', 'also fine'], overrunEntry: 1);
+      addTearDown(tlk.close);
+
+      final results = await Future.wait([
+        tlk.get(1).then<Object?>((s) => s, onError: (Object e) => e),
+        tlk.get(0).then<Object?>((s) => s, onError: (Object e) => e),
+      ]);
+
+      expect(results[0], isA<InfinityFormatException>());
+      expect(results[1], 'fine');
+    });
+  });
 }

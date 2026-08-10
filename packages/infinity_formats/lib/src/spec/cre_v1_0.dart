@@ -390,6 +390,104 @@ const int creMemorizationInfoLength = 16;
 /// Bytes per memorised-spell entry.
 const int creMemorizedSpellLength = 12;
 
+/// One entry of the known-spells section: a spell the creature may prepare.
+enum CreKnownSpellField implements FormatField {
+  /// Resref of the `SPL` resource, e.g. `SPWI112`.
+  resref(0x00, 8),
+
+  /// ⚠️ **The spell's level *less one*, in IESDP's own words.** A first-level
+  /// spell stores `0`. Written straight through, a spellbook comes out full of
+  /// level-zero spells — which is why the arithmetic lives behind
+  /// `Cre.knownSpells` rather than at each call site.
+  levelLessOne(0x08, 2),
+
+  /// `0` priest, `1` wizard, `2` innate.
+  type(0x0a, 2);
+
+  const CreKnownSpellField(this.offset, this.length);
+
+  @override
+  final int offset;
+
+  @override
+  final int length;
+
+  /// Nothing here is signed: two resref halves, a level and an enumeration.
+  @override
+  bool get signed => false;
+}
+
+/// One entry of the spell-memorisation info section.
+///
+/// ⚠️ **This is the only structure in the format that points *into* another
+/// section.** [firstIndex] and [count] name a window of the memorised-spells
+/// array, and the engine's own characters lay those windows out as a partition
+/// in row order — each row's index is the running total of the counts before
+/// it. So inserting a memorised spell anywhere but at the very end rewrites a
+/// pointer in a section it did not touch, which is the one place a resize here
+/// is not mechanical.
+///
+/// ⚠️ **The engine writes a full grid, not only the rows in use.** A
+/// Fighter / Mage the game made carries seven priest rows and nine wizard rows
+/// with `memorisable` zero on every one it cannot cast.
+enum CreMemorizationField implements FormatField {
+  /// The spell level *less one*, as [CreKnownSpellField.levelLessOne] is.
+  levelLessOne(0x00, 2),
+
+  /// How many spells of this level and type may be memorised.
+  memorisable(0x02, 2),
+
+  /// The same count after effects have applied — what the engine draws.
+  afterEffects(0x04, 2),
+
+  /// `0` priest, `1` wizard, `2` innate.
+  type(0x06, 2),
+
+  /// Index into the memorised-spells array of the first spell in this window.
+  firstIndex(0x08, 4),
+
+  /// How many memorised-spell entries this window holds.
+  count(0x0c, 4);
+
+  const CreMemorizationField(this.offset, this.length);
+
+  @override
+  final int offset;
+
+  @override
+  final int length;
+
+  /// Counts and an index; none of them is meaningful below zero.
+  @override
+  bool get signed => false;
+}
+
+/// One entry of the memorised-spells section: a spell prepared for casting.
+enum CreMemorizedSpellField implements FormatField {
+  /// Resref of the `SPL` resource.
+  resref(0x00, 8),
+
+  /// Bit 0 memorised, bit 1 disabled — a spell cast today is still listed.
+  flags(0x08, 4);
+
+  const CreMemorizedSpellField(this.offset, this.length);
+
+  @override
+  final int offset;
+
+  @override
+  final int length;
+
+  @override
+  bool get signed => false;
+}
+
+/// [CreMemorizedSpellField.flags] bit 0: this spell is ready to cast.
+const int creSpellMemorizedFlag = 1;
+
+/// [CreMemorizedSpellField.flags] bit 1: this spell has been cast today.
+const int creSpellDisabledFlag = 2;
+
 /// Bytes in the item-slot table, which is fixed-size and has no count field.
 const int creItemSlotsLength = 80;
 

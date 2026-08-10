@@ -43,7 +43,14 @@ enum ResourceType {
   /// A `BMP` bitmap, e.g. `AJANTISM`.
   ///
   /// Portraits are these. All 210 in `data/PORTRAIT.BIF` carry this type.
-  bitmap(0x0001);
+  bitmap(0x0001),
+
+  /// An `SPL` spell, e.g. `SPWI112.SPL` — Magic Missile.
+  ///
+  /// A BG:EE install indexes **1,207** of these, 1,115 in `data/Spells.bif`.
+  /// Most are not spells anyone learns: the engine keeps its own plumbing here
+  /// too, and tells them apart by whether the header names a string.
+  spell(0x03ee);
 
   const ResourceType(this.code);
 
