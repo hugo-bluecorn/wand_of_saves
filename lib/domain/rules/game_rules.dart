@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/rules/identifiers.g.dart';
 import 'package:wand_of_saves/domain/rules/modifiers.g.dart';
+import 'package:wand_of_saves/domain/rules/name_tables.dart';
 
 /// What the game's own tables say.
 ///
@@ -32,6 +34,21 @@ abstract interface class GameRules {
 
   /// The `RACE.IDS` identifier for [id], e.g. `ELF`.
   String? raceIdentifier(int id);
+
+  /// The `CLASS.IDS` id for [identifier], e.g. `7` for `FIGHTER_MAGE`.
+  ///
+  /// The reverse of [classIdentifier], and it exists because the game's own
+  /// rules tables are keyed by **name**: `clsrcreq.2da` labels its rows
+  /// `FIGHTER_MAGE`, and storing a class needs the number.
+  int? classIdFor(String identifier);
+
+  /// The `RACE.IDS` id for [identifier], e.g. `2` for `ELF`.
+  ///
+  /// The reverse of [raceIdentifier]. ⚠️ **`clsrcreq.2da`'s columns use exactly
+  /// this vocabulary** — including `HALFORC` with no underscore — where
+  /// `racetext.2da` spells the same race `HALF_ORC`. That disagreement is why
+  /// a race is matched here and joined to its text on the numeric id.
+  int? raceIdFor(String identifier);
 
   /// The `ALIGNMEN.IDS` identifier for [id], e.g. `NEUTRAL_GOOD`.
   String? alignmentIdentifier(int id);
@@ -94,10 +111,27 @@ abstract interface class GameRules {
   int? maximumRolledHitPoints(String classIdentifier, int level);
 }
 
-/// [GameRules] backed by the tables generated from IESDP.
+/// [GameRules] backed by the tables generated from IESDP, plus whatever the
+/// player's own installation could be read for.
+///
+/// ⚠️ **D13: a name comes from the game's table when there is one.** [tables]
+/// carries `racetext`, `clastext` and `kitlist`; the derivations below are the
+/// **fallback**, reachable only when nothing was read — which is a machine with
+/// no game installed, where the app still has to open a savegame and name what
+/// is in it.
 class GeneratedGameRules implements GameRules {
-  /// Creates the rules.
-  const GeneratedGameRules();
+  /// Creates the rules over [tables] and [hitDice], both defaulting to
+  /// nothing read.
+  const GeneratedGameRules({
+    this.tables = NameTables.empty,
+    this.hitDice = HitDieTables.empty,
+  });
+
+  /// What the player's installation calls things. Data, separate from this.
+  final NameTables tables;
+
+  /// How many hit points each class gains per level. Data, separate from this.
+  final HitDieTables hitDice;
 
   /// Class identifiers whose hit points come from the warrior column.
   ///
@@ -116,6 +150,17 @@ class GeneratedGameRules implements GameRules {
   ///
   /// It also confirms the *containment* rule rather than just the roots: Aard
   /// is half mage and still draws on the warrior column.
+  ///
+  /// ⚠️ **D13 — a rule, and here is why no table answers.** `hpconbon.2da` has
+  /// the `WARRIOR` column but **nothing in the installation maps a class to
+  /// it**; `hpclass.2da` maps classes to *hit-die* tables, which is a different
+  /// question. Checked and rejected: `hpclass`, `hpconbon`, `clsrcreq`,
+  /// `profs`. The rule stands because it is **measured** rather than reasoned.
+  ///
+  /// ⚠️ And it is known to be wrong in one direction that has not bitten yet:
+  /// containment says a kit follows its class, and `hpclass` shows
+  /// `DWARVEN_DEFENDER` breaking exactly that pattern for hit dice. If this is
+  /// ever asked about a kit, measure first.
   static const Set<String> warriorRoots = {'FIGHTER', 'PALADIN', 'RANGER'};
 
   @override
@@ -123,6 +168,27 @@ class GeneratedGameRules implements GameRules {
 
   @override
   String? raceIdentifier(int id) => raceIdentifiers[id];
+
+  /// `CLASS.IDS` reversed. **Lowest id wins on a repeat**, which keeps the
+  /// playable classes (1–21) ahead of the monster entries that start at 101.
+  static final Map<String, int> _classIdsByName = _reverse(classIdentifiers);
+
+  /// `RACE.IDS` reversed, on the same rule.
+  static final Map<String, int> _raceIdsByName = _reverse(raceIdentifiers);
+
+  static Map<String, int> _reverse(Map<int, String> byId) {
+    final out = <String, int>{};
+    for (final id in byId.keys.toList()..sort()) {
+      out.putIfAbsent(byId[id]!, () => id);
+    }
+    return out;
+  }
+
+  @override
+  int? classIdFor(String identifier) => _classIdsByName[identifier];
+
+  @override
+  int? raceIdFor(String identifier) => _raceIdsByName[identifier];
 
   @override
   String? alignmentIdentifier(int id) => alignmentIdentifiers[id];
@@ -156,7 +222,12 @@ class GeneratedGameRules implements GameRules {
     // Two encodings mean the same thing. Aard and Montaron store 0x40000000,
     // Imoen stores 0, and the game shows no kit for any of the three.
     final bare = _kitColumn(stored);
-    return bare == null ? null : _words(bare).join(' ');
+    if (bare == null) return null;
+
+    // ⚠️ **D13, and here the derivation is not merely clumsy but wrong.**
+    // `kitlist.2da` names the Ranger's first kit `FERALAN`; the game draws
+    // *Archer*. No amount of title-casing an identifier reaches that.
+    return tables.kitNames[bare] ?? _words(bare).join(' ');
   }
 
   /// The kit identifier as `weapprof.2da` spells it, or `null` for no kit.
@@ -190,12 +261,22 @@ class GeneratedGameRules implements GameRules {
     // holding 1 in every shipped NPC record and 0 in the player's own, so a
     // single-class Thief reads 1/1/1. Every playable CLASS.IDS name spells
     // its classes out -- FIGHTER_MAGE_THIEF is three -- so the name can.
+    //
+    // ⚠️ D13 — a rule, and no table answers it. Checked: `clsrcreq`, `profs`,
+    // `hpclass`, `clastext`, `dualclas`. Each is *keyed* by the multi-class
+    // name and none of them counts it. The identifier is the only source.
     final identifier = classIdentifier(id);
     return identifier?.split('_').length;
   }
 
   @override
   String? className(int id) {
+    // ⚠️ **D13: `clastext.2da`'s MIXED column already says it** — separator,
+    // capitalisation and ordering included, in the player's language. The
+    // derivation below is the no-installation fallback and nothing else.
+    final fromTable = tables.classNames[id];
+    if (fromTable != null) return fromTable;
+
     final identifier = classIdentifier(id);
     // A multi-class is one identifier with underscores, and the game renders
     // it with slashes: FIGHTER_MAGE is "Fighter / Mage".
@@ -204,21 +285,31 @@ class GeneratedGameRules implements GameRules {
 
   @override
   String? raceName(int id) {
+    // ⚠️ **D13: `racetext.2da`'s UPPERCASE column holds `Half-Orc` outright.**
+    // The map below existed because a word-splitter cannot reach that string;
+    // keeping it as a fallback is only for a machine with no game installed.
+    final fromTable = tables.raceNames[id];
+    if (fromTable != null) return fromTable;
+
     final identifier = raceIdentifier(id);
     if (identifier == null) return null;
-    // Races hyphenate where classes separate, and HALFORC has no underscore
-    // to work from at all — so the two that need it are named outright rather
-    // than guessed at by a rule that would get one of them wrong.
     return const {'HALF_ELF': 'Half-Elf', 'HALFORC': 'Half-Orc'}[identifier] ??
         _words(identifier).join(' ');
   }
 
+  /// ⚠️ **D13 — derived, and no table was found.** `alignmnt.2da` is 1/0
+  /// permissions with no names in it, and no `align*`-shaped table carries
+  /// display strings. The alignment screen's own prose lives in the talk table
+  /// with nothing tying a strref to an `ALIGNMEN.IDS` number. Unlike races and
+  /// classes, this stays derived — and it will read only in English.
   @override
   String? alignmentName(int id) {
     final identifier = alignmentIdentifier(id);
     return identifier == null ? null : _words(identifier).join(' ');
   }
 
+  /// ⚠️ **D13 — derived, and no table was found**, on the same search as
+  /// [alignmentName]. `GENDER.IDS` has the two words and nothing names them.
   @override
   String? genderName(int id) {
     final identifier = genderIdentifier(id);
@@ -266,6 +357,11 @@ class GeneratedGameRules implements GameRules {
   /// **12**, which is `HPWAR`×2 and `HPWIZ`×1 each halved, and a Fighter 1→2
   /// level-up stored **+5**, which is `HPWAR` halved. What `HPFM` is for is an
   /// open question in the findings.
+  /// ⚠️ **The fallback, and it is measurably wrong past level 9.** It has every
+  /// class stop rolling at 9; `hpwiz.2da` and `hprog.2da` roll through **11**,
+  /// so a Mage 12 comes out 3 short and a Thief 12 four short. Kept only for a
+  /// machine with no game installed, where a character sheet still has to draw
+  /// and every fixture is level 1 or 2 anyway. **`hitDice` supersedes it.**
   static const Map<String, (int die, int afterNine)> classHitDice = {
     'FIGHTER': (10, 3),
     'RANGER': (10, 3),
@@ -286,8 +382,24 @@ class GeneratedGameRules implements GameRules {
 
   @override
   int? maximumRolledHitPoints(String classIdentifier, int level) {
+    if (level < 1) return null;
+
+    // ⚠️ **D13: `hpclass.2da` names the table and `hp…2da` holds the rows.**
+    // The written-out dice below are the no-installation fallback, and they are
+    // known to be slightly wrong past level 9 — see [classHitDice].
+    final rows = hitDice.rowsFor(classIdentifier);
+    if (rows != null) {
+      var total = 0;
+      for (var each = 1; each <= level; each++) {
+        // The last row governs every level past the end of the table.
+        final row = rows[each <= rows.length ? each - 1 : rows.length - 1];
+        total += row.sides * row.rolls + row.modifier;
+      }
+      return total;
+    }
+
     final entry = classHitDice[classIdentifier];
-    if (entry == null || level < 1) return null;
+    if (entry == null) return null;
     final (die, afterNine) = entry;
     final rolled = level < lastRollingLevel ? level : lastRollingLevel;
     return die * rolled + afterNine * (level - rolled);

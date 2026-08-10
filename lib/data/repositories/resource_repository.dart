@@ -18,7 +18,10 @@ import 'dart:typed_data';
 
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
+import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
+import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 /// Source of truth for the rules tables that live inside the game's archives.
@@ -99,6 +102,121 @@ class ResourceRepository {
   /// Not cached here either — see [proficiencies].
   Future<SkillCatalogue> thiefSkills() async =>
       thiefSkillsFrom(await _table(thiefSkillTable));
+
+  /// How many hit points each class gains per level.
+  ///
+  /// ⚠️ **D13.** This replaced a written-out `(die, afterNine)` map that had
+  /// every class stop rolling at level 9 — `hpwiz.2da` and `hprog.2da` roll
+  /// through 11. Two table reads: `hpclass.2da` names the table for each class
+  /// *and kit*, then each named table is read for its rows.
+  ///
+  /// No strrefs anywhere, so this comes back finished rather than needing a
+  /// talk-table merge — the same as [thiefSkills].
+  Future<HitDieTables> hitDieTables() async {
+    final classes = await _table(hitDieClassTable);
+
+    final tableByClass = <String, String>{
+      for (final row in classes.rows.keys)
+        if (classes.cell(row, hitDieTableColumn) case final String table)
+          if (table != tableAbsent) row: table,
+    };
+
+    final rowsByTable = <String, List<HitDieRow>>{};
+    for (final name in tableByClass.values.toSet()) {
+      final table = await _table(name.toLowerCase());
+      final rows = <HitDieRow>[];
+      // Levels are the row labels and they run 1..40 in order; reading them in
+      // file order is what makes the list index the level.
+      for (final row in table.rows.keys) {
+        final sides = table.number(row, 'SIDES');
+        final rolls = table.number(row, 'ROLLS');
+        final modifier = table.number(row, 'MODIFIER');
+        if (sides == null || rolls == null || modifier == null) continue;
+        rows.add((sides: sides, rolls: rolls, modifier: modifier));
+      }
+      if (rows.isNotEmpty) rowsByTable[name] = rows;
+    }
+
+    return HitDieTables(tableByClass: tableByClass, rowsByTable: rowsByTable);
+  }
+
+  /// What the installation calls races, classes and kits — as **strrefs**.
+  ///
+  /// ⚠️ **D13.** These names used to be derived from the IDS identifiers inside
+  /// `GameRules`. The game ships them: `racetext.2da`'s `UPPERCASE`,
+  /// `clastext.2da`'s `MIXED` for the plain-class rows, and `kitlist.2da`'s
+  /// `MIXED`. Resolving the strrefs needs the talk table, so that happens in
+  /// `loadNameTables`, not here.
+  ///
+  /// Read separately from [creationCatalogue] even though two of the three
+  /// tables overlap: naming what is in a savegame must not depend on anything
+  /// about *creating* one. The key index and archives underneath are cached, so
+  /// the second read costs three small table parses.
+  Future<
+    ({
+      Map<int, int> races,
+      Map<int, int> classes,
+      Map<String, int> kits,
+    })
+  >
+  nameStrrefs() async {
+    final raceText = await _table(raceTextTable);
+    final classText = await _table(classTextTable);
+    final kits = await _table(kitTable);
+
+    return (
+      // ⚠️ Keyed on the table's own `ID` column: it spells the seventh race
+      // `HALF_ORC` where `RACE.IDS` says `HALFORC`.
+      races: {
+        for (final row in raceText.rows.keys)
+          if (raceText.number(row, 'ID') case final int id)
+            if (raceText.number(row, raceNameColumn) case final int strref)
+              if (strref >= 0) id: strref,
+      },
+      // Only the plain-class rows — a kit row shares its `CLASSID`.
+      classes: {
+        for (final row in classText.rows.keys)
+          if (classText.number(row, 'KITID') == trueClassKitId)
+            if (classText.number(row, 'CLASSID') case final int id)
+              if (classText.number(row, classNameColumn) case final int strref)
+                if (strref >= 0) id: strref,
+      },
+      kits: {
+        for (final row in kits.rows.keys)
+          if (kits.cell(row, 'ROWNAME') case final String identifier)
+            if (kits.number(row, kitNameColumn) case final int strref)
+              if (strref >= 0) identifier: strref,
+      },
+    );
+  }
+
+  /// What this installation says a new character may be.
+  ///
+  /// Six tables at once, read together because they answer one question
+  /// between them and no step of a creation flow is useful without the rest.
+  /// They are small — the largest is 9 KB — and the key file and archives
+  /// underneath are already cached.
+  ///
+  /// Names and descriptions come back as **strrefs**, exactly as
+  /// [proficiencies] leaves them: resolving one needs the talk table, which is
+  /// a different repository, and repositories must never be aware of each
+  /// other.
+  ///
+  /// Not cached here either — see [proficiencies].
+  Future<CreationCatalogue> creationCatalogue({
+    required GameRules rules,
+  }) async {
+    final tables = await Future.wait(creationTables.map(_table));
+    return creationCatalogueFrom(
+      classRaceRequirements: tables[0],
+      alignmentRequirements: tables[1],
+      kits: tables[2],
+      classText: tables[3],
+      raceText: tables[4],
+      racialAdjustments: tables[5],
+      rules: rules,
+    );
+  }
 
   /// The bitmap named [resref], or `null` if there is none.
   ///
@@ -301,6 +419,67 @@ String _baseNameOf(String resref) {
 
 /// The resref of the weapon-proficiency table.
 const String weaponProficiencyTable = 'weapprof';
+
+/// The six tables a creation flow needs, all from the player's installation.
+///
+/// ⚠️ **Read the file before believing its name.** `abracerq.2da` is the
+/// *ability minima* per race and is not one of these; `clasiskl.2da` is not a
+/// class list. The names here were each opened and checked.
+const List<String> creationTables = [
+  classRaceRequirementTable,
+  alignmentRequirementTable,
+  kitTable,
+  classTextTable,
+  raceTextTable,
+  racialAdjustmentTable,
+];
+
+/// Which classes each race may take — a row per class or kit, a column per
+/// race. **Its columns are the playable races.**
+const String classRaceRequirementTable = 'clsrcreq';
+
+/// Which alignments each class or kit may hold, as nine `L_G`…`C_E` columns.
+const String alignmentRequirementTable = 'alignmnt';
+
+/// Every specialisation, the class it belongs to, and the dword it stores.
+const String kitTable = 'kitlist';
+
+/// Each class's and kit's description strref.
+///
+/// ⚠️ **Its `MIXED` column is not a usable name** — `FIGHTER` holds the token
+/// `<FIGHTERTYPE>`, which only the engine substitutes. Take `DESCSTR` from here
+/// and let `GameRules.className` do the naming.
+const String classTextTable = 'clastext';
+
+/// Each race's name and description strref, keyed by its **`ID` column**.
+const String raceTextTable = 'racetext';
+
+/// What each race adds to and takes from the ability scores.
+const String racialAdjustmentTable = 'abracead';
+
+/// Which hit-die table each class and kit uses.
+///
+/// ⚠️ **Kits are listed individually and do not follow their class** —
+/// `DWARVEN_DEFENDER` uses `HPBARB` where its Fighter base uses `HPWAR`.
+const String hitDieClassTable = 'hpclass';
+
+/// `hpclass.2da`'s only column, naming the table to read.
+const String hitDieTableColumn = 'TABLE';
+
+/// What a `2DA` cell holds when the row has no value at all.
+const String tableAbsent = '*';
+
+/// `racetext.2da`'s capitalised name column — `Half-Orc`, not `half-orc`.
+const String raceNameColumn = 'UPPERCASE';
+
+/// `clastext.2da`'s display-name column — `Cleric / Ranger`, separator and all.
+///
+/// ⚠️ Carries `<FIGHTERTYPE>` and `<MAGESCHOOL>` substitution tokens, which are
+/// what makes a kit *replace* the class name on screen.
+const String classNameColumn = 'MIXED';
+
+/// `kitlist.2da`'s display-name column — where `FERALAN` reads *Archer*.
+const String kitNameColumn = 'MIXED';
 
 /// The resref of the table saying which classes have which thief skills.
 ///

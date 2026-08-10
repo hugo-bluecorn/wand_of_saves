@@ -33,9 +33,12 @@ import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/character_file.dart';
+import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/proficiency.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/resistances.dart';
+import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/domain/saving_throws.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
@@ -272,7 +275,12 @@ class FakeResourceRepository implements ResourceRepository {
     this.skills = SkillCatalogue.empty,
     this.portraits = const {},
     this.creatures = const {},
+    this.creation = CreationCatalogue.empty,
   });
+
+  /// What [creationCatalogue] returns. Empty means "no installation", which is
+  /// the right default for every test that is not about making a character.
+  final CreationCatalogue creation;
 
   /// Creature records by resref — `CHARBASE`, in practice.
   final Map<String, Uint8List> creatures;
@@ -293,6 +301,26 @@ class FakeResourceRepository implements ResourceRepository {
 
   @override
   Future<SkillCatalogue> thiefSkills() async => skills;
+
+  @override
+  Future<CreationCatalogue> creationCatalogue({
+    required GameRules rules,
+  }) async => creation;
+
+  /// Nothing read, so `GameRules` falls back to the written-out dice — which is
+  /// what every test written before D13 expects.
+  @override
+  Future<HitDieTables> hitDieTables() async => HitDieTables.empty;
+
+  /// Nothing read, so `GameRules` falls back to deriving names from the IDS
+  /// identifiers — which is exactly what every test written before D13 expects.
+  @override
+  Future<({Map<int, int> classes, Map<String, int> kits, Map<int, int> races})>
+  nameStrrefs() async => (
+    races: const <int, int>{},
+    classes: const <int, int>{},
+    kits: const <String, int>{},
+  );
 
   @override
   Future<Uint8List?> portrait(String resref) async => portraits[resref];

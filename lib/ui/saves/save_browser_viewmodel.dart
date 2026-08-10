@@ -21,6 +21,7 @@ import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/save_editor.dart';
 import 'package:wand_of_saves/domain/character_file.dart';
+import 'package:wand_of_saves/domain/character_identity.dart';
 import 'package:wand_of_saves/domain/document_ref.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
@@ -200,6 +201,11 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
     required String name,
     required String fileName,
     required String portraitName,
+    int? genderId,
+    int? raceId,
+    int? classId,
+    int? alignmentId,
+    int? kitValue,
   }) async {
     final template = await ref
         .read(resourceRepositoryProvider)
@@ -212,10 +218,33 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
       // back into it would change under the next reader.
       record: Uint8List.fromList(template),
     );
-    final created = applyCharacterEdit(
+    // Every edit here is fixed-width — four single bytes, one dword and two
+    // 8-byte resrefs — so nothing resizes and the layout pass is not involved.
+    //
+    // ⚠️ **An identity left `null` keeps `CHARBASE`'s.** That is what a caller
+    // asking for nothing but a portrait means, and it is how the flow behaved
+    // before any of these were editable.
+    var created = applyCharacterEdit(
       blank,
       SetPortrait(creOffset: blank.creOffset, baseName: portraitName),
     );
+    for (final (identity, value) in [
+      (CharacterIdentity.gender, genderId),
+      (CharacterIdentity.race, raceId),
+      (CharacterIdentity.characterClass, classId),
+      (CharacterIdentity.alignment, alignmentId),
+      (CharacterIdentity.kit, kitValue),
+    ]) {
+      if (value == null) continue;
+      created = applyCharacterEdit(
+        created,
+        SetCharacterIdentity(
+          creOffset: created.creOffset,
+          identity: identity,
+          value: value,
+        ),
+      );
+    }
 
     final file = await ref
         .read(characterFileRepositoryProvider)

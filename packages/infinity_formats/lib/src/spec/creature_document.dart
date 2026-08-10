@@ -14,6 +14,7 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/cre/cre.dart';
 import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/spec/cre_v1_0.dart';
 
@@ -91,4 +92,24 @@ abstract interface class CreatureDocument<T extends CreatureDocument<T>> {
     required EffectV2Field field,
     required int value,
   });
+
+  /// The creature record at [creOffset], as bytes.
+  ///
+  /// The read half of [withCreature]: a resizing edit has to parse the record
+  /// before it can grow it, and it must reach it the same way in either
+  /// document.
+  Uint8List creatureAt(int creOffset);
+
+  /// A copy with the creature at [creOffset] **replaced** by [creature].
+  ///
+  /// ⚠️ **The only edit here that may change a record's size**, which is why it
+  /// takes a whole creature rather than a field: a grown record moves every
+  /// pointer that follows it, and how many of those there are is the difference
+  /// between the two documents. A `.chr` has **one** — the length in its
+  /// 100-byte header. A savegame has thirty-nine, so it **refuses**: growing a
+  /// file that holds hours of someone's play is Phase 1's work and is not
+  /// attempted here.
+  ///
+  /// Throws `UnsupportedError` on a document that cannot resize safely.
+  T withCreature({required int creOffset, required Cre creature});
 }

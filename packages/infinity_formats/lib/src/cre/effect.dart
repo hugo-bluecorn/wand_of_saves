@@ -14,6 +14,7 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/spec/cre_v1_0.dart';
 import 'package:infinity_formats/src/spec/format_field.dart';
 
 /// Fields of a `V2` effect **as a creature record embeds it**.
@@ -120,3 +121,40 @@ final class Effect {
   @override
   String toString() => 'Effect(opcode $opcode @$start)';
 }
+
+/// A proficiency effect exactly as BG:EE writes one, with the pips and the
+/// proficiency left at zero.
+///
+/// ⚠️ **Copied from the engine's own bytes, not synthesised.** A `CRE` embedded
+/// effect is 264 bytes and Aard's, read out of the party fixture, is zero
+/// everywhere except eight places:
+///
+/// | offset | value | what |
+/// |---|---|---|
+/// | `0x008` | 233 | opcode — the proficiency effect |
+/// | `0x014` | pips | parameter 1 |
+/// | `0x018` | id | parameter 2, the `weapprof.2da` number |
+/// | `0x01c` | 9 | timing mode |
+/// | `0x024` | 100 | probability |
+/// | `0x078`–`0x087` | `0xFF` | sixteen bytes of "none" |
+/// | `0x09c`–`0x09f` | `0xFF` | four more |
+/// | `0x0c4` | 1 | |
+///
+/// ⚠️ **`0x000` and `0x004` are zero**, which confirms in the data what IESDP
+/// says in prose: an embedded effect is the EFF *body*, with no 8-byte header.
+/// Building this from the field table alone would have left those two dwords
+/// holding whatever a "signature" seemed to want.
+Uint8List proficiencyEffectTemplate() {
+  final out = Uint8List(creEffectV2Length);
+  ByteData.sublistView(out)
+    ..setUint32(EffectV2Field.opcode.offset, Effect.proficiencyOpcode, _le)
+    ..setUint32(EffectV2Field.timingMode.offset, 9, _le)
+    ..setUint32(0x24, 100, _le)
+    ..setUint32(0xc4, 1, _le);
+  out
+    ..fillRange(0x78, 0x88, 0xFF)
+    ..fillRange(0x9c, 0xa0, 0xFF);
+  return out;
+}
+
+const Endian _le = Endian.little;

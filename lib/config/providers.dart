@@ -30,6 +30,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // they are rarely written out. `specify_nonobvious_property_types` requires
 // naming this one, so the import is the honest way to satisfy it (D8).
 import 'package:flutter_riverpod/misc.dart';
+import 'package:wand_of_saves/data/creation_catalogue_loading.dart';
+import 'package:wand_of_saves/data/name_tables_loading.dart';
 import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/repositories/save_game_repository.dart';
@@ -39,8 +41,11 @@ import 'package:wand_of_saves/data/services/game_profile_service.dart';
 import 'package:wand_of_saves/data/services/portrait_import_service.dart';
 import 'package:wand_of_saves/data/services/recycle_service.dart';
 import 'package:wand_of_saves/domain/character_file.dart';
+import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/document_ref.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
+import 'package:wand_of_saves/domain/rules/name_tables.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 
 /// Locates the game installation and save directory on this machine.
@@ -75,15 +80,37 @@ final recycleServiceProvider = Provider<RecycleService>(
   (ref) => RecycleService(profile: ref.watch(gameProfileServiceProvider)),
 );
 
-/// The game's own rules tables.
+/// What the installation calls races, classes and kits.
 ///
-/// A snapshot generated from IESDP's copies of the shipped `2DA` and `IDS`
-/// files, which is right for an unmodded install. It is a provider so Phase
-/// 3's resource index can override it with the player's actual files — a
-/// modded game has different tables, and nothing above this should have to
-/// know which it got.
+/// Its own query so naming what is in a savegame does not depend on anything
+/// about *creating* one, and so a machine with no game installed simply gets an
+/// empty answer rather than an error.
+final nameTablesProvider = FutureProvider<NameTables>(
+  retry: neverRetry,
+  (ref) => loadNameTables(
+    resources: ref.watch(resourceRepositoryProvider),
+    strings: ref.watch(stringRepositoryProvider),
+  ),
+);
+
+/// How many hit points each class gains per level, from the installation.
+final hitDieTablesProvider = FutureProvider<HitDieTables>(
+  retry: neverRetry,
+  (ref) => ref.watch(resourceRepositoryProvider).hitDieTables(),
+);
+
+/// The rules, over whatever names could be read.
+///
+/// ⚠️ **Stays synchronous while depending on an async read**, by taking the
+/// query's value and falling back to `NameTables.empty`. Every consumer
+/// `ref.watch`es this, so names sharpen from the derived fallback to the
+/// installation's own the moment the tables arrive — with no screen passing
+/// through a loading state to get there, and no API change anywhere.
 final gameRulesProvider = Provider<GameRules>(
-  (ref) => const GeneratedGameRules(),
+  (ref) => GeneratedGameRules(
+    tables: ref.watch(nameTablesProvider).value ?? NameTables.empty,
+    hitDice: ref.watch(hitDieTablesProvider).value ?? HitDieTables.empty,
+  ),
 );
 
 /// Source of truth for the rules tables inside the game's own archives.
@@ -259,6 +286,27 @@ final rulesCataloguesProvider = FutureProvider<RulesCatalogues>(
   (ref) => loadRulesCatalogues(
     resources: ref.watch(resourceRepositoryProvider),
     strings: ref.watch(stringRepositoryProvider),
+  ),
+);
+
+/// What this installation says a new character may be.
+///
+/// Its own query rather than part of [rulesCataloguesProvider], because the two
+/// serve different screens: a character sheet needs proficiency names on every
+/// open, and six creation tables read for it would be read for nothing.
+///
+/// ⚠️ **Nothing in the creation flow may `ref.watch` this from a ViewModel's
+/// `build()`.** A provider's state is destroyed whenever it recomputes
+/// (`concepts2/auto_dispose.mdx`), so a half-made character watching a query
+/// would be thrown away the moment anything invalidated it — and the flow's own
+/// portrait step invalidates [portraitNamesProvider]. `ref.listen` is how a
+/// ViewModel reacts to this without depending on it.
+final creationCatalogueProvider = FutureProvider<CreationCatalogue>(
+  retry: neverRetry,
+  (ref) => loadCreationCatalogue(
+    resources: ref.watch(resourceRepositoryProvider),
+    strings: ref.watch(stringRepositoryProvider),
+    rules: ref.watch(gameRulesProvider),
   ),
 );
 

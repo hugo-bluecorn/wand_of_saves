@@ -14,6 +14,7 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/cre/cre.dart';
 import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/gam/gam_npc.dart';
@@ -173,6 +174,31 @@ final class Gam implements CreatureDocument<Gam> {
     value: value,
     what: '$field of the creature at $creOffset',
   );
+
+  /// The record of the party member whose creature starts at [creOffset].
+  @override
+  Uint8List creatureAt(int creOffset) =>
+      partyMembers.firstWhere((npc) => npc.creOffset == creOffset).creBytes;
+
+  /// **Refused.** A savegame cannot take a resized creature yet.
+  ///
+  /// ⚠️ Measured, not guessed: adding one 264-byte effect inside a save
+  /// invalidates **39** pointers and shifts about 90 KB — the nine GAM header
+  /// offsets, the `creLength` in this NPC's struct, and the `creOffset` of
+  /// every one of the 36 non-party NPCs after it. That is Phase 1's layout
+  /// pass. Until it exists, this says so rather than writing a file that loads
+  /// and is subtly wrong.
+  ///
+  /// The creation flow is unaffected: it writes a `.chr`, where the same edit
+  /// costs one dword.
+  @override
+  Gam withCreature({required int creOffset, required Cre creature}) {
+    throw UnsupportedError(
+      'a savegame cannot take a resized creature yet: growing the record at '
+      '$creOffset would move 39 pointers, which is Phase 1’s layout pass. '
+      'Export the character and edit that instead.',
+    );
+  }
 
   /// A copy with the text [field] of the creature at [creOffset] set to
   /// [value] — a portrait resref, so far.

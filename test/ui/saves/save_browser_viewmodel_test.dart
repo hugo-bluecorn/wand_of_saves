@@ -349,6 +349,57 @@ void main() {
       expect(cre.portraitLarge, 'AJANTISL');
     });
 
+    test('writes who the character is, not only what they look like', () async {
+      // ⚠️ **The gap this flow was built to close.** A character created here
+      // used to be stuck as whatever CHARBASE is — there was no way to be an
+      // elf, a thief, or a woman.
+      final characters = FakeCharacterFileRepository();
+      final container = withTemplate(characters: characters);
+      await container.read(saveBrowserProvider.future);
+
+      await container
+          .read(saveBrowserProvider.notifier)
+          .createCharacter(
+            name: 'Aurel',
+            fileName: 'aurel.chr',
+            portraitName: 'AJANTIS',
+            genderId: 2,
+            raceId: 2,
+            classId: 9,
+            alignmentId: 0x31,
+            kitValue: 0x40030000,
+          );
+
+      final cre = CreCodec.decode(characters.created.single.$2.creBytes);
+      expect(cre.genderId, 2);
+      expect(cre.raceId, 2);
+      expect(cre.classId, 9);
+      expect(cre.alignmentId, 0x31);
+      expect(cre.kitId, 0x40030000);
+    });
+
+    test('an identity left unsaid keeps the template’s', () async {
+      // What "portrait only" means, and what the flow did before any of these
+      // were editable at all.
+      final characters = FakeCharacterFileRepository();
+      final container = withTemplate(characters: characters);
+      await container.read(saveBrowserProvider.future);
+
+      final before = CreCodec.decode(template());
+      await container
+          .read(saveBrowserProvider.notifier)
+          .createCharacter(
+            name: 'Aurel',
+            fileName: 'aurel.chr',
+            portraitName: 'AJANTIS',
+          );
+
+      final cre = CreCodec.decode(characters.created.single.$2.creBytes);
+      expect(cre.raceId, before.raceId);
+      expect(cre.classId, before.classId);
+      expect(cre.kitId, before.kitId);
+    });
+
     test('the new character shows in the lineup afterwards', () async {
       final container = withTemplate();
       await container.read(saveBrowserProvider.future);

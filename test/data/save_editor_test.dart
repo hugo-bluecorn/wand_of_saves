@@ -15,6 +15,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/save_editor.dart';
+import 'package:wand_of_saves/domain/character_identity.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 
@@ -442,5 +443,269 @@ void main() {
         contains('Clear'),
       );
     });
+  });
+
+  group('SetCharacterIdentity', () {
+    // Who the character *is* — gender, race, class, alignment, specialisation.
+    // Every one is a fixed-width field the spec already carries, so these are
+    // as safe as a stat edit; what makes them their own command is that the
+    // legal values are an enumeration rather than a range.
+    test('writes the race into the creature record', () {
+      final gam = openSave();
+
+      final edited = applyEdit(
+        gam,
+        SetCharacterIdentity(
+          creOffset: creOffsetOf(gam),
+          identity: CharacterIdentity.race,
+          value: 4,
+        ),
+      );
+
+      expect(creatureIn(edited).raceId, 4);
+    });
+
+    test('writes class, gender and alignment', () {
+      var gam = openSave();
+      for (final (identity, value) in [
+        (CharacterIdentity.characterClass, 6),
+        (CharacterIdentity.gender, 2),
+        (CharacterIdentity.alignment, 0x11),
+      ]) {
+        gam = applyEdit(
+          gam,
+          SetCharacterIdentity(
+            creOffset: creOffsetOf(gam),
+            identity: identity,
+            value: value,
+          ),
+        );
+      }
+
+      final cre = creatureIn(gam);
+      expect(cre.classId, 6);
+      expect(cre.genderId, 2);
+      expect(cre.alignmentId, 0x11);
+    });
+
+    test('moves exactly one byte for a one-byte field', () {
+      final gam = openSave();
+
+      final edited = applyEdit(
+        gam,
+        SetCharacterIdentity(
+          creOffset: creOffsetOf(gam),
+          identity: CharacterIdentity.race,
+          value: 4,
+        ),
+      );
+
+      final moved = [
+        for (var i = 0; i < gam.bytes.length; i++)
+          if (gam.bytes[i] != edited.bytes[i]) i,
+      ];
+      expect(edited.bytes, hasLength(gam.bytes.length));
+      expect(moved, [creOffsetOf(gam) + CreHeaderField.race.offset]);
+    });
+
+    test('writes the kit as a dword, raw', () {
+      // ⚠️ The stored value carries the KIT.IDS key in its **high word** — the
+      // fixture's 0x40000000 is TRUECLASS. The command writes what it is given
+      // and shifts nothing: which dword a specialisation means is the rules
+      // tables' question, answered before a command is ever built.
+      final gam = openSave();
+
+      final edited = applyEdit(
+        gam,
+        SetCharacterIdentity(
+          creOffset: creOffsetOf(gam),
+          identity: CharacterIdentity.kit,
+          value: 0x40070000,
+        ),
+      );
+
+      expect(creatureIn(edited).kitId, 0x40070000);
+
+      // Not a byte count: 0x40000000 and 0x40070000 differ in one byte, and
+      // asserting "one" would pin an accident of these two values. What the
+      // writer must guarantee is that nothing outside the field moved.
+      final field = creOffsetOf(gam) + CreHeaderField.kit.offset;
+      final moved = [
+        for (var i = 0; i < gam.bytes.length; i++)
+          if (gam.bytes[i] != edited.bytes[i]) i,
+      ];
+      expect(edited.bytes, hasLength(gam.bytes.length));
+      expect(moved, isNotEmpty);
+      expect(
+        moved.every((i) => i >= field && i < field + CreHeaderField.kit.length),
+        isTrue,
+        reason: 'every changed byte must lie inside the 4-byte kit field',
+      );
+    });
+
+    test('refuses a value the field cannot hold', () {
+      final gam = openSave();
+
+      expect(
+        () => applyEdit(
+          gam,
+          SetCharacterIdentity(
+            creOffset: creOffsetOf(gam),
+            identity: CharacterIdentity.race,
+            value: 300,
+          ),
+        ),
+        throwsA(isA<InvalidEditException>()),
+      );
+    });
+
+    test('leaves the save it was given alone', () {
+      final gam = openSave();
+
+      applyEdit(
+        gam,
+        SetCharacterIdentity(
+          creOffset: creOffsetOf(gam),
+          identity: CharacterIdentity.race,
+          value: 4,
+        ),
+      );
+
+      expect(creatureIn(gam).raceId, 2);
+    });
+
+    test('works the same on an exported character', () {
+      final chr = ChrCodec.decode(buildCharacterFile());
+
+      final edited = applyCharacterEdit(
+        chr,
+        SetCharacterIdentity(
+          creOffset: chr.creOffset,
+          identity: CharacterIdentity.race,
+          value: 4,
+        ),
+      );
+
+      expect(CreCodec.decode(edited.creBytes).raceId, 4);
+    });
+
+    test('says what it did, naming the field', () {
+      expect(
+        const SetCharacterIdentity(
+          creOffset: 0,
+          identity: CharacterIdentity.race,
+          value: 4,
+        ).label,
+        contains('Race'),
+      );
+    });
+  });
+
+  group('edits that make the record bigger', () {
+    // ⚠️ **The first commands that resize.** They exist because a created
+    // character is otherwise an empty shell: `CHARBASE` carries zero effects
+    // and zero known spells, so `SetProficiency` — which only raises a pip that
+    // is already there — has nothing to raise.
+    Chr blank() => ChrCodec.decode(buildCharacterFile());
+
+    test('grants a proficiency to a character that had none', () {
+      final chr = blank();
+      final before = CreCodec.decode(chr.creBytes);
+
+      final after = applyCharacterEdit(
+        chr,
+        GrantProficiency(
+          creOffset: chr.creOffset,
+          proficiencyId: 114,
+          pips: 2,
+        ),
+      );
+
+      final cre = CreCodec.decode(after.creBytes);
+      expect(cre.effectsCount, before.effectsCount + 1);
+      expect(cre.proficiencies[114], 2);
+      expect(cre.contentEnd, cre.bytes.length);
+    });
+
+    test('the CHR header’s length follows the record it describes', () {
+      // The whole of what resizing costs an exported character: one dword.
+      final chr = blank();
+
+      final after = applyCharacterEdit(
+        chr,
+        GrantProficiency(creOffset: chr.creOffset, proficiencyId: 89, pips: 1),
+      );
+
+      expect(after.creLength, chr.creLength + creEffectV2Length);
+      expect(after.bytes, hasLength(chr.bytes.length + creEffectV2Length));
+      expect(CreCodec.decode(after.creBytes).proficiencies[89], 1);
+    });
+
+    test('a second proficiency joins the first rather than replacing it', () {
+      var chr = blank();
+      for (final (id, pips) in [(89, 1), (114, 2)]) {
+        chr = applyCharacterEdit(
+          chr,
+          GrantProficiency(
+            creOffset: chr.creOffset,
+            proficiencyId: id,
+            pips: pips,
+          ),
+        );
+      }
+
+      expect(CreCodec.decode(chr.creBytes).proficiencies, {89: 1, 114: 2});
+    });
+
+    test('learns a spell into a book that did not exist', () {
+      final chr = blank();
+
+      final after = applyCharacterEdit(
+        chr,
+        LearnSpell(
+          creOffset: chr.creOffset,
+          resref: 'SPWI112',
+          level: 1,
+          type: SpellType.wizard,
+        ),
+      );
+
+      final cre = CreCodec.decode(after.creBytes);
+      expect(cre.knownSpellsCount, 1);
+      expect(cre.contentEnd, cre.bytes.length);
+    });
+
+    test(
+      '⚠️ a savegame refuses a resizing edit rather than corrupting itself',
+      () {
+        // Adding one effect inside a save moves 39 pointers. Until Phase 1's
+        // layout pass exists, saying so is the only safe answer.
+        final gam = openSave();
+
+        expect(
+          () => applyEdit(
+            gam,
+            SetCharacterIdentity(
+              creOffset: creOffsetOf(gam),
+              identity: CharacterIdentity.race,
+              value: 2,
+            ),
+          ),
+          returnsNormally,
+          reason: 'a fixed-width edit is still fine',
+        );
+        expect(
+          () => applyEdit(
+            gam,
+            GrantProficiency(
+              creOffset: creOffsetOf(gam),
+              proficiencyId: 89,
+              pips: 1,
+            ),
+          ),
+          throwsA(isA<UnsupportedError>()),
+        );
+      },
+    );
   });
 }

@@ -22,14 +22,13 @@ import 'package:wand_of_saves/data/services/portrait_import_service.dart';
 import 'package:wand_of_saves/domain/bitmap_info.dart';
 import 'package:wand_of_saves/ui/character/portrait_image.dart';
 
-/// Every portrait the player can choose, by base name.
-///
-/// The game's own 210 **and** whatever is in their `portraits/` folder, in one
-/// list — because the engine treats them as one list too: a loose file simply
-/// shadows a packed one of the same name.
-final portraitNamesProvider = FutureProvider<List<String>>(
-  (ref) => ref.watch(resourceRepositoryProvider).portraitNames(),
-);
+// ⚠️ `portraitNamesProvider` used to be declared here *as well as* in
+// `lib/config/providers.dart`, and this was the copy the app actually used —
+// so the one in the query section was dead, and this one carried **no
+// `retry:` policy**. On a machine with no game installed the picker therefore
+// retried the read ten times over 6.4 seconds before admitting there were no
+// portraits, which is precisely the defect D12 recorded and believed fixed.
+// One declaration now, in the query section with the rest of the graph.
 
 /// Asks which portrait a character should use.
 ///
@@ -57,6 +56,58 @@ class PortraitPicker extends ConsumerStatefulWidget {
 
 class _PortraitPickerState extends ConsumerState<PortraitPicker> {
   late String? _chosen = widget.selected;
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Choose a portrait'),
+    content: SizedBox(
+      width: 640,
+      height: 520,
+      child: PortraitChooser(
+        selected: _chosen,
+        onChoose: (name) => setState(() => _chosen = name),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: _chosen == null
+            ? null
+            : () => Navigator.of(context).pop(_chosen),
+        child: const Text('Use this portrait'),
+      ),
+    ],
+  );
+}
+
+/// The search box, the `Add a portrait…` button and the grid of faces.
+///
+/// **Extracted from [PortraitPicker] so the creation flow can show the same
+/// thing without a dialog around it.** The picker keeps its `show` signature
+/// and its behaviour; this holds everything that was inside its `content`.
+///
+/// It owns the search text and nothing else. What has been *chosen* belongs to
+/// whoever is asking — a dialog that answers on Cancel, or a wizard step that
+/// records it in the draft — so it arrives as [selected] and leaves through
+/// [onChoose].
+class PortraitChooser extends ConsumerStatefulWidget {
+  /// Shows the portraits, with [selected] drawn as chosen.
+  const PortraitChooser({required this.onChoose, this.selected, super.key});
+
+  /// The base name currently chosen, if any.
+  final String? selected;
+
+  /// Called with the base name each time one is picked.
+  final ValueChanged<String> onChoose;
+
+  @override
+  ConsumerState<PortraitChooser> createState() => _PortraitChooserState();
+}
+
+class _PortraitChooserState extends ConsumerState<PortraitChooser> {
   String _filter = '';
 
   /// Takes a picture from anywhere and puts it where the engine looks.
@@ -86,92 +137,77 @@ class _PortraitPickerState extends ConsumerState<PortraitPicker> {
       context: context,
       builder: (context) => _AddPortraitDialog(
         importer: ref.read(portraitImportServiceProvider),
-        suggestedName: _suggest(file.name),
+        suggestedName: _suggestFrom(file.name),
         bytes: bytes,
       ),
     );
     if (chosen == null || !mounted) return;
 
-    // The picker reads the folder through the resource repository, so the new
-    // portrait only appears once that list is re-read.
+    // The list is read through the resource repository, so a new portrait only
+    // appears once that query is re-read.
+    //
+    // ⚠️ **This is why the creation flow's ViewModel must not `watch` a
+    // query.** An invalidation here recomputes every provider that depends on
+    // it, and a recomputed provider's state is destroyed — which would throw a
+    // half-made character away for the sake of adding a picture.
     ref.invalidate(portraitNamesProvider);
-    setState(() => _chosen = chosen);
-  }
-
-  /// A first guess at a name, from the file the player picked.
-  static String _suggest(String fileName) {
-    final stem = fileName.split('.').first.toUpperCase();
-    final kept = stem.replaceAll(RegExp('[^A-Z0-9_]'), '');
-    const limit = PortraitImportService.baseNameLimit;
-    return kept.length > limit ? kept.substring(0, limit) : kept;
+    widget.onChoose(chosen);
   }
 
   @override
   Widget build(BuildContext context) {
     final names = ref.watch(portraitNamesProvider);
 
-    return AlertDialog(
-      title: const Text('Choose a portrait'),
-      content: SizedBox(
-        width: 640,
-        height: 520,
-        child: Column(
+    return Column(
+      children: [
+        // Both controls act on the *list*, so they sit together above it —
+        // where a dialog's actions below act on the choice.
+        Row(
           children: [
-            // Both controls act on the *list*, so they sit together above it
-            // — where the dialog's actions below act on the choice.
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    autofocus: true,
-                    onChanged: (value) =>
-                        setState(() => _filter = value.trim().toUpperCase()),
-                    decoration: const InputDecoration(
-                      labelText: 'Search',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: _addOne,
-                  icon: const Icon(Icons.add_photo_alternate_outlined),
-                  label: const Text('Add a portrait…'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
             Expanded(
-              child: names.when(
-                data: (all) => _PortraitGrid(
-                  names: [
-                    for (final name in all)
-                      if (_filter.isEmpty || name.contains(_filter)) name,
-                  ],
-                  chosen: _chosen,
-                  onChoose: (name) => setState(() => _chosen = name),
+              child: TextField(
+                onChanged: (value) =>
+                    setState(() => _filter = value.trim().toUpperCase()),
+                decoration: const InputDecoration(
+                  labelText: 'Search',
+                  prefixIcon: Icon(Icons.search),
                 ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Center(child: Text('$error')),
               ),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: _addOne,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: const Text('Add a portrait…'),
             ),
           ],
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _chosen == null
-              ? null
-              : () => Navigator.of(context).pop(_chosen),
-          child: const Text('Use this portrait'),
+        const SizedBox(height: 12),
+        Expanded(
+          child: names.when(
+            data: (all) => _PortraitGrid(
+              names: [
+                for (final name in all)
+                  if (_filter.isEmpty || name.contains(_filter)) name,
+              ],
+              chosen: widget.selected,
+              onChoose: widget.onChoose,
+            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(child: Text('$error')),
+          ),
         ),
       ],
     );
   }
+}
+
+/// A first guess at a name, from the file the player picked.
+String _suggestFrom(String fileName) {
+  final stem = fileName.split('.').first.toUpperCase();
+  final kept = stem.replaceAll(RegExp('[^A-Z0-9_]'), '');
+  const limit = PortraitImportService.baseNameLimit;
+  return kept.length > limit ? kept.substring(0, limit) : kept;
 }
 
 /// Asks what to call an imported portrait, and says what was actually read.

@@ -24,6 +24,8 @@
 /// only a savegame can take.
 library;
 
+import 'dart:typed_data';
+
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 
@@ -63,6 +65,72 @@ T applyCharacterEdit<T extends CreatureDocument<T>>(
     return document.withCreatureField(
       creOffset: creOffset,
       field: stat.field,
+      value: value,
+    );
+  }(),
+  // ⚠️ **The two that resize.** Both go through `Cre.withEntryAppended`, which
+  // creates the section when it is absent — `CHARBASE` has neither — and then
+  // through `withCreature`, which is where a savegame refuses.
+  GrantProficiency(:final creOffset, :final proficiencyId, :final pips) => () {
+    if (!EffectV2Field.parameter1.holds(pips)) {
+      throw InvalidEditException(
+        what: 'proficiency $proficiencyId',
+        value: pips,
+        minimum: EffectV2Field.parameter1.minimum,
+        maximum: EffectV2Field.parameter1.maximum,
+      );
+    }
+    final creature = CreCodec.decode(document.creatureAt(creOffset));
+    final effect = proficiencyEffectTemplate();
+    ByteData.sublistView(effect)
+      ..setUint32(EffectV2Field.parameter1.offset, pips, Endian.little)
+      ..setUint32(
+        EffectV2Field.parameter2.offset,
+        proficiencyId,
+        Endian.little,
+      );
+
+    return document.withCreature(
+      creOffset: creOffset,
+      creature: creature.withEntryAppended(
+        section: CreSection.effects,
+        entry: effect,
+      ),
+    );
+  }(),
+  LearnSpell(:final creOffset, :final resref, :final level, :final type) => () {
+    final creature = CreCodec.decode(document.creatureAt(creOffset));
+    final entry = Uint8List(creKnownSpellLength)
+      ..setRange(0, 8, encodeFixedString(resref, 8));
+    ByteData.sublistView(entry)
+      // ⚠️ "Spell Level -1" in IESDP's own words. A book of level-0 spells is
+      // what happens when this is written straight through.
+      ..setUint16(0x08, level - 1, Endian.little)
+      ..setUint16(0x0a, type.stored, Endian.little);
+
+    return document.withCreature(
+      creOffset: creOffset,
+      creature: creature.withEntryAppended(
+        section: CreSection.knownSpells,
+        entry: entry,
+      ),
+    );
+  }(),
+  SetCharacterIdentity(:final creOffset, :final identity, :final value) => () {
+    // The field's bound, not the game's. Which classes an elf may take lives
+    // in the player's `clsrcreq.2da` and is settled before a command is built
+    // — the same division `SetProficiency` makes just below.
+    if (!identity.holds(value)) {
+      throw InvalidEditException(
+        what: identity.label,
+        value: value,
+        minimum: identity.field.minimum,
+        maximum: identity.field.maximum,
+      );
+    }
+    return document.withCreatureField(
+      creOffset: creOffset,
+      field: identity.field,
       value: value,
     );
   }(),

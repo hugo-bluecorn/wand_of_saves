@@ -14,6 +14,7 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/cre/cre.dart';
 import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/spec/chr_v2_0.dart';
 import 'package:infinity_formats/src/spec/cre_v1_0.dart';
@@ -97,6 +98,30 @@ final class Chr implements CreatureDocument<Chr> {
     value: value,
     what: '$field of the creature at $creOffset',
   );
+
+  /// The record this file wraps. [creOffset] is the header size.
+  @override
+  Uint8List creatureAt(int creOffset) =>
+      Uint8List.sublistView(bytes, creOffset, creOffset + creLength);
+
+  /// A copy carrying [creature] instead, with the header's length updated.
+  ///
+  /// **The whole of what resizing costs an exported character**: one dword.
+  /// `creOffset` is always the header size here, and the record is the rest of
+  /// the file, so there is nothing after it to move.
+  @override
+  Chr withCreature({required int creOffset, required Cre creature}) {
+    final record = creature.bytes;
+    final out = Uint8List(creOffset + record.length)
+      ..setRange(0, creOffset, bytes)
+      ..setRange(creOffset, creOffset + record.length, record);
+    ByteData.sublistView(out).setUint32(
+      ChrHeaderField.creLength.offset,
+      record.length,
+      Endian.little,
+    );
+    return Chr.trusted(out.asUnmodifiableView());
+  }
 
   /// A copy with the text [field] of the creature at [creOffset] set to
   /// [value] — a portrait resref, so far.

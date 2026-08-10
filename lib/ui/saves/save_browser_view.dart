@@ -19,14 +19,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/config/router.dart';
-import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
-import 'package:wand_of_saves/data/services/game_profile_service.dart';
 import 'package:wand_of_saves/domain/character_file.dart';
 import 'package:wand_of_saves/domain/document_ref.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/ui/character/portrait_image.dart';
-import 'package:wand_of_saves/ui/character/portrait_picker.dart';
 import 'package:wand_of_saves/ui/saves/save_browser_viewmodel.dart';
 
 /// The home screen: the two kinds of document this app opens.
@@ -731,115 +728,15 @@ class _NewCharacterCard extends ConsumerWidget {
     );
   }
 
-  static Future<void> _create(BuildContext context, WidgetRef ref) async {
-    final portrait = await PortraitPicker.show(context);
-    if (portrait == null || !context.mounted) return;
-
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => const _NewCharacterDialog(),
-    );
-    if (name == null || !context.mounted) return;
-
-    final messenger = ScaffoldMessenger.of(context);
-    final router = GoRouter.of(context);
-    try {
-      final created = await ref
-          .read(saveBrowserProvider.notifier)
-          .createCharacter(
-            name: name,
-            fileName: '$name${GameProfileService.characterExtension}',
-            portraitName: portrait,
-          );
-      // Straight into the sheet, where class, abilities and the rest are
-      // edited like any other character. Nothing else is asked for up front.
-      router.go(Routes.characterFor(created.fileName));
-    } on CharacterFileExistsException {
-      messenger.showSnackBar(
-        SnackBar(content: Text('There is already a character called $name')),
-      );
-    } on NoCharacterTemplateException {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Baldur’s Gate does not appear to be installed, so there is no '
-            'character template to build from.',
-          ),
-        ),
-      );
-    }
-  }
-}
-
-/// Asks what to call the new character.
-///
-/// The name is the second and last question: everything else is on the sheet
-/// the player lands in.
-class _NewCharacterDialog extends StatefulWidget {
-  const _NewCharacterDialog();
-
-  @override
-  State<_NewCharacterDialog> createState() => _NewCharacterDialogState();
-}
-
-class _NewCharacterDialogState extends State<_NewCharacterDialog> {
-  final TextEditingController _controller = TextEditingController();
-  String? _error;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final typed = _controller.text.trim();
-    if (typed.isEmpty) {
-      setState(() => _error = 'Give the character a name.');
-      return;
-    }
-    if (RegExp(r'[\\/:*?"<>|]').hasMatch(typed)) {
-      setState(
-        () => _error = r'A name cannot contain \ / : * ? " < > or |.',
-      );
-      return;
-    }
-    Navigator.of(context).pop(typed);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Name your character'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'The character is built from the game’s own template, then opens '
-            'so you can set class, abilities and the rest.',
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            onSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              labelText: 'Name',
-              errorText: _error,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('Create')),
-      ],
-    );
-  }
+  /// Opens the guided flow.
+  ///
+  /// ⚠️ **A route, not a pair of dialogs.** This used to show the portrait
+  /// picker and then a name dialog, and a character created that way was stuck
+  /// as whatever `CHARBASE` is — no gender, race, class or alignment could be
+  /// chosen at all. The flow asks the same questions the game asks, in the same
+  /// order, and the step list stays in view.
+  static void _create(BuildContext context, WidgetRef ref) =>
+      context.go(Routes.newCharacterPath);
 }
 
 /// The screenshot the game took when the save was written.

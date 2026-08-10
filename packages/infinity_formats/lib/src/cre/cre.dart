@@ -14,6 +14,7 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/cre/cre_section.dart';
 import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/spec/cre_v1_0.dart';
@@ -361,6 +362,84 @@ final class Cre {
     for (final effect in effects)
       if (effect.isProficiency) effect.parameter2: effect.parameter1,
   };
+
+  /// A copy of this creature with [entry] appended to [section].
+  ///
+  /// **The first write in this project that changes a record's size**, and the
+  /// reason it can exist yet is that the creation flow puts it in a `.chr`: one
+  /// length field in a 100-byte header, against a file this app built seconds
+  /// earlier. The same edit inside a savegame moves thirty-nine pointers and is
+  /// still Phase 1's work.
+  ///
+  /// What it does, in order:
+  ///
+  /// 1. **Creates the section if it is absent.** An offset of `0` means absent,
+  ///    so `CHARBASE` — carrying no effects at all — needs the section made
+  ///    rather than written at zero.
+  /// 2. Splices [entry] in at the end of the section.
+  /// 3. Raises that section's count by one.
+  /// 4. **Shifts every other section that started at or after the splice**, and
+  ///    leaves an absent section's `0` alone. Adding a stride to `0` would turn
+  ///    "absent" into a pointer at the stride.
+  ///
+  /// ⚠️ **Appends only.** [CreSection.memorizationInfo] entries hold an index
+  /// into the memorised-spell array; inserting anywhere but the end would leave
+  /// those indices pointing at the wrong entry, and this method does not fix
+  /// them up. Whoever inserts a memorised spell owns keeping them honest.
+  ///
+  /// The result satisfies `contentEnd == bytes.length`, which is the single
+  /// check that reconciles all six pointers, every entry size and the
+  /// effect-version flag.
+  ///
+  /// Throws [ArgumentError] if [entry] is not exactly one entry wide.
+  Cre withEntryAppended({
+    required CreSection section,
+    required Uint8List entry,
+  }) {
+    final stride = section.strideIn(this);
+    if (entry.length != stride) {
+      throw ArgumentError.value(
+        entry.length,
+        'entry',
+        'a ${section.name} entry is $stride bytes',
+      );
+    }
+
+    final offset = _read(section.offsetField);
+    final count = _read(section.countField);
+    // An absent section starts where the content currently ends, so the splice
+    // is an append to the file and nothing else moves.
+    final present = hasSection(offset);
+    final start = present ? offset : contentEnd;
+    final spliceAt = present ? offset + count * stride : contentEnd;
+
+    final out = Uint8List(bytes.length + stride)
+      ..setRange(0, spliceAt, bytes)
+      ..setRange(spliceAt, spliceAt + stride, entry)
+      ..setRange(spliceAt + stride, bytes.length + stride, bytes, spliceAt);
+
+    final view = ByteData.sublistView(out)
+      ..setUint32(section.offsetField.offset, start, Endian.little)
+      ..setUint32(section.countField.offset, count + 1, Endian.little);
+
+    for (final other in CreSection.all) {
+      if (other == section) continue;
+      final where = _read(other.offsetField);
+      if (!hasSection(where) || where < spliceAt) continue;
+      view.setUint32(other.offsetField.offset, where + stride, Endian.little);
+    }
+    // The slot table has an offset and no count, so it moves but never grows.
+    final slots = itemSlotsOffset;
+    if (hasSection(slots) && slots >= spliceAt) {
+      view.setUint32(
+        CreHeaderField.itemSlotsOffset.offset,
+        slots + stride,
+        Endian.little,
+      );
+    }
+
+    return Cre.trusted(out.asUnmodifiableView());
+  }
 
   /// Whether this creature has a section at [offset] at all.
   ///

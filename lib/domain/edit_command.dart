@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'package:wand_of_saves/domain/character_identity.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 
 /// One change the player asked for.
@@ -72,6 +73,48 @@ final class SetCharacterStat extends CharacterEditCommand {
 
   @override
   String get label => 'Set ${stat.label} to $value';
+}
+
+/// Sets one identity field — who the character is, rather than how good.
+///
+/// Its own command rather than a [CharacterStat] entry, for the reason
+/// [CharacterIdentity] exists at all: **the legal values are an enumeration,
+/// not a range.** Race 4 is `DWARF` and race 5 is `HALFLING`; neither is more
+/// than the other, and a sheet that offered a spinner for them would be lying
+/// about what the field is.
+///
+/// ⚠️ **Fixed-width, so it is as safe as a stat edit.** Four of the five fields
+/// are a single byte and the fifth is a dword; nothing resizes and the layout
+/// pass is not involved.
+///
+/// [value] is what the record stores, unshifted. For [CharacterIdentity.kit]
+/// that is the whole dword with the `KIT.IDS` key in its high word — turning a
+/// chosen specialisation into that number needs the player's `kitlist.2da`, and
+/// a command must not reach for a data source.
+final class SetCharacterIdentity extends CharacterEditCommand {
+  /// Sets [identity] to [value] on the creature record at [creOffset].
+  const SetCharacterIdentity({
+    required this.creOffset,
+    required this.identity,
+    required this.value,
+  });
+
+  @override
+  final int creOffset;
+
+  /// Which field to write.
+  final CharacterIdentity identity;
+
+  /// The new value, exactly as the record stores it.
+  final int value;
+
+  /// What this edit did.
+  ///
+  /// Names the field and the stored number, not the race. Saying "Elf" needs
+  /// `RACE.IDS` and, for a kit, the player's own `kitlist.2da` — the same
+  /// reason [SetProficiency] names its proficiency by number.
+  @override
+  String get label => 'Set ${identity.label} to $value';
 }
 
 /// Sets the pip count of a proficiency the character already has.
@@ -171,6 +214,92 @@ final class SetPortrait extends CharacterEditCommand {
   @override
   String get label =>
       baseName.isEmpty ? 'Clear the portrait' : 'Set the portrait to $baseName';
+}
+
+/// How a spell is filed in a creature's book.
+///
+/// The word in the record, from IESDP's known-spell entry: `0` priest,
+/// `1` wizard, `2` innate.
+enum SpellType {
+  /// A cleric's or druid's.
+  priest(0),
+
+  /// A mage's or bard's.
+  wizard(1),
+
+  /// A racial or class ability rather than a memorised spell.
+  innate(2);
+
+  const SpellType(this.stored);
+
+  /// What the record stores.
+  final int stored;
+}
+
+/// Grants a proficiency the character does not have.
+///
+/// ⚠️ **The first edit in this project that makes a record bigger**, and it
+/// exists because a created character is otherwise stuck: `CHARBASE` carries
+/// **zero** effects, so [SetProficiency] — which raises a pip already in the
+/// record — has nothing to raise.
+///
+/// On BG:EE a proficiency is a 264-byte opcode 233 effect, so granting one adds
+/// an entry to the effects section and moves everything after it.
+///
+/// ⚠️ **A savegame refuses this.** Growing a record inside a save moves 39
+/// pointers; a `.chr` moves one. That is why creation writes a character file.
+final class GrantProficiency extends CharacterEditCommand {
+  /// Grants [proficiencyId] at [pips] to the creature at [creOffset].
+  const GrantProficiency({
+    required this.creOffset,
+    required this.proficiencyId,
+    required this.pips,
+  });
+
+  @override
+  final int creOffset;
+
+  /// Which proficiency, as `weapprof.2da` numbers it.
+  final int proficiencyId;
+
+  /// How many pips to grant.
+  final int pips;
+
+  @override
+  String get label => 'Grant proficiency $proficiencyId at $pips';
+}
+
+/// Puts a spell in the character's book.
+///
+/// Adds a 12-byte entry to the known-spells section, which `CHARBASE` also does
+/// not have — so this creates it.
+final class LearnSpell extends CharacterEditCommand {
+  /// Teaches [resref] at [level] to the creature at [creOffset].
+  const LearnSpell({
+    required this.creOffset,
+    required this.resref,
+    required this.level,
+    required this.type,
+  });
+
+  @override
+  final int creOffset;
+
+  /// The `SPL` resource, e.g. `SPWI112` for Magic Missile.
+  final String resref;
+
+  /// The spell's level, as a player counts it — 1 for a first-level spell.
+  ///
+  /// ⚠️ **The record stores this less one**, which the writer handles. IESDP
+  /// labels the field "Spell Level -1" and a book full of level-0 spells is
+  /// what happens when that is missed.
+  final int level;
+
+  /// Priest, wizard or innate.
+  final SpellType type;
+
+  @override
+  String get label => 'Learn $resref';
 }
 
 /// Sets the shared party purse.

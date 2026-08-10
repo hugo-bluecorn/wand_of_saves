@@ -22,6 +22,7 @@ library;
 
 import 'package:go_router/go_router.dart';
 import 'package:wand_of_saves/ui/character/character_file_view.dart';
+import 'package:wand_of_saves/ui/creation/creation_view.dart';
 import 'package:wand_of_saves/ui/party/party_view.dart';
 import 'package:wand_of_saves/ui/saves/save_browser_view.dart';
 
@@ -55,6 +56,16 @@ abstract final class Routes {
   /// The path parameter naming a character file.
   static const String characterParameter = 'file';
 
+  /// The guided flow that makes a character, relative to [browser].
+  ///
+  /// ⚠️ **Deliberately not `character/new`.** That would collide with
+  /// [character] for a character actually called `new` — every string is a
+  /// legal file name, so no literal segment under that prefix is safe.
+  static const String newCharacter = 'new-character';
+
+  /// The creation flow's path.
+  static const String newCharacterPath = '/new-character';
+
   /// The party shell's path for the slot directory named [directoryName].
   ///
   /// Encoded on the way out; `go_router` decodes path parameters on the way
@@ -85,6 +96,10 @@ GoRouter buildRouter() => GoRouter(
           builder: (context, state) => CharacterFileView(
             fileName: state.pathParameters[Routes.characterParameter] ?? '',
           ),
+        ),
+        GoRoute(
+          path: Routes.newCharacter,
+          builder: (context, state) => const CreationView(),
         ),
       ],
     ),

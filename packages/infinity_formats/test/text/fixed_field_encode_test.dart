@@ -15,7 +15,6 @@
 import 'dart:typed_data';
 
 import 'package:infinity_formats/infinity_formats.dart';
-import 'package:infinity_formats/src/text/fixed_field.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -585,3 +585,48 @@ errors"* — without making a keystroke asynchronous.
 
 The 74 existing editor tests caught this within a minute of the attempt, unmodified. That is the
 argument for holding a public command API still while rewiring what is behind it.
+
+---
+
+## D13 — The game's table answers it; a rule in code must say why none does · CLOSED (2026-08-10)
+
+**Decision: prefer the player's own `2DA` over a rule written here. Where a rule must be written,
+its doc comment names the tables that were checked and why none of them answers.**
+
+### What forced it
+
+The user, looking at the creation flow: *"the app has domain knowledge as programmatic rules when a
+table lookup provides the answer… I do like ECS's concept of separating data from behaviour, and in
+our case the data and the behaviour are intertwined, thus we are constantly running into the problem
+of data interpretation."*
+
+Checking it found four derivations in code we own, and **two of them were wrong**:
+
+| written here | what the installation says |
+|---|---|
+| `raceName` — a hand-kept `{'HALFORC': 'Half-Orc'}` map plus a word-splitter | `racetext.2da`'s `UPPERCASE` column *is* `Half-Orc`, in the player's language |
+| `className` — `identifier.split('_')` title-cased and joined with `' / '` | `clastext.2da`'s `MIXED` is `Cleric / Ranger`, separator and all |
+| `kitName` — the same splitter | ⚠️ **wrong.** `kitlist.2da` names the Ranger's first kit `FERALAN`; the game draws **Archer** |
+| `classHitDice` — `(die, afterNine)` per class, rolls stopping at level 9 | ⚠️ **wrong.** `hpclass.2da` → `hp…2da` roll through **11** for wizards and rogues, so a Mage 12 was **3** hit points short and a Thief 12 **4** |
+
+Neither wrong answer could have been caught by the suite: `Archer` needs the talk table, and the
+hit-point gap only opens above level 9 where no fixture goes.
+
+### The rule
+
+- **Data and its interpretation are separate objects.** `NameTables` and `HitDieTables` hold what the
+  tables said and nothing else; `GameRules` reads them. Swapping the source touches no logic.
+- **Raw columns, not reductions.** `HitDieRow` keeps `sides`, `rolls` and `modifier` rather than a
+  computed maximum — reducing in the data bakes one reading in and loses every other.
+- **A rule that stays says why.** `isWarrior`, `classCount`, `alignmentName`, `genderName`, the
+  pronoun tokens and the kit encodings each carry the tables checked and what was missing.
+- **The fallback is the derivation**, reachable only with no game installed — where the app still
+  has to open a savegame and name what is in it. It is documented as approximate.
+
+### ⚠️ The refinement the audit itself forced: **engine > table > code**
+
+`hpclass.2da` maps `FIGHTER_MAGE → HPFM`, and `HPFM.2da` says a Fighter/Mage rolls a pre-averaged
+`1d7`. The engine does not: measured twice, it builds hit points **per class** (`2 × 5 + 1 × 2 = 12`).
+So "always use the table" would have *introduced* a bug. This decision prefers a table over an
+**invented** rule, and every place a measurement overrides a table is recorded where the override
+lives.
