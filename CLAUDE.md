@@ -171,55 +171,60 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phases 0, 2 and 2.5 are done. The Characters plan is done: all six slices.**
+**Phases 0, 2 and 2.5 are done. Both character plans are done** — the Characters plan (six
+slices) and the creation flow (steps A–F).
 Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
 four workflows they serve.
 
-> ### 🔶 Where the last session stopped, 2026-08-09
+> ### 🔶 Where the last session stopped, 2026-08-10
 >
-> **All four workflows now have a screen.** 347 app tests, 234 format tests, `analyze` clean, no
-> suppressions.
+> **The creation wizard is finished, and D14 is measured.** 543 app tests, 282 format tests,
+> `analyze` clean, no suppressions.
 >
-> The home screen is **two sections** — Characters above Saves — and a `.chr` is a document in its
-> own right: listed, opened, edited, saved, exported, deleted and created.
+> - **Ten steps**, the game's own order: Gender → Picture → Race → Class → Specialisation →
+>   Alignment → **Abilities → Proficiencies → Spells** → Name. Three of them are conditional and
+>   every condition is a table's answer: kits from `kitlist`, pips from `profs.2da`, spells from the
+>   `mxspl*` progressions — which is how a **bard** correctly gets no spell step at first level.
+> - ⚠️ **The record it grows now equals the engine's.** `creation_golden_test.dart` compares against
+>   the character BG:EE itself made and they agree on the **proficiency map**, the **two known
+>   spells**, the **memorised spell** and the **memorisation row** — all three sections `CHARBASE`
+>   does not have. `contentEnd == bytes.length` after four resizes.
+> - **Abilities are rolled from an injected `Random`** (`abilityDiceProvider`) — the first
+>   non-deterministic thing in the app, and a provider so the flow can be tested at all.
+> - **The list of level-1 wizard spells is in no table.** It comes from the `SPL` headers and needs
+>   **three** filters; the third is that the resref's level digit must agree with the header's, or
+>   `SPWI989` comes along. 108 candidates become the 22 the Mage Book screen shows.
 >
-> - **`ChrCodec`** — `CHR V2.0`, a 100-byte header around a plain `CRE V1.0`. Round-trip byte
->   identity on all three real `.chr` files. ⚠️ **`V2.1` is refused by name**, because this app can
->   provoke it: the engine writes it past `startare.2da`'s `START_XP_CAP` of **161,000**.
-> - **Export** — `ChrCodec.exportOf`, and it synthesises nothing. **The CHR header is a byte-for-byte
->   copy of the GAM NPC struct**: name from `0xc0`, quick slots from `0x8c`–`0xbf`. Asserted against
->   the engine's own exports. ⚠️ The *record* will not match — `0x27c`/`0x27e` are actor enumeration
->   values the session assigns.
-> - **Delete moves, never unlinks.** `RecycleService` puts a save's whole directory and a character
->   *with its `.bio`* into `deleted/` beside the save root, never overwriting. Emptying is separate
->   and says plainly it cannot be undone.
-> - **One character sheet, two documents.** `CharacterPanel` takes a `Character` and an `onEdit`
->   callback; `CreatureDocument<T>` is the F-bounded interface `Gam` and `Chr` share, and
->   `applyCharacterEdit` is generic over it. ⚠️ **`SetPartyGold` sits outside `CharacterEditCommand`
->   deliberately** — a `.chr` has no party, and the type system is where that is said.
-> - **Portraits come from the record**, not from the save's sidecar. ⚠️ **That reverses a documented
->   decision**: the rail used to draw `PORTRT<n>.bmp`. It still does the one job only it can — it is
->   a picture of what the engine *believed*, and it closed D10 — but it is not the character's face.
-> - **`+` creates a character** from the engine's own `CHARBASE`, portrait first.
+> **⚠️ Two defects were found and fixed, one of them shipped:**
 >
->   The picker offers the game's 210, whatever is already in `portraits/`, and **`Add a
->   portrait…`**, which copies a file from anywhere into that folder — the same thing the game's
->   own CUSTOM button does. ⚠️ **It explains rather than refuses**: the only hard rule is a base
->   name of seven characters or fewer, because depth, compression and size are all things the
->   engine tolerates in its own portraits.
+> - **`GrantProficiency` threw against the real `CHARBASE`.** The template is `effectVersion` **0**
+>   — 48-byte v1 effects — and a proficiency is a 264-byte v2 record, so the first proficiency
+>   granted to any created character was refused. **No test could see it**: the synthetic creature
+>   wrote v2 unconditionally, which is true of every character in a save and of nothing a new one is
+>   built from.
+> - **`Tlk.get` could not be called concurrently** — a seek and then a read on one handle, so two
+>   overlapping lookups broke both. Latent for weeks; it surfaced when one caller grew a few more
+>   strrefs.
 >
-> **Two cheap experiments are still queued** for the next time the game is open, neither blocking:
-> store a THAC0 *worse* than the class table computes and see whether the engine overrides it, and
-> check whether a percentile of 100 really prints `18/00`.
+> **D14 closed by measurement.** A probe character with every field at an underivable value was
+> imported, played and saved: **the engine overwrote six fields and left sixty-seven alone.**
+> `tool/dev/make_probe_character.dart` builds it, `tool/dev/compare_characters.dart` diffs it.
 >
-> ⚠️ **The gate for export and creation is one trip into BG:EE**: New Game → IMPORT accepting a
-> character this app exported, and one it created.
+> ⚠️ **The next plan is written and deliberately unstarted**:
+> `~/.claude/plans/authored-and-derived.md`.
+>
+> ⚠️ **Still owed, and now the only thing between this and Phase 2 being finished:** one trip into
+> BG:EE for the **export** half of the gate. This run got a savegame instead, because EXPORT is
+> greyed out for an intoxicated character.
 
 ### What exists
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 186 tests.
+  one table serves reader and writer and they cannot disagree. 282 tests.
+  - **`Cre` resizes**: `withEntryInserted` (insert at an entry index, not only append),
+    `withEntryField`, `withEffectVersion` and `readField`. The three spell sections have their own
+    field tables and readers; `SplCodec` reads enough of an `SPL` header to list a spellbook.
   - **The whole character sheet reads**: saving throws, resistances, thief skills, attacks,
     armour class modifiers, morale, fatigue, luck. Homogeneous groups come back as **records**.
   - **`Effect`** — enough of the 264-byte v2 record to find proficiencies, which on BG:EE are
@@ -229,7 +234,7 @@ four workflows they serve.
 - **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. **The whole
   character sheet is editable** and writes back: sealed `EditCommand`s over a curated
   `CharacterStat` table of 49 fields, plus `SetProficiency` for the pips that live in effects;
-  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 249 tests.
+  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 543 tests.
   - **Only what the class can actually have is offered.** The seven thief skills are greyed out
     when the player's `thiefscl.2da` gives that class or kit 0% of them — a Fighter/Mage has none
     — and proficiency tiles show their ceiling (`max 3`) rather than only refusing a bad value.
@@ -318,8 +323,9 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | Kit encoding | **Closed 2026-08-08.** `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and `0x4000` (`TRUECLASS`) both mean no kit. ⚠️ A kit **replaces** the class name — the game writes `Necromancer`, never `Mage (Necromancer)`. |
 | `hpconbon` warrior column | **Closed 2026-08-08.** Raised to Constitution 18 and loaded: the engine printed `Bonus Hit Points/Level: +4`, the warrior row, on a **Fighter/Mage**. `warriorRoots` was right, and the rule is *containment* — half a fighter is a warrior. |
 | Multi-class hit-point multiplier | **Closed 2026-08-09 — the MEAN class level, not the highest.** D10's route worked exactly as written: experience was set to 4000, no level was written, and the engine did the rest. A Fighter 2 / Mage 1 at Constitution 18 stores 12 and the game draws **18 / 18** into its portrait, so the bonus is 6 where highest gives 8. ⚠️ It hid for two days because **mean and highest are the same number for a single class**. `hitPointBonus` is fixed. Residual: how it rounds when the mean is not exact. |
-| THAC0 after a level-up | **Open — two readings, one number, 2026-08-09.** `THAC0.2da` computes 19 for a Fighter 2; Aard's record holds an edited **15** and the screen still printed 15. So either the engine never recomputes THAC0, or it recomputes and keeps whichever is better — 15 beats 19 either way. ⚠️ **The experiment that separates them:** store a value *worse* than computed, say 25, and look. |
-| Who may Turn Undead, and who may Track | **Open, and deliberately not guessed at — 2026-08-08.** Every other editable field on the panel is now governed by a table: the seven thief skills by `thiefscl.2da`, proficiency pips by `weapprof.2da`. These two are governed by nothing that has been found — `tracking.2da` turns out to be per-area prose — so they stay editable rather than take an invented class rule. Cheap to settle: set Turn Undead on a mage and Tracking on a thief, and see whether BG:EE shows or ignores them. |
+| THAC0 after a level-up | **Closed 2026-08-10 — the engine never recomputes it.** The separating experiment was run: a stored **25** against a computed 20, *worse* either way, survived import and play. The screen printed `Base THAC0: 25`, `THAC0: 22`, `Strength Modification: -3`. The same run closed the percentile question — a stored `strengthBonus` of 100 prints **`18/00`**. |
+| Who may Turn Undead, and who may Track | **Half-closed 2026-08-10.** Stored 25 and 100 on a Fighter/Mage/Thief both **survived** the record and the Skills tab showed **neither** — so the display is class-gated and a stored value alone grants nothing. *Which* classes qualify is still in no table that has been found, so both stay editable rather than take an invented rule. |
+| Which fields the engine owns | **Closed 2026-08-10 — D14.** A probe character with every field at an underivable value was imported, played and saved: the engine overwrote **six** fields and left **sixty-seven** alone. Hit points and Lore store the class-and-level part only, with the ability bonus added at display. |
 
 ⚠️ **Seeing the screen is still the only way some defects surface.** The panel's stat tiles have
 now been too narrow **twice** — 148 truncated "Exceptional strength", 222 was needed for

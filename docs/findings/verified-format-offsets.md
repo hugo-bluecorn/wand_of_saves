@@ -941,15 +941,28 @@ it.** Measured twice: an imported Fighter 2 / Mage 1 arrived at **12**, which is
 Elf's Dexterity. Each table is measured; ⚠️ **flooring the racial minimum with the class one is an
 inference** until a case distinguishes it.
 
-### Proficiency slots — `profsmax.2da`
+### Proficiency slots — **`profs.2da`**, corrected 2026-08-10
 
-Every class row gives `FIRST_LEVEL 2`, and **a multi-class sums its halves**: Aurel, a level-1
-Fighter/Mage, was offered **4** slots at creation and spent exactly four — War Hammer 1,
-Flail 1, Two-Weapon Style 2.
+⚠️ **This section previously named `profsmax.2da` and was wrong.** Two tables one letter apart,
+and they answer different questions:
 
-⚠️ **The progression past level 1 does not parse cleanly.** The remaining columns read
-`OTHER_LEVELS 5` and then three headed `3 6 9` holding `3 4 5`. All that is measured is that a
-Fighter 1→2 level-up grants **none** — the screen read `PROFICIENCY SLOTS 0`.
+| table | column | what it means |
+|---|---|---|
+| **`profs.2da`** | `FIRST_LEVEL` | **how many pips there are to spend** — MAGE 1, FIGHTER 4, CLERIC 2, THIEF 2, PALADIN 4, RANGER 4, FIGHTER_MAGE 4, SORCERER 1 |
+| `profsmax.2da` | `FIRST_LEVEL` | **the most pips that may go into any *one* proficiency** — 2 for every class, which is Specialized |
+
+The old reading — "every class gets 2, and a multi-class sums its halves" — got the right number
+for a Fighter/Mage by coincidence and the wrong one for everything else. It is a direct lookup;
+nothing is summed.
+
+Aurel, a level-1 Fighter/Mage, was offered **4** and spent exactly four — War Hammer 1, Flail 1,
+Two-Weapon Style 2. That is `profs.2da`'s `FIGHTER_MAGE 4`, and the two-pip Style is
+`profsmax.2da`'s cap of 2 exactly reached.
+
+⚠️ **`profsmax`'s progression past level 1 still does not parse cleanly.** The remaining columns
+read `OTHER_LEVELS 5` and then three headed `3 6 9` holding `3 4 5`. All that is measured is that a
+Fighter 1→2 level-up grants **none** — the screen read `PROFICIENCY SLOTS 0`. `profs.2da`'s `RATE`
+column (3 for warriors, 6 for a mage, 4 for the rest) is presumably levels-per-slot, unmeasured.
 
 ### Thief skill points — `thiefskl.2da`
 
@@ -985,6 +998,15 @@ The entry array start is **hardcoded to byte 18** by the format, not derived fro
 
 Use `RandomAccessFile`, seek per lookup, and put an LRU in front. Dart has no mmap, and the largest
 single string measured is 15,111 bytes. Do **not** load all strings.
+
+⚠️ **A lookup is a seek *and* a read, and that pair is not atomic — 2026-08-10.** Dart's
+`RandomAccessFile` refuses a second operation while one is in flight
+(`FileSystemException: An async operation is currently pending`), so two overlapping lookups break
+**both** and neither caller did anything wrong. The app has two providers resolving names at the
+same time as a matter of course; it stayed hidden until one of them grew a few more strrefs to
+resolve, and then it took out a whole screen of names. `Tlk` now serialises its own file access by
+chaining, and ⚠️ **the chain must swallow the failure for itself only** — chaining on the result
+directly would let one truncated entry poison every lookup queued behind it.
 
 ### Encoding — UTF-8. Verified 2026-08-07
 
@@ -1405,3 +1427,198 @@ than the engine refuses files the engine would draw.
 BMP header offsets, measured by parsing all 210: width `0x12` and height `0x16` as **signed**
 int32 (a negative height is a top-down row order, not a negative picture), bit depth `0x1c`,
 compression `0x1e`. A header is 54 bytes.
+
+## The three spell sections, and what a created character has to build — 2026-08-10
+
+Read from IESDP (`cre_v1.htm`) and then checked against a character BG:EE made. Entry layouts are
+`CreKnownSpellField`, `CreMemorizationField` and `CreMemorizedSpellField`.
+
+| section | size | fields |
+|---|---|---|
+| known spell | 12 | `0x00` resref(8) · `0x08` word **level − 1** · `0x0a` word type |
+| memorisation info | 16 | `0x00` level − 1 · `0x02` memorisable · `0x04` after effects · `0x06` type · `0x08` dword **index into the memorised array** · `0x0c` dword count |
+| memorised spell | 12 | `0x00` resref(8) · `0x08` dword flags — bit 0 memorised, bit 1 disabled |
+
+⚠️ **A known spell's `type` is not an `SPL` header's `type`.** Here `0` is priest, `1` wizard and
+`2` innate; an `SPL V1` header at `0x1c` says `1` wizard, `2` priest and `4` innate. The two agree
+on exactly one value — wizard — which is the worst possible overlap, because it is the case anyone
+tests first.
+
+### The full grid of memorisation rows is a **creation** artefact, not a requirement
+
+Measured on `aurel.chr` and on `000000101-Aurel Start`: **sixteen** rows on a Fighter/Mage — seven
+priest levels and nine wizard levels — with `memorisable` zero on every one the class cannot cast.
+Imoen carries **seventeen**: the same fifteen plus an innate row for her Find Traps ability.
+
+⚠️ **Corrected 2026-08-10 by importing a character with one row.** This section previously read
+"the engine writes a full grid, not only the rows in use", and inferred a requirement from two
+characters that had both been made by character *generation*. An imported character keeps whatever
+rows it arrived with: a probe carrying **one** row came back with **two** — ours verbatim
+(`level 1, wizard, memorisable 9/9, index 0, count 9`) plus one the engine appended for the Thief's
+innate ability, at `index 9`, following the same running-total convention. It did not expand
+anything to sixteen. Writing one row per window in use is correct and is now measured, not assumed.
+
+**Each row's `index` is the running total of the counts before it.** The rows partition the
+memorised array in row order. Confirmed on both fixtures and asserted as an invariant.
+
+⚠️ **So a memorised spell is inserted, not appended.** Adding a second spell of a level that
+already has one goes *inside* the array, and every window after it moves along by one — a pointer
+rewritten in a section the insert never touched. `Cre.withEntryInserted` plus `Cre.withEntryField`
+is what that costs.
+
+### ⚠️ `CHARBASE` stores `effectVersion` 0; the character built from it stores 1
+
+The template is **804 bytes**: a 724-byte header plus the 80-byte item-slot table, with all six
+section offsets pointing at 724 and every count zero. Its `effectVersion` is **0**, meaning 48-byte
+v1 effects — and BG:EE's own finished Aurel is **1**, with 22 records of 264 bytes.
+
+A proficiency is a 264-byte v2 record, so granting one to the template as it arrives asks a 48-byte
+section to accept 264 bytes and is refused outright. **That shipped**, and no test could see it: the
+app's synthetic creature wrote `effectVersion` 1 unconditionally, which is true of every character
+in a save and of nothing a new one is built from.
+
+The fix is `Cre.withEffectVersion`, which **refuses once any effect exists** — changing the stride
+under existing entries moves no bytes and reinterprets all of them.
+
+### The list of spells a mage may learn is in no table
+
+Checked and rejected: `spells.2da` (a flat cap of 50 per level), `speldesc.2da` (descriptions for a
+few dozen), `mschool.2da` (school names), `splsrckn.2da` (the sorcerer's known-spell progression),
+and the ten `mxspl*` progressions. None enumerates spells. The `SPL` resources themselves do, and
+**three filters are needed**, each measured against the installation:
+
+1. **Header type and level** — necessary and nowhere near sufficient: **108** resources claim
+   first-level wizard.
+2. **A name strref** — 86 of those 108 carry `-1`. They are engine plumbing.
+3. ⚠️ **The resref's level digit must agree with the header's** — what survives the first two still
+   holds `SPWI003`, `SPWI020`, `SPWI989` and `SPWI998`, all named and all claiming level 1. The
+   naming is `SPWI<level><nn>`, and where name and header disagree the resource is not a spell.
+
+With all three: **22**, which is what the engine's own Mage Book screen offers. ⚠️ `SPWI109` does
+not exist, so enumerate the index rather than a range; and `SPWI119A` / `spwi117a` are sub-spells,
+excluded by the resref being exactly `SPWI` plus three digits.
+
+### How many spells a new mage learns is a measurement, not a lookup
+
+**Two**, flatly — `docs/findings/screens/char-create/20-mage-book-choose-2.png` says "You may
+choose 2 spells to put in your spellbook". ⚠️ **`intmod.2da` does carry `MAX_SPELLS_PER_LEVEL` and
+it is not this**: Aurel rolled Intelligence 17, which that table gives **14**, and the screen still
+offered two. The *memorise* count is tabled — `mxsplwiz.2da` row 1 column 1 is **1**, and screen 23
+says "You may memorize 1 spells".
+
+⚠️ **A sorcerer is the one class whose learn count is tabled**: `splsrckn.2da` gives 2, and
+`mxsplsrc.2da` memorises **3** where a mage memorises 1. A **bard** casts nothing at first level,
+and `mxsplbrd.2da` says so by starting at row 2. ⚠️ **Nothing joins a class to its `mxspl*` file**
+the way `hpclass.2da` does for hit dice, so that mapping is a rule in code.
+
+### Ability bounds — the composition, confirmed against the engine's own screens
+
+`abracerq.2da` gives a race's floor and ceiling, `abracead.2da` its adjustment, `abclasrq.2da` the
+class's *and kit's* minimum. An elf's Dexterity is 6–18 plus 1 → **7 to 19**, which is screen 14
+verbatim; its Intelligence floor of 8 is raised to **9** by `FIGHTER_MAGE`, which is screen 15.
+
+⚠️ **The tables spell Charisma `CHR`, not `CHA`.**
+
+⚠️ **Open, and it turns on one character.** Whether the racial adjustment applies before or after
+the class minimum is taken is not separable from any screen recorded: an elf gives the same answer
+either way. **A Gnome Mage separates them** — a gnome's Intelligence floor is 6, `abracead` adds 1
+and `abclasrq` asks a Mage for 9, so "adjust then take the maximum" says 9 and "take the maximum
+then adjust" says 10. The code takes the first, because it cannot forbid a character the game
+allows. One trip to the creation screen settles it.
+
+## ⚠️ Which fields the ENGINE owns — measured, 2026-08-10
+
+**The run that settles D14.** `tool/dev/make_probe_character.dart` built a level-1 elf
+Fighter/Mage/Thief with every field at a value the engine could not have produced — three of them
+deliberately **worse** than computed, which is what separates "never recomputes" from "recomputes
+and keeps whichever is better". It was imported into BG:EE at Normal difficulty, played, saved, and
+the saved record diffed against what was written
+(`tool/dev/compare_characters.dart`).
+
+### The engine overwrote **six** fields. Everything else — 67 of them — it left alone.
+
+| field | written | engine stored | the rule |
+|---|---|---|---|
+| `maximumHitPoints` / `currentHitPoints` | 999 | **6** | class hit points per level. ⚠️ **The Constitution bonus is not stored** — the screen showed 13, which is 6 + `HPCONBON[25].WARRIOR` 7 |
+| `lore` | 100 | **3** | class `RATE` × level. The screen showed 83, which is 3 + `LOREBON[Int 25]` 40 + `LOREBON[Wis 25]` 40 |
+| `reputation` | 200 | **110** | the party's, ×10 |
+| `gold` | 999999 | **0** | personal gold, reset on import |
+| `fatigue` | 10 | **0** | play state, reset on import |
+| `dialogFile` | `None` | `NONE` | case normalisation only — ⚠️ relevant to any byte-identity test |
+
+⚠️ **Hit points and Lore are the same shape, and that shape is the whole of D14**: the stored value
+is the **class-and-level** part, and the ability bonus is added at *display*. So an editor that
+recomputes stored hit points when Constitution changes double-counts; one that recomputes them when
+class or level changes is doing the only job the engine will not.
+
+### Authored — survived exactly, including every value written worse than computed
+
+`thac0` **25** (computed: 20) · all five saving throws **20** (computed: 11–16) ·
+`armorClassNatural` 20 and `armorClassEffective` −5 · the four armour-class modifiers at −20 ·
+all eleven resistances at 100 · all seven thief skills at 100 · `numberOfAttacks` 10 ·
+all six abilities at 25 with `strengthBonus` 100 · `morale` 20 and `moraleBreak` 1 · `luck` ·
+`intoxication` · `turnUndeadLevel` 25 · `trackingSkill` 100 · `racialEnemy` · the three class
+levels · `kit`, `race`, `characterClass`, `gender`, `alignment` · both portrait resrefs ·
+`experience` · `animationId` · `effectVersion`.
+
+**Sections:** the four opcode-233 proficiency effects at five pips each, identical. All 22 known
+spells kept. ⚠️ **The engine appends what the class grants**: a 23rd known spell `SPCL412` (the
+Thief's innate), a matching memorised entry, a second memorisation row, and **twenty opcode-187
+effects** — 4 became 24.
+
+### ✅ Two open questions closed by the same run
+
+- **THAC0 is never recomputed.** Stored 25 against a computed 20 — *worse*, which is what makes it
+  decisive — and it stood. The screen printed `Base THAC0: 25`, `THAC0: 22`,
+  `Strength Modification: -3`. Supersedes the "two readings, one number" entry.
+- **A stored `strengthBonus` of 100 prints `18/00`.**
+
+### Saving throws are authored, which was not obvious
+
+Aurel's five are `savewiz.2da` level 1 verbatim, so the engine plainly *writes* them at creation —
+but it does not *maintain* them. Ours stayed at 20 through import and play. Anything this
+application creates or re-classes must compute them itself or they stay wrong for the whole game.
+
+### Displayed value = stored + table. Every one confirmed against the player's own files
+
+| shown | = | from |
+|---|---|---|
+| hit points 13 | stored 6 + 7 | `HPCONBON[25].WARRIOR` |
+| Lore 83 | stored 3 + 40 + 40 | `LOREBON[Int]` + `LOREBON[Wis]` |
+| THAC0 22 | stored 25 − 3 | Strength 18/00 To Hit |
+| AC −11 | stored **effective** −5 + −6 | `DEXMOD[25].AC` — the *natural* 20 is ignored |
+| Missile +5, Reaction +5 | | `DEXMOD[25]` |
+| thief skills 165/155/145/150/150/100/140 | stored 100 + | `SKILLDEX[Dex]` + `SKILLRAC[race]`, 7 of 7 exact |
+| Chance to Learn Spell 150 | | `INTMOD[25].LEARN_SPELL` |
+| Attacks per Round **9/2** | stored 10 | ⚠️ not a count — 0–5 are whole attacks, 6–10 are halves |
+
+### ⚠️ Turn Undead and Tracking are gated by class at *display*, and the record keeps them anyway
+
+Stored 25 and 100 both survived, and the Skills tab showed **neither**. So a stored value alone does
+not grant the ability, and an editor offering them unconditionally shows something the game will not
+honour. Which classes qualify is still not in any table that has been found.
+
+### ⚠️ Two legal values that make a character unplayable
+
+Found by writing them at maximum, which is exactly what an editor would let someone do:
+
+- **`moraleBreak` at or above `morale`** panics the character permanently — random movement, no
+  commands, no Save Game, no EXPORT. The protagonist stores **0** for this reason.
+- **`intoxication` above zero disables EXPORT.** It survives import and shows as `Intoxicated`.
+
+Neither is out of range, and both load without complaint. A field bound is not a safety check.
+
+### Difficulty is a **third owner**, and it is readable
+
+`Baldur.lua`: `SetPrivateProfileString('Game Options','Difficulty Level','2')`. `2` is Normal, and
+Story/Easy/Normal all **maximise hit-point rolls** — which every hit-point measurement in this
+project has silently depended on. Easy additionally grants **+6 Luck**. Legacy of Bhaal's improved
+THAC0 and saving throws are given to *enemies*, not to the party.
+
+So a value can be owned by the character, by the engine, or by a game setting outside the record —
+and the third is why any hit-point figure this app computes is wrong unless it knows the difficulty.
+
+### ⚠️ The game caches an imported character
+
+Overwriting the `.chr` and re-entering the Import screen is not enough; the old one comes back. The
+game has to be restarted.
