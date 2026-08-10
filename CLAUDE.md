@@ -148,6 +148,11 @@ cd packages/infinity_formats && fvm dart test
 fvm dart run build_runner build                  # *.mapper.dart, after a model change
 fvm dart run tool/gen/generate_rules.dart        # lib/domain/rules/*.g.dart, from ../iesdp
 fvm dart run tool/dev/sync_fixtures.dart         # copy real saves into the gitignored fixtures
+
+# Reading the player's own installation, which is where every rules fact should come from (D11/D13).
+fvm dart run tool/dev/dump_table.dart weapprof   # any 2DA, exactly as it is stored
+fvm dart run tool/dev/dump_table.dart --list sav # search the 604 tables by name
+fvm dart run tool/dev/dump_table.dart --text 1076  # resolve a strref — ⚠️ this one is <FIGHTERTYPE>
 ```
 
 **There is no CI** — deliberately (solo project, one machine). Nothing enforces the checks above,
@@ -171,51 +176,68 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phases 0, 2 and 2.5 are done. Both character plans are done** — the Characters plan (six
-slices) and the creation flow (steps A–F).
+**Phases 0, 2 and 2.5 are done. Three plans are done** — the Characters plan (six slices), the
+creation flow (steps A–F) and **authored-and-derived** (six slices, which is what makes a created
+character's numbers the ones the engine would have written).
 Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
 four workflows they serve.
 
-> ### 🔶 Where the last session stopped, 2026-08-10
+> ### 🔶 Where the last session stopped, 2026-08-10 (evening)
 >
-> **The creation wizard is finished, and D14 is measured.** 543 app tests, 282 format tests,
-> `analyze` clean, no suppressions.
+> **`~/.claude/plans/authored-and-derived.md` is implemented — all six slices.** 661 app tests,
+> 282 format tests, `analyze` clean, no suppressions. ⚠️ **42 files uncommitted, 19 of them new.**
 >
-> - **Ten steps**, the game's own order: Gender → Picture → Race → Class → Specialisation →
->   Alignment → **Abilities → Proficiencies → Spells** → Name. Three of them are conditional and
->   every condition is a table's answer: kits from `kitlist`, pips from `profs.2da`, spells from the
->   `mxspl*` progressions — which is how a **bard** correctly gets no spell step at first level.
-> - ⚠️ **The record it grows now equals the engine's.** `creation_golden_test.dart` compares against
->   the character BG:EE itself made and they agree on the **proficiency map**, the **two known
->   spells**, the **memorised spell** and the **memorisation row** — all three sections `CHARBASE`
->   does not have. `contentEnd == bytes.length` after four resizes.
-> - **Abilities are rolled from an injected `Random`** (`abilityDiceProvider`) — the first
->   non-deterministic thing in the app, and a provider so the flow can be tested at all.
-> - **The list of level-1 wizard spells is in no table.** It comes from the `SPL` headers and needs
->   **three** filters; the third is that the resref's level digit must agree with the header's, or
->   `SPWI989` comes along. 108 candidates become the 22 the Mage Book screen shows.
+> The plan closes what **D14** exposed: the engine overwrites six fields of seventy-three and
+> maintains none of the rest, so a character this app creates keeps whatever it was given for the
+> whole game. **Creation now writes** saving throws, THAC0, Lore, hit points, class levels, morale
+> break and the skills a bard or ranger gets without asking; there is a **thief-skills step**
+> (40 points from `thiefskl.2da`); the **sheet shows what the game will draw** beside what the file
+> holds; and a **specialist** must take a spell of their own school and is barred from the opposed
+> one.
 >
-> **⚠️ Two defects were found and fixed, one of them shipped:**
+> ⚠️ **The golden test is the proof**: our Aurel's saving throws, THAC0, Lore and class levels equal
+> the ones **BG:EE itself wrote**.
 >
-> - **`GrantProficiency` threw against the real `CHARBASE`.** The template is `effectVersion` **0**
->   — 48-byte v1 effects — and a proficiency is a 264-byte v2 record, so the first proficiency
->   granted to any created character was refused. **No test could see it**: the synthetic creature
->   wrote v2 unconditionally, which is true of every character in a save and of nothing a new one is
->   built from.
-> - **`Tlk.get` could not be called concurrently** — a seek and then a read on one handle, so two
->   overlapping lookups broke both. Latent for weeks; it surfaced when one caller grew a few more
->   strrefs.
+> **Four rules were measured against an oracle this project had never used — the game's own shipped
+> NPC records.** BioWare's characters are in the archives and `ResourceRepository.creature()` reads
+> them, so no trip into the game was needed:
 >
-> **D14 closed by measurement.** A probe character with every field at an underivable value was
-> imported, played and saved: **the engine overwrote six fields and left sixty-seven alone.**
-> `tool/dev/make_probe_character.dart` builds it, `tool/dev/compare_characters.dart` diffs it.
+> - **A multi-class takes the BEST of each saving-throw column.** ⚠️ Aurel could not separate that
+>   from "the caster's table wins"; **QUAYLE**, a Cleric/Mage, stores a row *neither* table holds.
+> - ⚠️ **A racial Constitution bonus nobody had asked about** — `savecndh.2da` (dwarf, halfling) and
+>   `savecng.2da` (gnome, **no death bonus**). Without them three of seven races are wrong by up to
+>   five points on three saves.
+> - **A specialist's forbidden school is in each `SPL`**, not in any table — exclusion flags at
+>   `0x1E`, bit = school + 5. Exact across all 22 first-level spells.
+> - ⚠️ **Lore's multi-class rule does NOT settle and is recorded as such.** The shipped NPCs read
+>   like *sums*; the engine's own import gave the *highest*. Those files also hold a Fighter 1 with
+>   Lore 4, so they are hand-written and cannot referee it. Code follows the engine.
 >
-> ⚠️ **The next plan is written and deliberately unstarted**:
-> `~/.claude/plans/authored-and-derived.md`.
+> **Two defects shipped and were found the moment the app was opened**, both invisible to 655
+> passing tests because no fixture has the shape the real data has:
 >
-> ⚠️ **Still owed, and now the only thing between this and Phase 2 being finished:** one trip into
-> BG:EE for the **export** half of the gate. This run got a savegame instead, because EXPORT is
-> greyed out for an intoxicated character.
+> - ⚠️ **`clastext.2da`'s class names are TEMPLATES.** `FIGHTER` resolves to `<FIGHTERTYPE>` and
+>   `CLERIC_MAGE` to `Cleric / <MAGESCHOOL>`; the class list drew the tokens. Substituted in place —
+>   **never wholesale**, because the half-tokened row carries the game's own separator.
+> - ⚠️ **`FALLEN_CLERIC` shares `CLASSID` and `KITID` with `CLERIC`** and sits later in the file, so
+>   last-wins put **"Fallen Cleric"** on screen. **Third displaced-row bug** after `IdsMap` and
+>   `Table2da`; the `FALLEN` column is the discriminator.
+>
+> **New tool: `tool/dev/dump_table.dart`** — any 2DA from the player's installation, `--list` to
+> search, `--text <strref>` to resolve a string. Every table fact above came from it.
+>
+> ⚠️ **Owed, and both need a human:**
+>
+> 1. **Two golden-test characters, made in BG:EE** — a **Gnome Cleric/Illusionist** and a **Halfling
+>    Thief**, Constitution 11+, exported. The gnome is the only case that separates best-of saves
+>    from one-table-wins *and* settles Lore; the halfling proves the two racial tables are not
+>    swapped.
+> 2. **Nobody has looked at the new "What the game shows" group** on the Skills tab. Tiles have been
+>    too narrow twice. A `FontLoader` capture harness hung under `flutter test` twice and was
+>    deleted rather than left half-working.
+>
+> **Still parked by the user, do not propose:** the stored-hit-point rule, a Gnome Mage's
+> Intelligence minimum, a Barbarian's bytes at `0x244`, and the export half of the Phase 2 gate.
 
 ### What exists
 
@@ -245,8 +267,13 @@ four workflows they serve.
     Names are left as strrefs there and merged with the talk table in `PartyViewModel`, because
     **repositories must never be aware of each other**. It reads `weapprof.2da` and
     `thiefscl.2da`, which share a column vocabulary — one kit-then-class resolver serves both.
-- **A rules layer** — `lib/domain/rules/`, generated from IESDP's copies of the game's own `2DA`
-  and `IDS` tables. Turns stored numbers into what the game displays. Two traps, both paid for:
+- **A rules layer** — `lib/domain/rules/`, part generated from IESDP and part read from the
+  player's own installation. Turns stored numbers into what the game displays, **and says what a
+  character's stored numbers should be in the first place**: `SavingThrowTables` (five class tables
+  plus the two racial Constitution ones), `RulesTables` (THAC0, Lore, thief-skill points, the bard
+  and ranger progressions, and the display modifiers), and `creation_derivation.dart`, which is the
+  pure function creation uses. ⚠️ **A value you look up can still be a template** — see the
+  `<FIGHTERTYPE>` defect above. Three traps, all paid for:
   - ⚠️ **`IDS` files repeat keys** — `KIT.IDS` numbers `0x4000` twice — so `IdsMap` keeps the
     *first* name and records the displaced ones; last-wins is what made the kit encoding look
     undecodable.
@@ -313,6 +340,15 @@ Xzar's own copies sit stale at 10.0 and only Aard's agrees. Prefer the field the
 to read, and find out which that is by looking. **A one-character party can never show any of
 this**, because there the two always match.
 
+**⚠️ And the game ships its own oracle, which took months to notice.** Every NPC is a creature
+record in the archives, built by the people who wrote the rules, and `ResourceRepository.creature()`
+reads one. On 2026-08-10 that settled the multi-class saving-throw rule — which BG:EE's own Aurel
+could *not* separate — and exposed a racial Constitution bonus nobody had asked about. **Reach for
+it before asking for a trip into the game**; the engine is still the only answer to *acceptance*
+("does IMPORT take this file"), but this is far cheaper for *equivalence*. ⚠️ They are hand-authored
+in places — `KHALID` holds a Lore no rule produces — so agreement is evidence and disagreement is
+not disproof. Order of authority: **engine > table > shipped file**.
+
 ### Open, and recorded rather than guessed
 
 None of these is blocking; none is guessed at in code. All are in the findings.
@@ -325,6 +361,9 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | Multi-class hit-point multiplier | **Closed 2026-08-09 — the MEAN class level, not the highest.** D10's route worked exactly as written: experience was set to 4000, no level was written, and the engine did the rest. A Fighter 2 / Mage 1 at Constitution 18 stores 12 and the game draws **18 / 18** into its portrait, so the bonus is 6 where highest gives 8. ⚠️ It hid for two days because **mean and highest are the same number for a single class**. `hitPointBonus` is fixed. Residual: how it rounds when the mean is not exact. |
 | THAC0 after a level-up | **Closed 2026-08-10 — the engine never recomputes it.** The separating experiment was run: a stored **25** against a computed 20, *worse* either way, survived import and play. The screen printed `Base THAC0: 25`, `THAC0: 22`, `Strength Modification: -3`. The same run closed the percentile question — a stored `strengthBonus` of 100 prints **`18/00`**. |
 | Who may Turn Undead, and who may Track | **Half-closed 2026-08-10.** Stored 25 and 100 on a Fighter/Mage/Thief both **survived** the record and the Skills tab showed **neither** — so the display is class-gated and a stored value alone grants nothing. *Which* classes qualify is still in no table that has been found, so both stay editable rather than take an invented rule. |
+| Multi-class saving throws | **Closed 2026-08-10 — best of each column, each class at its own level.** QUAYLE, a Cleric/Mage, stores a row neither table holds. ⚠️ Plus a racial Constitution bonus: `savecndh` for dwarves and halflings, `savecng` for gnomes, whose death row is all zeros. |
+| Multi-class **Lore** | ⚠️ **OPEN, and the two readings disagree.** Shipped NPCs read like *sums* (Coran 12, Tiax 8); the engine's own import gave the *highest* (a Fighter/Mage/Thief 1/1/1 stored 3 where a sum gives 7). The files hold hand-written Lore, so they cannot referee it. Code follows the engine. **A Gnome Cleric/Mage settles it: 3 against 4.** |
+| A specialist's forbidden school | **Closed 2026-08-10 — it is in each `SPL`,** exclusion flags at `0x1E`, bit = `mschool.2da` row + 5. Exact across all 22 first-level spells. No 2DA pairs the schools. |
 | Which fields the engine owns | **Closed 2026-08-10 — D14.** A probe character with every field at an underivable value was imported, played and saved: the engine overwrote **six** fields and left **sixty-seven** alone. Hit points and Lore store the class-and-level part only, with the ability bonus added at display. |
 
 ⚠️ **Seeing the screen is still the only way some defects surface.** The panel's stat tiles have

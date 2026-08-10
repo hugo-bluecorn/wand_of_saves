@@ -631,6 +631,30 @@ So "always use the table" would have *introduced* a bug. This decision prefers a
 **invented** rule, and every place a measurement overrides a table is recorded where the override
 lives.
 
+### ⚠️ Amendment, 2026-08-10 — a table answering is not the same as an answer
+
+Two ways a successful lookup still produced the wrong thing, both of which reached the screen:
+
+- **The value can be a template.** `clastext.2da`'s name column, resolved against the player's own
+  talk table, gives `FIGHTER` → **`<FIGHTERTYPE>`** and `CLERIC_MAGE` → **`Cleric / <MAGESCHOOL>`**.
+  The engine substitutes the character's kit, or the base class where there is none. ⚠️ **And the
+  half-tokened row is what makes the obvious fix wrong**: falling back to a derived name whenever a
+  token appears throws away the separator and ordering that were the reason to read the table.
+  Substitute **in place**, and refuse a token nothing recognises.
+- **A row can be a duplicate of another row.** `FALLEN_CLERIC` carries the same `CLASSID` and the
+  same "no kit" marker as `CLERIC`, later in the file, so a last-wins map put **"Fallen Cleric"** on
+  the class-selection screen. The table's own `FALLEN` column separates them. This is the **third**
+  displaced-row defect in this project after `IdsMap` (`KIT.IDS`) and `Table2da` (`weapprof.2da`).
+
+**So D13 gains two obligations.** After resolving a strref, look at the string — angle brackets mean
+it is not a name. Before keying a map on a column, ask whether two rows can share that key; in these
+files they usually can.
+
+⚠️ **And neither was reachable by a unit test**, because every fixture supplied a *name* where the
+real table supplies a template and a duplicate. The guard that works is a test that reads the
+player's own installation and skips where there is none —
+`test/data/name_tables_oracle_test.dart`.
+
 ## D14 — Every editable field is **authored** or **derived**, and the app says which · CLOSED (2026-08-10)
 
 ### The question

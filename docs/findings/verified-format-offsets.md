@@ -973,6 +973,121 @@ column (3 for warriors, 6 for a mage, 4 for the rest) is presumably levels-per-s
 ⚠️ **`thiefskl` is not `thiefscl`.** The near-identical names have misled this project once
 already.
 
+### Saving throws — five class tables, and **two racial ones nobody was looking for** — 2026-08-10
+
+Measured against **fifteen of the game's own shipped NPC creature records**, which is an oracle
+this project had not used before: BioWare's characters are in the archives, built by the people who
+wrote the rules, and reading them needs no trip into the game. `test/domain/rules/
+saving_throw_oracle_test.dart` is the measurement.
+
+**The five class tables**, each five rows — `DEATH`, `WANDS`, `POLY`, `BREATH`, `SPELL` — by forty
+level columns. ⚠️ **Nothing in the installation maps a class to its table**, unlike `hpclass.2da`
+for hit dice; IESDP's prose on `savexxx.2da` is what states it, and `savename.2da` is savegame
+*slot* names rather than anything to do with saves.
+
+| table | classes |
+|---|---|
+| `savewar` | Fighter, Paladin, Ranger |
+| `savewiz` | Mage, Sorcerer |
+| `saveprs` | Cleric, Druid |
+| `saverog` | Thief, Bard |
+| `savemonk` | Monk |
+
+**A multi-class takes the BEST of each column, each class read at its own level.** ⚠️ This had been
+recorded as "consistent with Aurel" and was **not separated** until now: at level 1 `savewar` is
+worse in all five, so every multi-class holding a fighter gives the other table's row under either
+rule. **QUAYLE**, a Cleric/Mage 2/2, settles it — he stores the priest's death save **and** the
+wizard's other four, a row neither table holds. **TIAX**, a Cleric/Thief, confirms it independently.
+
+⚠️ **And there is a racial Constitution bonus, in two more tables.** Four NPCs disagreed with the
+class tables by up to five points and all four were dwarves, gnomes or halflings:
+
+| table | races | improves |
+|---|---|---|
+| `savecndh` | Dwarf, Halfling | `DEATH`, `WANDS`, `SPELL` |
+| `savecng` | Gnome | `WANDS`, `SPELL` — ⚠️ its `DEATH` row is **all zeros** |
+
+Both are columned by **Constitution**, not by level, and run 1 to 25 giving 0 up to 5. Measured:
+KAGAIN (dwarf, Constitution 20) stores 9/11/15/17/12 where the class table alone gives
+14/16/15/17/17; ALORA (halfling, 12) takes 3 including on death; QUAYLE and TIAX (gnomes, 11 and 16)
+take 3 and 4 and **neither improves death**, which is the only thing making these two tables rather
+than one.
+
+**Fourteen of fifteen NPCs agree exactly.** ⚠️ The exception is **IMOEN**, whose record is class
+`MAGE` holding 14/15/16/17/17 — `savewar` level 1 with wands and polymorph transposed, matching no
+table at any level. A hand-written record, and evidence about her file rather than about the rule.
+
+### THAC0, Lore and the two fixed skills — the same oracle, three different answers — 2026-08-10
+
+`test/domain/rules/derived_stats_oracle_test.dart`. **The three do not agree equally, and the
+difference is the finding.**
+
+**THAC0 — `thac0.2da`, and it is exact for all fourteen NPCs tested.** ⚠️ **The table enumerates
+the multi-classes outright** — `FIGHTER_MAGE`, `CLERIC_THIEF`, `FIGHTER_MAGE_THIEF` — so a
+multi-class is a *lookup*, never a composition. Coran, a Fighter/Thief 3/3, stores 18, which is the
+`FIGHTER_THIEF` row and the warrior progression. ⚠️ **Which column an unequal multi-class reads is
+not separated**: every multi-class NPC in the game is equal-levelled, so nothing says whether a
+Fighter 3 / Mage 1 takes column 3 or column 1. The code takes the highest.
+
+**The skills a class gets without allocating them.**
+
+| table | who | what |
+|---|---|---|
+| `skillbrd.2da` | Bard | `PICK_POCKETS` by level — 25 at 1, 35 at 3 |
+| `skillrng.2da` | Ranger | `MOVE_SILENTLY` by level — 15 at 1, 21 at 2 |
+
+⚠️ **A ranger's stealth is ONE number written into TWO skills.** `skillrng.2da` has a
+`MOVE_SILENTLY` column and no other, and both rangers hold that value twice — Minsc 15/15, Kivan
+21/21. A reader that filled only Move Silently leaves every created ranger half-stealthy.
+`thiefscl.2da` gives `RANGER` 100 in both rows, which is the other half of the same fact.
+
+**Lore — ⚠️ single class is settled, multi-class is NOT.** `lore.2da`'s `RATE` × level is exact for
+eleven single-class NPCs. Two more are **hand-written and match no rule at all**: `KHALID`, a
+Fighter 1 whose rate is 1, holds **4**; `IMOEN`, a Mage 1 whose rate is 3, holds **0**. So these
+files cannot referee the multi-class question — and they disagree with the engine on it:
+
+| | Coran (F/T 3/3) | Tiax (C/T 2/2) | Quayle (C/M 2/2) | the D14 probe (F/M/T 1/1/1) |
+|---|---|---|---|---|
+| stored | 12 | 8 | 8 | **3** |
+| sum of rate × level | 12 ✓ | 8 ✓ | 8 ✓ | 7 ✗ |
+| highest of rate × level | 9 ✗ | 6 ✗ | 6 ✗ | 3 ✓ |
+
+The probe is the **engine recomputing on import**, and the order of authority is
+**engine > table > shipped file**, so the code takes the highest and the disagreement is recorded
+rather than smoothed over. Settling it needs one multi-class import whose two rules differ.
+
+### A specialist's forbidden school is in each SPL, not in any table — 2026-08-10
+
+⚠️ **`SplHeaderField.exclusionFlags`, a dword at `0x1E`.** Bit 6 excludes Abjurers through bit 13
+for Transmuters, with bit 14 excluding Generalists (wild magic) and bits 0–5 and 30–31 excluding
+priests by alignment and class. So a school's bit is its `mschool.2da` row number **plus five**.
+
+Checked and rejected as sources first: `mschool.2da` is the text shown when magic of a school is
+dispelled, `kitlist.2da` has no such column, and nothing in IESDP's BG:EE 2DA set matches
+"opposition". Without this field the eight opposed pairs would have had to be written into the code
+from the rulebook.
+
+**Measured across the installation's own twenty-two first-level wizard spells, and it is exact:**
+
+| specialist | closed out of | spells |
+|---|---|---|
+| Abjurer (1) | school 8, Alteration | 3 |
+| Conjurer (2) | 3, Divination | 2 |
+| Diviner (3) | 2, Conjuration | 3 |
+| Enchanter (4) | 6, Invocation | 3 |
+| Illusionist (5) | 7, Necromancy | 2 |
+| Invoker (6) | 4, Enchantment | 3 |
+| Necromancer (7) | 5, Illusion | 3 |
+| Transmuter (8) | 1, Abjuration | 2 |
+
+Every excluded spell belongs to exactly the opposed school and no other — an off-by-one in the bit
+numbering would have failed on all of them at once. ⚠️ One spell, `SPWI124`, is school **10** and
+excludes all eight: past the nine `mschool.2da` names, so it belongs to no specialist.
+
+⚠️ **`mschool.2da` has no column holding the school number — the row's *position* is the number.**
+`None` is 0, `ABJURER` 1 through `TRANSMUTER` 8, and `GENERALIST` 9. Its only column is the strref
+of the dispel message.
+
 ## TLK (`dialog.tlk`)
 
 Source: IESDP `file_formats/ie_formats/tlk_v1.htm`. ⚠️ That page's *Applies to* list covers the
