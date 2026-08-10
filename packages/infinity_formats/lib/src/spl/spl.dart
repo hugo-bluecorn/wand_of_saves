@@ -73,6 +73,32 @@ final class Spl {
   /// Its school, as `mschool.2da` numbers them. `0` is none.
   int get school => _read(SplHeaderField.school);
 
+  /// Which specialists may not learn this spell, as a bit per school.
+  ///
+  /// See [SplHeaderField.exclusionFlags]. Prefer [excludesSpecialist] to
+  /// reading the bits at a call site.
+  int get exclusionFlags => _read(SplHeaderField.exclusionFlags);
+
+  /// The bit that excludes the first specialist school, `ABJURER`.
+  ///
+  /// `mschool.2da` numbers the schools from 1 and the exclusion bits start at
+  /// 6, so a school's bit is its row number plus five.
+  static const int firstSchoolExclusionBit = 6;
+
+  /// The last school with an exclusion bit of its own, `TRANSMUTER`.
+  static const int lastSchoolExcluded = 8;
+
+  /// Whether a specialist of [school] is barred from this spell.
+  ///
+  /// [school] is the `mschool.2da` row number, which is what a creature's kit
+  /// resolves to. `false` for `0`, which is no school at all, and for anything
+  /// past the eight the format has a bit for — `GENERALIST` is bit 14 and
+  /// means wild magic rather than an opposed school.
+  bool excludesSpecialist(int school) {
+    if (school < 1 || school > lastSchoolExcluded) return false;
+    return exclusionFlags & (1 << (firstSchoolExclusionBit + school - 1)) != 0;
+  }
+
   @override
   String toString() => 'Spl(${type?.name ?? 'unknown'} level $level)';
 }

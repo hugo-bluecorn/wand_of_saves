@@ -39,6 +39,19 @@ enum SplHeaderField implements FormatField {
   /// What kind of spell this is — see [SplType].
   spellType(0x1c, 2),
 
+  /// Which specialists, priests and alignments may **not** have this spell.
+  ///
+  /// ⚠️ **This is where a specialist mage's forbidden school lives**, and it
+  /// is a property of each *spell* rather than of the kit: bit 6 excludes
+  /// Abjurers, running up to bit 13 for Transmuters, with bit 14 excluding
+  /// Generalists. Nothing in the installation's 2DA files pairs a school with
+  /// its opposite — `mschool.2da` is dispel text and `kitlist.2da` has no such
+  /// column — so this field is the only source there is.
+  ///
+  /// Bits 0 to 5 exclude priests by alignment and bits 30 and 31 by class.
+  /// IESDP notes that the alignment and school bits cannot be combined.
+  exclusionFlags(0x1e, 4),
+
   /// The school, as `mschool.2da` numbers them. `0` is none.
   school(0x25, 1),
 
