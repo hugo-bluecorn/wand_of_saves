@@ -67,6 +67,22 @@ final class Tlk {
   /// a hit keeps `keys.first` as the eviction candidate. No dependency needed.
   final Map<int, String> _cache = {};
 
+  /// The last file operation queued, so the next one waits for it.
+  ///
+  /// ⚠️ **A lookup is a seek and then a read, and that pair is not atomic.**
+  /// Dart's `RandomAccessFile` refuses a second operation while one is in
+  /// flight — `FileSystemException: An async operation is currently pending` —
+  /// so two overlapping lookups break *both*, and neither caller did anything
+  /// wrong. Nothing in this API suggests they must take turns, and in the
+  /// application two providers resolve names concurrently as a matter of
+  /// course: it surfaced the moment one of them grew a few more strrefs to
+  /// resolve.
+  ///
+  /// So the queue is here rather than left to every caller. It is the same
+  /// shape as memoising a `Future` — the fix that stopped the portrait cache
+  /// racing — applied to ordering rather than to sharing.
+  Future<void> _queue = Future<void>.value();
+
   /// Opens the TLK at [path].
   ///
   /// Throws [FormatException] if the header is absent, truncated, or carries a
@@ -135,15 +151,31 @@ final class Tlk {
   ///
   /// Throws [FormatException] if the entry is truncated or its string runs
   /// past the end of the file.
-  Future<String?> get(int strref) async {
-    if (strref < 0 || strref >= _count) return null;
+  Future<String?> get(int strref) {
+    if (strref < 0 || strref >= _count) return Future<String?>.value();
 
     final hit = _cache.remove(strref);
     if (hit != null) {
       _cache[strref] = hit; // re-inserted, so it is now most recently used
-      return hit;
+      return Future<String?>.value(hit);
     }
 
+    return _inTurn(() => _read(strref));
+  }
+
+  /// Runs [operation] once every operation queued before it has finished.
+  ///
+  /// ⚠️ **The failure is swallowed for the *queue* only**, never for the
+  /// caller: the returned future still carries it. Chaining `_queue` on the
+  /// result directly would poison every later lookup with the first truncated
+  /// entry, which is one bad string costing a whole screen of names.
+  Future<T> _inTurn<T>(Future<T> Function() operation) {
+    final result = _queue.then((_) => operation());
+    _queue = result.then((_) {}, onError: (_) {});
+    return result;
+  }
+
+  Future<String?> _read(int strref) async {
     await _file.setPosition(_headerSize + strref * _entrySize);
     final entry = await _file.read(_entrySize);
     if (entry.length < _entrySize) {

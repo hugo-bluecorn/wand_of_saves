@@ -53,6 +53,28 @@ class GameProfileService {
   /// The game's settings file, which lives beside the save root.
   static const String settingsMarker = 'Baldur.lua';
 
+  /// The directory holding exported characters, beside the save root.
+  static const String characterDirectory = 'characters';
+
+  /// The directory holding the player's own portraits, beside the save root.
+  static const String portraitDirectory = 'portraits';
+
+  /// The name of the save root directory itself.
+  ///
+  /// Named because the recycle bin mirrors the live layout — `deleted/save/…`
+  /// beside `deleted/characters/…` — and hardcoding the word twice is how the
+  /// two drift apart.
+  static const String saveDirectoryName = 'save';
+
+  /// The extension of an exported character file.
+  static const String characterExtension = '.chr';
+
+  /// The extension of the biography sidecar beside a `.chr`.
+  ///
+  /// Named here rather than in the repository because the two files are one
+  /// document: a character moved without its biography is half-deleted.
+  static const String biographyExtension = '.bio';
+
   /// The directory under the installation holding one folder per language.
   static const String languageDirectory = 'lang';
 
@@ -183,6 +205,42 @@ class GameProfileService {
       candidate(findLanguage()),
       candidate(defaultLanguage),
     ].where((path) => File(path).existsSync()).firstOrNull;
+  }
+
+  /// Where exported characters live, or `null` if there is no save root.
+  ///
+  /// **A sibling of the save root, not a directory inside it** — the same step
+  /// [findLanguage] takes to reach the settings file. The game's user-data
+  /// directory holds `save/`, `characters/` and `portraits/` alongside each
+  /// other, and looking inside `save/` finds nothing at all.
+  ///
+  /// ⚠️ **The directory need not exist**, and a non-`null` answer is not a
+  /// promise that it does. A player who has never used the Record screen's
+  /// EXPORT button has no `characters/` folder, and the first export has to
+  /// create one — so this answers *where it goes*, and callers that only read
+  /// check for themselves.
+  String? findCharacterRoot() {
+    final saveRoot = findSaveRoot();
+    if (saveRoot == null) return null;
+
+    return '${Directory(saveRoot).parent.path}${Platform.pathSeparator}'
+        '$characterDirectory';
+  }
+
+  /// Where the player's own portraits live, or `null` if there is no save root.
+  ///
+  /// ⚠️ **The engine looks here first**, before its own archives, and that is
+  /// the whole of what "custom portrait" means — a loose file that shadows a
+  /// packed one. A portrait is named by resref either way, so the same two CRE
+  /// fields serve both and there is no second mechanism to build.
+  ///
+  /// The directory need not exist. Present and empty on the developer's
+  /// machine; absent on a player who has never added one.
+  String? findPortraitRoot() {
+    final saveRoot = findSaveRoot();
+    if (saveRoot == null) return null;
+    return '${Directory(saveRoot).parent.path}${Platform.pathSeparator}'
+        '$portraitDirectory';
   }
 
   /// Directories inside [root] that are save slots, unordered.

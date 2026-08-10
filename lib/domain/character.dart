@@ -77,6 +77,7 @@ class Character with CharacterMappable {
     required this.trackingSkill,
     this.proficiencies = const [],
     this.portraitPath,
+    this.portraitBaseName = '',
   });
 
   /// The party order value meaning "not in the party".
@@ -230,8 +231,21 @@ class Character with CharacterMappable {
   /// every offset after it. The second is the layout pass, and it is deferred.
   final List<Proficiency> proficiencies;
 
-  /// Path to this character's portrait, or `null` if the save has none.
+  /// Path to the portrait the *game* baked beside this save, or `null`.
+  ///
+  /// ⚠️ **A snapshot, not a picture of the character.** `PORTRT<n>.bmp` is what
+  /// the engine drew when the file was written, hit points and all, so it goes
+  /// stale the moment anything is edited — and an exported character has none
+  /// at all. It is kept because it is this project's cheapest oracle: it closed
+  /// D10. What the character sheet *shows* is [portraitBaseName].
   final String? portraitPath;
+
+  /// The portrait this character names, without its variant suffix.
+  ///
+  /// Derived from the record's own `…M` resref — `BDTMIM` gives `BDTMI` — so it
+  /// is current whatever the save's baked picture shows, and it is the only one
+  /// that responds to an edit. Empty when the record names none.
+  final String portraitBaseName;
 
   /// Whether this character is in the party.
   bool get isInParty => partyOrder != notInParty;

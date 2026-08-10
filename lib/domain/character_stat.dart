@@ -95,7 +95,10 @@ enum CharacterStat {
   experience(CreHeaderField.experience, 'Experience'),
 
   /// Gold on this character, not the shared party purse.
-  gold(CreHeaderField.gold, 'Gold'),
+  ///
+  /// ⚠️ Reset to **0** when a character file is imported — D14 wrote 999,999
+  /// and the engine kept none of it.
+  gold(CreHeaderField.gold, 'Gold', engineOwned: true),
 
   /// THAC0. IESDP: "THAC0 (1-25)".
   thac0(CreHeaderField.thac0, 'THAC0', declaredMinimum: 1, declaredMaximum: 25),
@@ -244,11 +247,15 @@ enum CharacterStat {
   ),
 
   /// Fatigue. IESDP: "(0-100)".
+  ///
+  /// ⚠️ Reset to **0** on import: it is play state rather than a property of
+  /// the character.
   fatigue(
     CreHeaderField.fatigue,
     'Fatigue',
     declaredMinimum: 0,
     declaredMaximum: 100,
+    engineOwned: true,
   ),
 
   /// Intoxication. IESDP: "(0-100)".
@@ -378,6 +385,7 @@ enum CharacterStat {
     this.declaredMinimum,
     this.declaredMaximum,
     this.thiefSkillRow,
+    this.engineOwned = false,
   });
 
   /// The creature-record field this stat is stored in.
@@ -414,6 +422,26 @@ enum CharacterStat {
   ///   left editable rather than given an invented rule; see the open
   ///   questions in `CLAUDE.md`.
   final String? thiefSkillRow;
+
+  /// Whether the **engine** rewrites this field when a character is imported.
+  ///
+  /// ⚠️ **Measured, not assumed — this is D14.** A probe character with every
+  /// field at an underivable value was imported, played and saved: the engine
+  /// overwrote six of seventy-three and left the rest alone. These are the
+  /// six that matter to an editor, and an edit to one of them survives in a
+  /// **savegame** and is discarded when a **character file** is imported.
+  ///
+  /// So this is a fact about the field and the screen decides what to do with
+  /// it: the character-file editor says so, the savegame editor does not,
+  /// because D14 measured the *import* boundary and editing gold in a running
+  /// game works — proven in Phase 2.
+  ///
+  /// ⚠️ **Hit points and Lore are the trap.** They look engine-owned and are
+  /// only half so: the stored value is the class-and-level part, which the
+  /// engine recomputes, while the ability bonus is added at display. Neither
+  /// is marked here, because what an editor writes into them is not what the
+  /// engine replaces.
+  final bool engineOwned;
 
   /// The lowest value this stat accepts.
   int get minimum => declaredMinimum ?? field.minimum;

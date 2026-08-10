@@ -21,6 +21,8 @@
 library;
 
 import 'package:go_router/go_router.dart';
+import 'package:wand_of_saves/ui/character/character_file_view.dart';
+import 'package:wand_of_saves/ui/creation/creation_view.dart';
 import 'package:wand_of_saves/ui/party/party_view.dart';
 import 'package:wand_of_saves/ui/saves/save_browser_view.dart';
 
@@ -43,12 +45,37 @@ abstract final class Routes {
   /// The path parameter naming a save slot directory.
   static const String slotParameter = 'slot';
 
+  /// The editor for one exported character, relative to [browser].
+  ///
+  /// **A sibling of [party], not a child of it.** The two documents are peers:
+  /// a character file is opened on its own terms and need never have come from
+  /// a savegame. Declared as a child of the browser for the same reason [party]
+  /// is — it gives the editor a working back button rather than a dead end.
+  static const String character = 'character/:$characterParameter';
+
+  /// The path parameter naming a character file.
+  static const String characterParameter = 'file';
+
+  /// The guided flow that makes a character, relative to [browser].
+  ///
+  /// ⚠️ **Deliberately not `character/new`.** That would collide with
+  /// [character] for a character actually called `new` — every string is a
+  /// legal file name, so no literal segment under that prefix is safe.
+  static const String newCharacter = 'new-character';
+
+  /// The creation flow's path.
+  static const String newCharacterPath = '/new-character';
+
   /// The party shell's path for the slot directory named [directoryName].
   ///
   /// Encoded on the way out; `go_router` decodes path parameters on the way
   /// in (`go_router-17.4.0/lib/src/match.dart:202`), so the two are symmetric.
   static String partyFor(String directoryName) =>
       '/save/${Uri.encodeComponent(directoryName)}';
+
+  /// The character editor's path for the file called [fileName].
+  static String characterFor(String fileName) =>
+      '/character/${Uri.encodeComponent(fileName)}';
 }
 
 /// The application's router.
@@ -63,6 +90,16 @@ GoRouter buildRouter() => GoRouter(
           builder: (context, state) => PartyView(
             slotDirectoryName: state.pathParameters[Routes.slotParameter] ?? '',
           ),
+        ),
+        GoRoute(
+          path: Routes.character,
+          builder: (context, state) => CharacterFileView(
+            fileName: state.pathParameters[Routes.characterParameter] ?? '',
+          ),
+        ),
+        GoRoute(
+          path: Routes.newCharacter,
+          builder: (context, state) => const CreationView(),
         ),
       ],
     ),

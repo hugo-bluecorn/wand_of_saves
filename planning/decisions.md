@@ -517,3 +517,240 @@ with nothing above it changing"*. That is now the plan of record for names, not 
 The generated tables stay. Regenerating from IESDP remains correct for numeric rules, and a fresh
 clone still builds without the game installed — an absent installation degrades to showing a
 resref rather than failing, the same way an absent `dialog.tlk` already degrades.
+
+---
+
+## D12 — Repository reads are **queries**; Riverpod's retry and `Mutation` are declined · CLOSED (2026-08-09)
+
+**Decision: every repository read the UI depends on is a `FutureProvider` the ViewModel watches.
+Providers never retry. `Mutation` is not adopted while it is experimental.**
+
+### What forced it
+
+Three defects in one afternoon, all from the same gap. `planning/architecture.md` showed services →
+repositories → ViewModels and **never said where a repository *read* lives**, so every ViewModel
+invented one: an `await repository.listX()` inside `build()`. A read that is a method call can be
+neither invalidated nor shared, so each consequence was patched by hand:
+
+| Symptom | What the missing provider forced |
+|---|---|
+| Changing a portrait, going back, the lineup shows the **old face** | a global "something changed" counter |
+| Home screen shows **one portrait and two blanks** | a hand-rolled repository cache, which raced |
+| Ticking cards then pressing **refresh clears the ticks** | selection derived from a read |
+
+The third was found by reading the code, not by anyone hitting it — which is the argument for
+treating this as a rule rather than three fixes.
+
+### The rule
+
+- A repository read the UI depends on is a query provider, declared with the rest of the graph in
+  `lib/config/providers.dart` (D7).
+- A write **invalidates exactly the query it changed**. `ref.refresh(…future)` when the caller
+  awaits completion, `ref.invalidate` otherwise.
+- A family gets `isAutoDispose: true` — Riverpod's own rule, since one state per parameter
+  combination is a leak. ⚠️ **Two deliberate exceptions:** `partyProvider` and
+  `characterFileProvider` hold an open document with unsaved edits, and discarding that to save
+  memory would lose the player's work.
+
+### ⚠️ Providers never retry, and this is not optional
+
+Riverpod retries a failing provider **up to ten times with a backoff reaching 6.4 seconds**. Every
+data source here is the local filesystem, where failure does not heal by waiting — and "no
+Baldur's Gate installed" is an *ordinary* state this app is built to handle, not a transient fault.
+Without `retry: neverRetry` the screen spins for thirteen seconds before admitting it.
+
+It is declared **on each query as well as on the `ProviderScope`**, because a test container does
+not inherit the app's scope — and a suite exercising different behaviour from the app is exactly
+how the default went unnoticed until a read became a provider.
+
+### ⚠️ `Mutation` is declined while experimental
+
+Riverpod 3.4.2 ships `Mutation`, which is the framework's own answer to "write, then let the UI
+react". Its documentation opens: *"Mutations are experimental, and the API may change in a breaking
+way without a major version bump."* This application writes to files representing tens of hours of
+play; an experimental API on that path is not a trade worth making.
+
+**Reopen when the API leaves experimental.** Recorded so the next reader knows it was considered
+rather than missed.
+
+### ⚠️ An editing session is NOT a provider of its own, and that was measured
+
+The tidier shape — a session provider per open document, with the ViewModel projecting it — was
+built and reverted. It makes every edit an *asynchronous* rebuild of the ViewModel, because `build`
+awaits its queries, so the editor passes through `AsyncLoading` on every committed keystroke: a
+spinner where a number should be. The session is one **immutable** `EditSession` value held by the
+ViewModel and replaced whole, which is what the docs actually argue for — *"`Notifier`/
+`AsyncNotifier`, in combination with immutable state, can lead to better design choices and less
+errors"* — without making a keystroke asynchronous.
+
+The 74 existing editor tests caught this within a minute of the attempt, unmodified. That is the
+argument for holding a public command API still while rewiring what is behind it.
+
+---
+
+## D13 — The game's table answers it; a rule in code must say why none does · CLOSED (2026-08-10)
+
+**Decision: prefer the player's own `2DA` over a rule written here. Where a rule must be written,
+its doc comment names the tables that were checked and why none of them answers.**
+
+### What forced it
+
+The user, looking at the creation flow: *"the app has domain knowledge as programmatic rules when a
+table lookup provides the answer… I do like ECS's concept of separating data from behaviour, and in
+our case the data and the behaviour are intertwined, thus we are constantly running into the problem
+of data interpretation."*
+
+Checking it found four derivations in code we own, and **two of them were wrong**:
+
+| written here | what the installation says |
+|---|---|
+| `raceName` — a hand-kept `{'HALFORC': 'Half-Orc'}` map plus a word-splitter | `racetext.2da`'s `UPPERCASE` column *is* `Half-Orc`, in the player's language |
+| `className` — `identifier.split('_')` title-cased and joined with `' / '` | `clastext.2da`'s `MIXED` is `Cleric / Ranger`, separator and all |
+| `kitName` — the same splitter | ⚠️ **wrong.** `kitlist.2da` names the Ranger's first kit `FERALAN`; the game draws **Archer** |
+| `classHitDice` — `(die, afterNine)` per class, rolls stopping at level 9 | ⚠️ **wrong.** `hpclass.2da` → `hp…2da` roll through **11** for wizards and rogues, so a Mage 12 was **3** hit points short and a Thief 12 **4** |
+
+Neither wrong answer could have been caught by the suite: `Archer` needs the talk table, and the
+hit-point gap only opens above level 9 where no fixture goes.
+
+### The rule
+
+- **Data and its interpretation are separate objects.** `NameTables` and `HitDieTables` hold what the
+  tables said and nothing else; `GameRules` reads them. Swapping the source touches no logic.
+- **Raw columns, not reductions.** `HitDieRow` keeps `sides`, `rolls` and `modifier` rather than a
+  computed maximum — reducing in the data bakes one reading in and loses every other.
+- **A rule that stays says why.** `isWarrior`, `classCount`, `alignmentName`, `genderName`, the
+  pronoun tokens and the kit encodings each carry the tables checked and what was missing.
+- **The fallback is the derivation**, reachable only with no game installed — where the app still
+  has to open a savegame and name what is in it. It is documented as approximate.
+
+### ⚠️ The refinement the audit itself forced: **engine > table > code**
+
+`hpclass.2da` maps `FIGHTER_MAGE → HPFM`, and `HPFM.2da` says a Fighter/Mage rolls a pre-averaged
+`1d7`. The engine does not: measured twice, it builds hit points **per class** (`2 × 5 + 1 × 2 = 12`).
+So "always use the table" would have *introduced* a bug. This decision prefers a table over an
+**invented** rule, and every place a measurement overrides a table is recorded where the override
+lives.
+
+### ⚠️ Amendment, 2026-08-10 — a table answering is not the same as an answer
+
+Two ways a successful lookup still produced the wrong thing, both of which reached the screen:
+
+- **The value can be a template.** `clastext.2da`'s name column, resolved against the player's own
+  talk table, gives `FIGHTER` → **`<FIGHTERTYPE>`** and `CLERIC_MAGE` → **`Cleric / <MAGESCHOOL>`**.
+  The engine substitutes the character's kit, or the base class where there is none. ⚠️ **And the
+  half-tokened row is what makes the obvious fix wrong**: falling back to a derived name whenever a
+  token appears throws away the separator and ordering that were the reason to read the table.
+  Substitute **in place**, and refuse a token nothing recognises.
+- **A row can be a duplicate of another row.** `FALLEN_CLERIC` carries the same `CLASSID` and the
+  same "no kit" marker as `CLERIC`, later in the file, so a last-wins map put **"Fallen Cleric"** on
+  the class-selection screen. The table's own `FALLEN` column separates them. This is the **third**
+  displaced-row defect in this project after `IdsMap` (`KIT.IDS`) and `Table2da` (`weapprof.2da`).
+
+**So D13 gains two obligations.** After resolving a strref, look at the string — angle brackets mean
+it is not a name. Before keying a map on a column, ask whether two rows can share that key; in these
+files they usually can.
+
+⚠️ **And neither was reachable by a unit test**, because every fixture supplied a *name* where the
+real table supplies a template and a duplicate. The guard that works is a test that reads the
+player's own installation and skips where there is none —
+`test/data/name_tables_oracle_test.dart`.
+
+## D14 — Every editable field is **authored** or **derived**, and the app says which · CLOSED (2026-08-10)
+
+### The question
+
+Constitution affects hit points. Class and level affect saving throws and THAC0. Equipment affects
+armour class. **Today the app recalculates nothing** — `applyCharacterEdit` is a switch in which
+each arm patches one field and stops. Change Constitution and one byte moves.
+
+The user's framing, which is the decision:
+
+> *"I like the authored vs derived because it is clear which fields I can control and which if
+> derived might be overwritten by the engine at some point during gameplay."*
+
+### The decision
+
+**Each field carries whether the character *authors* it or the engine *derives* it**, and the sheet
+shows the difference. A derived field is presented as computed, with an override affordance; an
+authored one is simply the player's.
+
+Rejected: **recalculate silently on every edit**, which reads well and destroys authored values —
+someone who deliberately set a maximum of 45 would lose it the moment they touched Constitution.
+Also rejected: **an explicit "Recalculate" button** alone, EE Keeper's shape, which leaves the
+character knowingly inconsistent until pressed. The button may still exist; it is not the model.
+
+### ⚠️ Why "recalculate everything" would be wrong, and this is the whole difficulty
+
+The engine derives **some** of these itself, and the app must not do the work twice:
+
+| field | measured | consequence |
+|---|---|---|
+| hit points | stored **without** the Constitution bonus; the engine adds it at display | the app must **not** touch maximum hit points when Constitution changes — it would double-count |
+| THAC0 | stored, and not recomputed in play | the app **must**, when class or level changes |
+| armour class | read from the **effective** field, not recomputed from equipment | the app **must** — this is why "Recalculate Stats" is required rather than parity garnish |
+| level | derived from experience **on import** | the app need not |
+
+That is four fields out of roughly fifty. **The rest is unknown, and a dependency graph written from
+reasoning would fight the engine exactly where the engine is already doing the work** — a failure
+that does not crash, it just makes somebody's character quietly wrong.
+
+### What settles it, and it is one trip
+
+`tool/dev/make_probe_character.dart` builds a level-1 elf Fighter / Mage / Thief with every field at
+a value the engine could not have produced — three of them deliberately **worse** than computed,
+which is what separates "never recomputes" from "recomputes and keeps whichever is better".
+
+⚠️ **Three states, not two.** What the tool wrote, what the engine *displays* after import, and what
+the engine *writes back* on export. The user's observation: some values are not corrected on import
+but are corrected on export, so a two-way diff would attribute them wrongly.
+
+Whatever comes back changed is derived. Whatever comes back intact is authored.
+
+### The table, measured
+
+Run 2026-08-10: imported at Normal difficulty, played, saved, and the saved record diffed against
+what was written. Full detail in `docs/findings/verified-format-offsets.md`.
+
+**The engine overwrote six fields. It left sixty-seven alone.**
+
+| derived | stored as | rule |
+|---|---|---|
+| maximum / current hit points | 6 | class hit points per level — ⚠️ **without** the Constitution bonus |
+| lore | 3 | class `RATE` × level — ⚠️ **without** the Intelligence and Wisdom bonus |
+| reputation | 110 | the party's |
+| gold | 0 | reset on import |
+| fatigue | 0 | reset on import |
+
+Everything else is **authored**: THAC0, all five saving throws, both armour-class fields and the
+four modifiers, all eleven resistances, all seven thief skills, attacks per round, all six
+abilities and the percentile, morale and morale break, luck, intoxication, Turn Undead, Tracking,
+racial enemy, the class levels, every identity field, proficiencies and the spellbook.
+
+⚠️ **The engine recomputes almost nothing.** A character this app creates with saving throws of 20
+keeps them for the whole game. That is what makes the derivation work necessary rather than tidy.
+
+### The shape the model takes, and it was not the obvious one
+
+Hit points and Lore are the **same shape**, and it is not "the engine owns this field":
+
+> **stored = the class-and-level part. The ability bonus is added at display.**
+
+So there are three cases, not two:
+
+1. **Authored** — the app owns it outright. Nothing else will maintain it.
+2. **Derived from class and level** — the app must recompute the *stored* value when class or level
+   changes, and must **never** touch it when an ability changes.
+3. **Derived for display only** — computed from the stored value plus a table, never written back.
+   Constitution → hit points, Dexterity → armour class and thief skills, Intelligence and Wisdom →
+   Lore. The read side already does some of this and calls it "stored vs displayed".
+
+⚠️ **And a fourth owner that is not the character at all: the game setting.** `Baldur.lua`'s
+`Difficulty Level` maximises hit-point rolls at Story, Easy and Normal, and grants +6 Luck on Easy.
+Any hit-point figure computed without reading it is a guess. It is readable, so it should be read.
+
+### ⚠️ A field's range is not a safety check
+
+Two values inside their documented range produced a character that imported cleanly and could not
+be played at all: `moraleBreak` at or above `morale` panics them permanently, and any
+`intoxication` above zero disables EXPORT. Whatever the model does about derivation, it also has to
+say which *combinations* are refusable — which is a different question from what a byte can hold.

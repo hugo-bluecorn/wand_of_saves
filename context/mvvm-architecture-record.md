@@ -71,7 +71,21 @@ declaration, no codegen) and D7 (DI through providers).
 | How Views bind | `ConsumerWidget` + `ref.watch`, one ViewModel per view, preserving the 1 : 1 rule |
 | How Repositories and Services are provided | `Provider`, declared by hand in `lib/config/` (D7) |
 | Codegen | None, ever (D2) — manual declaration style only |
+| How a View gets repository data | a **query** — a `FutureProvider` the ViewModel watches, never an `await` in `build()` (D12) |
+| How a write reaches the screen | `ref.invalidate` the query it changed; `ref.refresh(…future)` when the caller awaits (`how_to/pull_to_refresh.mdx`) |
+| Whether a family auto-disposes | yes, `isAutoDispose: true` — *"one state per parameter combination… can lead to memory leaks"* (`concepts2/auto_dispose.mdx`). ⚠️ Except the two that hold an open document |
+| Whether a failed provider retries | **no.** Riverpod retries ten times to 6.4s by default; every source here is the local filesystem (D12) |
 
 Verified against the Riverpod 3.4.2 sources: `Provider`, `FutureProvider`, `NotifierProvider` and
 `AsyncNotifierProvider` are all current API. `StateProvider` and `StateNotifierProvider` are the
 ones Riverpod 3.x treats as legacy — do not use them.
+
+The rows added for D12 were checked against **Riverpod's own documentation**, pinned in
+`~/ai/claude-git-context/ai-context/rrousselGit/riverpod` at exactly the 3.4.2 this project
+resolves. Checking corrected three of them: refresh is `ref.refresh`, not `invalidate`, when the
+caller awaits; family auto-disposal is a documented rule rather than a preference, spelled
+`isAutoDispose: true` for hand-declared providers; and the retry default exists at all.
+
+⚠️ **`Mutation` is the framework's own answer to the write path and is declined while experimental**
+— see D12. Anyone reading the docs will find it; the reason it is not used is recorded rather than
+left to look like an oversight.

@@ -193,6 +193,13 @@ class CharacterMapper extends ClassMapperBase<Character> {
     _$portraitPath,
     opt: true,
   );
+  static String _$portraitBaseName(Character v) => v.portraitBaseName;
+  static const Field<Character, String> _f$portraitBaseName = Field(
+    'portraitBaseName',
+    _$portraitBaseName,
+    opt: true,
+    def: '',
+  );
 
   @override
   final MappableFields<Character> fields = const {
@@ -234,6 +241,7 @@ class CharacterMapper extends ClassMapperBase<Character> {
     #trackingSkill: _f$trackingSkill,
     #proficiencies: _f$proficiencies,
     #portraitPath: _f$portraitPath,
+    #portraitBaseName: _f$portraitBaseName,
   };
 
   static Character _instantiate(DecodingData data) {
@@ -276,6 +284,7 @@ class CharacterMapper extends ClassMapperBase<Character> {
       trackingSkill: data.dec(_f$trackingSkill),
       proficiencies: data.dec(_f$proficiencies),
       portraitPath: data.dec(_f$portraitPath),
+      portraitBaseName: data.dec(_f$portraitBaseName),
     );
   }
 
@@ -389,6 +398,7 @@ abstract class CharacterCopyWith<$R, $In extends Character, $Out>
     int? trackingSkill,
     List<Proficiency>? proficiencies,
     String? portraitPath,
+    String? portraitBaseName,
   });
   CharacterCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(Then<$Out2, $R2> t);
 }
@@ -469,6 +479,7 @@ class _CharacterCopyWithImpl<$R, $Out>
     int? trackingSkill,
     List<Proficiency>? proficiencies,
     Object? portraitPath = $none,
+    String? portraitBaseName,
   }) => $apply(
     FieldCopyWithData({
       if (name != null) #name: name,
@@ -510,6 +521,7 @@ class _CharacterCopyWithImpl<$R, $Out>
       if (trackingSkill != null) #trackingSkill: trackingSkill,
       if (proficiencies != null) #proficiencies: proficiencies,
       if (portraitPath != $none) #portraitPath: portraitPath,
+      if (portraitBaseName != null) #portraitBaseName: portraitBaseName,
     }),
   );
   @override
@@ -558,6 +570,7 @@ class _CharacterCopyWithImpl<$R, $Out>
     trackingSkill: data.get(#trackingSkill, or: $value.trackingSkill),
     proficiencies: data.get(#proficiencies, or: $value.proficiencies),
     portraitPath: data.get(#portraitPath, or: $value.portraitPath),
+    portraitBaseName: data.get(#portraitBaseName, or: $value.portraitBaseName),
   );
 
   @override

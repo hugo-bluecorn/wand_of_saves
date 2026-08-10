@@ -64,6 +64,12 @@ to undo.
   This is a *declared deviation* from `context/flutter-ai-rules.md`'s native-first default;
   everywhere else, a disagreement with `context/` is still a defect. See
   `planning/architecture.md` §The provider graph.
+- ⚠️ **A repository read the UI depends on is a query provider, never an `await` inside a
+  ViewModel's `build()`** (D12). A read that is a method call can be neither invalidated nor
+  shared, and that gap produced three defects in one afternoon. A write invalidates exactly the
+  query it changed. **Providers never retry** — Riverpod's default is ten attempts over 6.4
+  seconds, and every data source here is the local filesystem where "no game installed" is an
+  ordinary answer rather than a transient fault.
 - **Code generation is decided per dependency** (D9), and the repo now contains three kinds — so
   D2 is emphatically *not* a project-wide ban, however it reads:
   - `*.mapper.dart` — `dart_mappable`, for domain models. Via `build_runner`.
@@ -142,6 +148,11 @@ cd packages/infinity_formats && fvm dart test
 fvm dart run build_runner build                  # *.mapper.dart, after a model change
 fvm dart run tool/gen/generate_rules.dart        # lib/domain/rules/*.g.dart, from ../iesdp
 fvm dart run tool/dev/sync_fixtures.dart         # copy real saves into the gitignored fixtures
+
+# Reading the player's own installation, which is where every rules fact should come from (D11/D13).
+fvm dart run tool/dev/dump_table.dart weapprof   # any 2DA, exactly as it is stored
+fvm dart run tool/dev/dump_table.dart --list sav # search the 604 tables by name
+fvm dart run tool/dev/dump_table.dart --text 1076  # resolve a strref — ⚠️ this one is <FIGHTERTYPE>
 ```
 
 **There is no CI** — deliberately (solo project, one machine). Nothing enforces the checks above,
@@ -153,6 +164,10 @@ there will surface only when someone first tries to build on those platforms.
 app reads a local game installation and writes to local save files, which is not a sandboxed-mobile
 or browser workload. Development happens on Linux; macOS and Windows are scaffolded but unverified.
 
+**`file_selector` is the one native plugin.** Added for `Add a portrait…`; it registers on
+`linux/`, `macos/` and `windows/`, and the Linux debug build is confirmed to compile with it. It is
+the only dependency in the project that needs anything from the platform side.
+
 **Dependencies are kept at latest.** The project was created and then immediately brought up to
 date with `fvm flutter pub upgrade --major-versions`. Prefer current versions over pinning. Note
 that `matcher`, `meta`, `test_api` and `vector_math` will always report as outdated in the app —
@@ -161,47 +176,77 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phases 0, 2 and 2.5 are done and merged. The character sheet is finished and tabbed.**
-Phase 1 is deferred on purpose — see below, and note that `planning/roadmap.md` now argues it is
-**two deliveries rather than one**, because a `.chr` needs 1 pointer patched where a savegame needs
-39. `planning/roadmap.md` has all seven phases and the four workflows they serve.
+**Phases 0, 2 and 2.5 are done. Three plans are done** — the Characters plan (six slices), the
+creation flow (steps A–F) and **authored-and-derived** (six slices, which is what makes a created
+character's numbers the ones the engine would have written).
+Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
+four workflows they serve.
 
-> ### 🔶 Where the last session stopped, 2026-08-09
+> ### 🔶 Where the last session stopped, 2026-08-10 (evening)
 >
-> **The character sheet is divided the way BG:EE divides it, and everything is pushed.** 249 app
-> tests, 186 format tests, `analyze` clean, no suppressions, `main` level with `origin`.
+> **`~/.claude/plans/authored-and-derived.md` is implemented — all six slices.** 661 app tests,
+> 282 format tests, `analyze` clean, no suppressions. ⚠️ **42 files uncommitted, 19 of them new.**
 >
-> Four tabs named after the game's own creation steps — **Character · Abilities · Skills ·
-> Combat**. ⚠️ **`SKILLS` is the game's umbrella for weapon proficiencies too**, and for spells;
-> this panel used to file them separately and the game does not. Pips are now the game's own
-> control, dots with `[+]`/`[-]` greyed at the class ceiling, so the cap is stated *before* it is
-> met. Percentile strength reads out as `18/27`, the way the game writes it.
+> The plan closes what **D14** exposed: the engine overwrites six fields of seventy-three and
+> maintains none of the rest, so a character this app creates keeps whatever it was given for the
+> whole game. **Creation now writes** saving throws, THAC0, Lore, hit points, class levels, morale
+> break and the skills a bard or ranger gets without asking; there is a **thief-skills step**
+> (40 points from `thiefskl.2da`); the **sheet shows what the game will draw** beside what the file
+> holds; and a **specialist** must take a spell of their own school and is barred from the opposed
+> one.
 >
-> **An approved plan is waiting, deliberately not started**:
-> `~/.claude/plans/ancient-finding-dragonfly.md` — a **Characters lineup beside Saves**, five
-> slices. Read it before planning anything else.
+> ⚠️ **The golden test is the proof**: our Aurel's saving throws, THAC0, Lore and class levels equal
+> the ones **BG:EE itself wrote**.
 >
-> **What the game taught us, and none of it was derivable from the code:**
+> **Four rules were measured against an oracle this project had never used — the game's own shipped
+> NPC records.** BioWare's characters are in the archives and `ResourceRepository.creature()` reads
+> them, so no trip into the game was needed:
 >
-> - **There are four workflows, not two** — a character file is a document in its own right. See
->   `planning/roadmap.md`, rewritten.
-> - **D10 is closed.** The Constitution bonus multiplies by the **mean** class level, not the
->   highest; `hitPointBonus` was wrong and is fixed. ⚠️ It hid for two days because **mean and
->   highest are the same number for a single class**, so no test could fail.
-> - **Maximum hit points now have a ceiling the game could actually produce**, because the engine
->   discards one it could not: a character exported with 45 came back from import with **12**.
-> - **Two claims of ours were wrong.** `*HARBASE` is not merely mangled, it is **not unique**; and
->   `dialogFile` "is what to key on" is true of companions and false of the protagonist.
+> - **A multi-class takes the BEST of each saving-throw column.** ⚠️ Aurel could not separate that
+>   from "the caster's table wins"; **QUAYLE**, a Cleric/Mage, stores a row *neither* table holds.
+> - ⚠️ **A racial Constitution bonus nobody had asked about** — `savecndh.2da` (dwarf, halfling) and
+>   `savecng.2da` (gnome, **no death bonus**). Without them three of seven races are wrong by up to
+>   five points on three saves.
+> - **A specialist's forbidden school is in each `SPL`**, not in any table — exclusion flags at
+>   `0x1E`, bit = school + 5. Exact across all 22 first-level spells.
+> - ⚠️ **Lore's multi-class rule does NOT settle and is recorded as such.** The shipped NPCs read
+>   like *sums*; the engine's own import gave the *highest*. Those files also hold a Fighter 1 with
+>   Lore 4, so they are hand-written and cannot referee it. Code follows the engine.
 >
-> **Two cheap experiments are queued** for the next time the game is open, neither blocking: store
-> a THAC0 *worse* than the class table computes and see whether the engine overrides it, and check
-> whether a percentile of 100 really prints `18/00`.
+> **Two defects shipped and were found the moment the app was opened**, both invisible to 655
+> passing tests because no fixture has the shape the real data has:
+>
+> - ⚠️ **`clastext.2da`'s class names are TEMPLATES.** `FIGHTER` resolves to `<FIGHTERTYPE>` and
+>   `CLERIC_MAGE` to `Cleric / <MAGESCHOOL>`; the class list drew the tokens. Substituted in place —
+>   **never wholesale**, because the half-tokened row carries the game's own separator.
+> - ⚠️ **`FALLEN_CLERIC` shares `CLASSID` and `KITID` with `CLERIC`** and sits later in the file, so
+>   last-wins put **"Fallen Cleric"** on screen. **Third displaced-row bug** after `IdsMap` and
+>   `Table2da`; the `FALLEN` column is the discriminator.
+>
+> **New tool: `tool/dev/dump_table.dart`** — any 2DA from the player's installation, `--list` to
+> search, `--text <strref>` to resolve a string. Every table fact above came from it.
+>
+> ⚠️ **Owed, and both need a human:**
+>
+> 1. **Two golden-test characters, made in BG:EE** — a **Gnome Cleric/Illusionist** and a **Halfling
+>    Thief**, Constitution 11+, exported. The gnome is the only case that separates best-of saves
+>    from one-table-wins *and* settles Lore; the halfling proves the two racial tables are not
+>    swapped.
+> 2. **Nobody has looked at the new "What the game shows" group** on the Skills tab. Tiles have been
+>    too narrow twice. A `FontLoader` capture harness hung under `flutter test` twice and was
+>    deleted rather than left half-working.
+>
+> **Still parked by the user, do not propose:** the stored-hit-point rule, a Gnome Mage's
+> Intelligence minimum, a Barbarian's bytes at `0x244`, and the export half of the Phase 2 gate.
 
 ### What exists
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 186 tests.
+  one table serves reader and writer and they cannot disagree. 282 tests.
+  - **`Cre` resizes**: `withEntryInserted` (insert at an entry index, not only append),
+    `withEntryField`, `withEffectVersion` and `readField`. The three spell sections have their own
+    field tables and readers; `SplCodec` reads enough of an `SPL` header to list a spellbook.
   - **The whole character sheet reads**: saving throws, resistances, thief skills, attacks,
     armour class modifiers, morale, fatigue, luck. Homogeneous groups come back as **records**.
   - **`Effect`** — enough of the 264-byte v2 record to find proficiencies, which on BG:EE are
@@ -211,7 +256,7 @@ Phase 1 is deferred on purpose — see below, and note that `planning/roadmap.md
 - **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. **The whole
   character sheet is editable** and writes back: sealed `EditCommand`s over a curated
   `CharacterStat` table of 49 fields, plus `SetProficiency` for the pips that live in effects;
-  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 249 tests.
+  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 543 tests.
   - **Only what the class can actually have is offered.** The seven thief skills are greyed out
     when the player's `thiefscl.2da` gives that class or kit 0% of them — a Fighter/Mage has none
     — and proficiency tiles show their ceiling (`max 3`) rather than only refusing a bad value.
@@ -222,8 +267,13 @@ Phase 1 is deferred on purpose — see below, and note that `planning/roadmap.md
     Names are left as strrefs there and merged with the talk table in `PartyViewModel`, because
     **repositories must never be aware of each other**. It reads `weapprof.2da` and
     `thiefscl.2da`, which share a column vocabulary — one kit-then-class resolver serves both.
-- **A rules layer** — `lib/domain/rules/`, generated from IESDP's copies of the game's own `2DA`
-  and `IDS` tables. Turns stored numbers into what the game displays. Two traps, both paid for:
+- **A rules layer** — `lib/domain/rules/`, part generated from IESDP and part read from the
+  player's own installation. Turns stored numbers into what the game displays, **and says what a
+  character's stored numbers should be in the first place**: `SavingThrowTables` (five class tables
+  plus the two racial Constitution ones), `RulesTables` (THAC0, Lore, thief-skill points, the bard
+  and ranger progressions, and the display modifiers), and `creation_derivation.dart`, which is the
+  pure function creation uses. ⚠️ **A value you look up can still be a template** — see the
+  `<FIGHTERTYPE>` defect above. Three traps, all paid for:
   - ⚠️ **`IDS` files repeat keys** — `KIT.IDS` numbers `0x4000` twice — so `IdsMap` keeps the
     *first* name and records the displaced ones; last-wins is what made the kit encoding look
     undecodable.
@@ -290,6 +340,15 @@ Xzar's own copies sit stale at 10.0 and only Aard's agrees. Prefer the field the
 to read, and find out which that is by looking. **A one-character party can never show any of
 this**, because there the two always match.
 
+**⚠️ And the game ships its own oracle, which took months to notice.** Every NPC is a creature
+record in the archives, built by the people who wrote the rules, and `ResourceRepository.creature()`
+reads one. On 2026-08-10 that settled the multi-class saving-throw rule — which BG:EE's own Aurel
+could *not* separate — and exposed a racial Constitution bonus nobody had asked about. **Reach for
+it before asking for a trip into the game**; the engine is still the only answer to *acceptance*
+("does IMPORT take this file"), but this is far cheaper for *equivalence*. ⚠️ They are hand-authored
+in places — `KHALID` holds a Lore no rule produces — so agreement is evidence and disagreement is
+not disproof. Order of authority: **engine > table > shipped file**.
+
 ### Open, and recorded rather than guessed
 
 None of these is blocking; none is guessed at in code. All are in the findings.
@@ -300,8 +359,12 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | Kit encoding | **Closed 2026-08-08.** `0x0244 >> 16` is the `KIT.IDS` key; `0x0` and `0x4000` (`TRUECLASS`) both mean no kit. ⚠️ A kit **replaces** the class name — the game writes `Necromancer`, never `Mage (Necromancer)`. |
 | `hpconbon` warrior column | **Closed 2026-08-08.** Raised to Constitution 18 and loaded: the engine printed `Bonus Hit Points/Level: +4`, the warrior row, on a **Fighter/Mage**. `warriorRoots` was right, and the rule is *containment* — half a fighter is a warrior. |
 | Multi-class hit-point multiplier | **Closed 2026-08-09 — the MEAN class level, not the highest.** D10's route worked exactly as written: experience was set to 4000, no level was written, and the engine did the rest. A Fighter 2 / Mage 1 at Constitution 18 stores 12 and the game draws **18 / 18** into its portrait, so the bonus is 6 where highest gives 8. ⚠️ It hid for two days because **mean and highest are the same number for a single class**. `hitPointBonus` is fixed. Residual: how it rounds when the mean is not exact. |
-| THAC0 after a level-up | **Open — two readings, one number, 2026-08-09.** `THAC0.2da` computes 19 for a Fighter 2; Aard's record holds an edited **15** and the screen still printed 15. So either the engine never recomputes THAC0, or it recomputes and keeps whichever is better — 15 beats 19 either way. ⚠️ **The experiment that separates them:** store a value *worse* than computed, say 25, and look. |
-| Who may Turn Undead, and who may Track | **Open, and deliberately not guessed at — 2026-08-08.** Every other editable field on the panel is now governed by a table: the seven thief skills by `thiefscl.2da`, proficiency pips by `weapprof.2da`. These two are governed by nothing that has been found — `tracking.2da` turns out to be per-area prose — so they stay editable rather than take an invented class rule. Cheap to settle: set Turn Undead on a mage and Tracking on a thief, and see whether BG:EE shows or ignores them. |
+| THAC0 after a level-up | **Closed 2026-08-10 — the engine never recomputes it.** The separating experiment was run: a stored **25** against a computed 20, *worse* either way, survived import and play. The screen printed `Base THAC0: 25`, `THAC0: 22`, `Strength Modification: -3`. The same run closed the percentile question — a stored `strengthBonus` of 100 prints **`18/00`**. |
+| Who may Turn Undead, and who may Track | **Half-closed 2026-08-10.** Stored 25 and 100 on a Fighter/Mage/Thief both **survived** the record and the Skills tab showed **neither** — so the display is class-gated and a stored value alone grants nothing. *Which* classes qualify is still in no table that has been found, so both stay editable rather than take an invented rule. |
+| Multi-class saving throws | **Closed 2026-08-10 — best of each column, each class at its own level.** QUAYLE, a Cleric/Mage, stores a row neither table holds. ⚠️ Plus a racial Constitution bonus: `savecndh` for dwarves and halflings, `savecng` for gnomes, whose death row is all zeros. |
+| Multi-class **Lore** | ⚠️ **OPEN, and the two readings disagree.** Shipped NPCs read like *sums* (Coran 12, Tiax 8); the engine's own import gave the *highest* (a Fighter/Mage/Thief 1/1/1 stored 3 where a sum gives 7). The files hold hand-written Lore, so they cannot referee it. Code follows the engine. **A Gnome Cleric/Mage settles it: 3 against 4.** |
+| A specialist's forbidden school | **Closed 2026-08-10 — it is in each `SPL`,** exclusion flags at `0x1E`, bit = `mschool.2da` row + 5. Exact across all 22 first-level spells. No 2DA pairs the schools. |
+| Which fields the engine owns | **Closed 2026-08-10 — D14.** A probe character with every field at an underivable value was imported, played and saved: the engine overwrote **six** fields and left **sixty-seven** alone. Hit points and Lore store the class-and-level part only, with the ability bonus added at display. |
 
 ⚠️ **Seeing the screen is still the only way some defects surface.** The panel's stat tiles have
 now been too narrow **twice** — 148 truncated "Exceptional strength", 222 was needed for

@@ -20,6 +20,8 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
+import 'package:wand_of_saves/domain/rules/name_tables.dart';
 
 void main() {
   const rules = GeneratedGameRules();
@@ -229,6 +231,91 @@ void main() {
         rules.hitPointBonusPerLevel(constitution: 10, warrior: false),
         isNotNull,
       );
+    });
+  });
+
+  group('a name comes from the game’s own table when there is one', () {
+    // ⚠️ **D13.** These used to be derived in this file: a word-splitter over
+    // the IDS identifier, plus a hand-maintained map for the two races it got
+    // wrong. `racetext.2da`'s UPPERCASE column holds `Half-Orc` outright — and
+    // holds it in whatever language the player installed, which no derivation
+    // here could ever do.
+    test('a race is named by racetext, not by a rule in this file', () {
+      const tables = NameTables(raceNames: {7: 'Halb-Ork'});
+      const withTables = GeneratedGameRules(tables: tables);
+
+      expect(withTables.raceName(7), 'Halb-Ork');
+    });
+
+    test('a class is named by clastext', () {
+      const withTables = GeneratedGameRules(
+        tables: NameTables(classNames: {7: 'Krieger / Magier'}),
+      );
+
+      expect(withTables.className(7), 'Krieger / Magier');
+    });
+
+    test('a kit is named by kitlist — FERALAN is Archer and nothing else', () {
+      const withTables = GeneratedGameRules(
+        tables: NameTables(kitNames: {'FERALAN': 'Archer'}),
+      );
+
+      expect(withTables.kitName(0x40070000), 'Archer');
+    });
+
+    test('with no installation it still answers, from the identifiers', () {
+      // The app opens saves on machines with no game on them, so the
+      // derivation stays — as the *fallback*, which is the only place it is
+      // now reachable.
+      expect(rules.raceName(7), 'Half-Orc');
+      expect(rules.className(7), 'Fighter / Mage');
+    });
+  });
+
+  group('hit dice come from the game’s own tables', () {
+    // ⚠️ **D13, and this one was measurably wrong.** The hand-written map here
+    // had every class stop rolling after level 9. `hpwiz.2da` and `hprog.2da`
+    // keep rolling through **11**, so a Mage 12 lost 3 maximum hit points and a
+    // Thief 12 lost 4. Nothing caught it because no fixture is above level 2.
+    // Levels 1-11 roll a d4; 12 onwards is a flat +1 — copied from the real
+    // `hpwiz.2da`, which is where the old written-out rule went wrong.
+    final wizard = HitDieTables(
+      tableByClass: const {'MAGE': 'HPWIZ'},
+      rowsByTable: {
+        'HPWIZ': [
+          for (var level = 1; level <= 11; level++)
+            (sides: 4, rolls: 1, modifier: 0),
+          (sides: 4, rolls: 0, modifier: 1),
+        ],
+      },
+    );
+
+    test('a mage keeps rolling through level 11', () {
+      final rules = GeneratedGameRules(hitDice: wizard);
+
+      expect(rules.maximumRolledHitPoints('MAGE', 11), 44);
+      expect(rules.maximumRolledHitPoints('MAGE', 12), 45);
+    });
+
+    test('the last row governs every level past the end of the table', () {
+      final rules = GeneratedGameRules(hitDice: wizard);
+
+      // 44 through 11, then +1 a level. Level 20 is 44 + 9.
+      expect(rules.maximumRolledHitPoints('MAGE', 20), 53);
+    });
+
+    test('with no installation it falls back to the written-out dice', () {
+      // ⚠️ The fallback is the *old, slightly wrong* rule, kept because a
+      // machine with no game still has to draw a character sheet. It is right
+      // to level 9, which is where every fixture lives.
+      expect(rules.maximumRolledHitPoints('MAGE', 9), 36);
+      expect(rules.maximumRolledHitPoints('FIGHTER', 1), 10);
+    });
+
+    test('an unknown class has no answer rather than a made-up one', () {
+      final rules = GeneratedGameRules(hitDice: wizard);
+
+      expect(rules.maximumRolledHitPoints('ANKHEG', 3), isNull);
     });
   });
 }

@@ -29,6 +29,7 @@ import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
+import 'package:wand_of_saves/ui/character/portrait_image.dart';
 import 'package:wand_of_saves/ui/party/party_view.dart';
 
 import '../../support/fakes.dart';
@@ -205,9 +206,15 @@ void main() {
     25019: 'Sling',
   };
 
+  /// The character files a test can assert against, set by [showParty].
+  late FakeCharacterFileRepository characterFiles;
+
   ProviderContainer containerWith(List<SyntheticCharacter> members) =>
       ProviderContainer.test(
         overrides: [
+          characterFileRepositoryProvider.overrideWithValue(
+            characterFiles = FakeCharacterFileRepository(),
+          ),
           saveGameRepositoryProvider.overrideWithValue(
             FakeSaveGameRepository(
               slots: [fakeSlot('last')],
@@ -277,6 +284,155 @@ void main() {
     await tester.tap(find.widgetWithText(Tab, heading));
     await tester.pumpAndSettle();
   }
+
+  group('exporting the character on screen', () {
+    testWidgets('names the character it will export', (tester) async {
+      // ⚠️ The user audits whether a control is *justified*, not whether it
+      // works: a bare "Export" beside four portraits does not say which of
+      // them it means.
+      await showParty(tester);
+
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.file_upload_outlined),
+            )
+            .tooltip,
+        'Export Aard…',
+      );
+    });
+
+    testWidgets('offers the character’s own name as the file name', (
+      tester,
+    ) async {
+      await showParty(tester);
+      await select(tester, 'Imoen');
+
+      await tester.tap(find.byIcon(Icons.file_upload_outlined));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(TextField, 'Imoen'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('writes the selected character, adding the extension', (
+      tester,
+    ) async {
+      await showParty(tester);
+      await select(tester, 'Xzar');
+
+      await tester.tap(find.byIcon(Icons.file_upload_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+      await tester.pumpAndSettle();
+
+      expect(characterFiles.created.single.$1, 'Xzar.chr');
+      expect(characterFiles.created.single.$2.name, 'Xzar');
+    });
+
+    testWidgets('writes nothing when the dialog is cancelled', (tester) async {
+      await showParty(tester);
+
+      await tester.tap(find.byIcon(Icons.file_upload_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(characterFiles.created, isEmpty);
+    });
+
+    testWidgets('refuses a file name that is really a path', (tester) async {
+      // A player may legitimately name a character with a slash in it, and the
+      // game lets them. That must not become a directory.
+      await showParty(tester);
+
+      await tester.tap(find.byIcon(Icons.file_upload_outlined));
+      await tester.pumpAndSettle();
+      // Scoped to the dialog: the character sheet behind it is full of stat
+      // fields, so a bare byType finds a dozen.
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        ),
+        '../escape',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+      await tester.pumpAndSettle();
+
+      expect(characterFiles.created, isEmpty);
+      expect(find.textContaining('cannot contain'), findsOneWidget);
+    });
+
+    testWidgets('says so when the name is already taken', (tester) async {
+      await showParty(tester);
+      characterFiles.taken = {'Aard.chr'};
+
+      await tester.tap(find.byIcon(Icons.file_upload_outlined));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('There is already a character called Aard.chr'),
+        findsOneWidget,
+      );
+    });
+  });
+
+  testWidgets('never shows the slot index, not even while loading', (
+    tester,
+  ) async {
+    // ⚠️ **Found by watching the app open a save.** The title fell back to the
+    // route parameter until the savegame had been read, so `000000022-last`
+    // flashed for a frame before settling on `last`. `SaveSlot.label` exists
+    // precisely because those digits are an index the player never sees — and
+    // the loading state has to obey that rule too.
+    tester.view
+      ..physicalSize = const Size(1600, 2200)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final container = containerWith(party);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: PartyView(slotDirectoryName: slotName)),
+      ),
+    );
+
+    // The first frame, before anything has been read.
+    expect(find.text(slotName), findsNothing);
+    expect(find.text('last'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.text(slotName), findsNothing);
+  });
+
+  testWidgets('the rail draws the portrait the record names', (tester) async {
+    // ⚠️ **This reverses what the rail used to do.** It drew PORTRT<n>.bmp,
+    // the picture the engine baked beside the save -- correct while nothing
+    // could change a portrait, and wrong now that something can: a rail still
+    // showing the old face after the player picked a new one looks broken.
+    //
+    // The sidecar keeps the job only it can do. It is a picture of what the
+    // engine *believed*, and reading 18 / 18 out of one is what closed D10.
+    await showParty(tester);
+
+    expect(find.byType(PortraitImage), findsWidgets);
+    expect(
+      find.byType(Image),
+      findsNothing,
+      reason: 'no portrait is read from a file beside the save any more',
+    );
+  });
 
   testWidgets('every party member is on the rail', (tester) async {
     await showParty(tester);

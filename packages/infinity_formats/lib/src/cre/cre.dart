@@ -14,9 +14,11 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/cre/cre_section.dart';
 import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/spec/cre_v1_0.dart';
+import 'package:infinity_formats/src/spec/format_field.dart';
 import 'package:infinity_formats/src/text/fixed_field.dart';
 
 /// A parsed creature record — the `CRE` embedded in a savegame.
@@ -39,18 +41,50 @@ final class Cre {
   /// the armour-class bug: the table already knew the answer and the getter
   /// was free to ignore it. `Gam.withCreatureField` writes through the mirror
   /// of this, so the two cannot drift.
-  int _read(CreHeaderField field) => switch ((field.length, field.signed)) {
-    (1, false) => _view.getUint8(field.offset),
-    (1, true) => _view.getInt8(field.offset),
-    (2, false) => _view.getUint16(field.offset, Endian.little),
-    (2, true) => _view.getInt16(field.offset, Endian.little),
-    (4, false) => _view.getUint32(field.offset, Endian.little),
-    (4, true) => _view.getInt32(field.offset, Endian.little),
-    _ => throw InfinityFormatException.unreadableField(
-      what: '$field',
-      length: field.length,
-    ),
-  };
+  int _read(CreHeaderField field) => _readAt(0, field);
+
+  /// Reads [field] of a structure beginning at [base].
+  ///
+  /// The same reader serves the header and every section entry, so the three
+  /// spell layouts cannot pick a different width or signedness from the one
+  /// their table declares — which is the whole of what D6 buys.
+  int _readAt(int base, FormatField field) =>
+      switch ((field.length, field.signed)) {
+        (1, false) => _view.getUint8(base + field.offset),
+        (1, true) => _view.getInt8(base + field.offset),
+        (2, false) => _view.getUint16(base + field.offset, Endian.little),
+        (2, true) => _view.getInt16(base + field.offset, Endian.little),
+        (4, false) => _view.getUint32(base + field.offset, Endian.little),
+        (4, true) => _view.getInt32(base + field.offset, Endian.little),
+        _ => throw InfinityFormatException.unreadableField(
+          what: '$field',
+          length: field.length,
+        ),
+      };
+
+  /// Reads [field] of the header, at the width and signedness it declares.
+  ///
+  /// **The read counterpart of `withCreatureField`.** Every named accessor here
+  /// is a spelling of this with the field filled in; this one exists for the
+  /// callers that hold a field rather than a name — a test comparing the six
+  /// abilities, or a tool checking that everything it wrote survived. Both were
+  /// writing the six out by hand.
+  ///
+  /// ⚠️ **The table decides the signedness, not the caller.** That discretion
+  /// is what produced the armour-class bug, where the layout already recorded
+  /// "signed word" and the getter used `getUint16` anyway.
+  ///
+  /// Throws [InfinityFormatException] for a field that is not a 1-, 2- or
+  /// 4-byte number — a resref, for instance.
+  int readField(CreHeaderField field) => _read(field);
+
+  /// Where entry [at] of [section] begins, relative to this record.
+  ///
+  /// ⚠️ **Never derived from the gap to the next section.** The offset field is
+  /// the only source; a section's neighbours may be absent, in which case they
+  /// carry `0` and the arithmetic produces a negative stride.
+  int entryStart(CreSection section, int at) =>
+      _read(section.offsetField) + at * section.strideIn(this);
 
   /// Strref of this creature's long name, or `-1` when there is none.
   ///
@@ -260,6 +294,26 @@ final class Cre {
   /// The kit dword. `0x40000000` means no kit.
   int get kitId => _read(CreHeaderField.kit);
 
+  /// Resref of the medium portrait, e.g. `BDTMIM`.
+  ///
+  /// ⚠️ **IESDP calls this field "Small Portrait" and it is not** — see
+  /// `CreHeaderField.portraitMedium`. This is the one a character sheet shows.
+  ///
+  /// Empty when the record names none, which is an ordinary state for a
+  /// creature that is not a character.
+  String get portraitMedium => decodeFixedString(
+    bytes,
+    CreHeaderField.portraitMedium.offset,
+    CreHeaderField.portraitMedium.length,
+  );
+
+  /// Resref of the large portrait, e.g. `BDTMIL`.
+  String get portraitLarge => decodeFixedString(
+    bytes,
+    CreHeaderField.portraitLarge.offset,
+    CreHeaderField.portraitLarge.length,
+  );
+
   /// Resref of this creature's dialogue file.
   String get dialogFile => decodeFixedString(
     bytes,
@@ -341,6 +395,283 @@ final class Cre {
     for (final effect in effects)
       if (effect.isProficiency) effect.parameter2: effect.parameter1,
   };
+
+  /// The spells this creature knows, in the order the record stores them.
+  ///
+  /// The `level` of each is the level a **player** counts, not what the field
+  /// holds: IESDP names it "Spell Level -1" and the arithmetic belongs here
+  /// rather than at every call site.
+  ///
+  /// Empty when the section is absent, which is an ordinary state — two of the
+  /// 37 creatures in the party fixture carry `knownSpellsOffset == 0`.
+  List<({String resref, int level, int type})> get knownSpells => [
+    for (var i = 0; i < knownSpellsCount; i++)
+      if (entryStart(CreSection.knownSpells, i) case final int at)
+        (
+          resref: decodeFixedString(
+            bytes,
+            at + CreKnownSpellField.resref.offset,
+            CreKnownSpellField.resref.length,
+          ),
+          level: _readAt(at, CreKnownSpellField.levelLessOne) + 1,
+          type: _readAt(at, CreKnownSpellField.type),
+        ),
+  ];
+
+  /// How many spells of each level and type this creature may memorise.
+  ///
+  /// ⚠️ **The rows partition [memorizedSpells] in order.** Each carries a
+  /// window — `firstIndex` and `count` — and on every character the engine has
+  /// made, a row's index is the running total of the counts before it. That is
+  /// what makes inserting a memorised spell an edit to two sections.
+  List<
+    ({
+      int level,
+      int memorisable,
+      int afterEffects,
+      int type,
+      int firstIndex,
+      int count,
+    })
+  >
+  get memorizations => [
+    for (var i = 0; i < memorizationInfoCount; i++)
+      if (entryStart(CreSection.memorizationInfo, i) case final int at)
+        (
+          level: _readAt(at, CreMemorizationField.levelLessOne) + 1,
+          memorisable: _readAt(at, CreMemorizationField.memorisable),
+          afterEffects: _readAt(at, CreMemorizationField.afterEffects),
+          type: _readAt(at, CreMemorizationField.type),
+          firstIndex: _readAt(at, CreMemorizationField.firstIndex),
+          count: _readAt(at, CreMemorizationField.count),
+        ),
+  ];
+
+  /// The spells this creature has prepared, in memorised-array order.
+  List<({String resref, bool isMemorized, bool isDisabled})>
+  get memorizedSpells => [
+    for (var i = 0; i < memorizedSpellsCount; i++)
+      if (entryStart(CreSection.memorizedSpells, i) case final int at)
+        if (_readAt(at, CreMemorizedSpellField.flags) case final int flags)
+          (
+            resref: decodeFixedString(
+              bytes,
+              at + CreMemorizedSpellField.resref.offset,
+              CreMemorizedSpellField.resref.length,
+            ),
+            isMemorized: flags & creSpellMemorizedFlag != 0,
+            isDisabled: flags & creSpellDisabledFlag != 0,
+          ),
+  ];
+
+  /// A copy of this creature with [entry] appended to [section].
+  ///
+  /// **The first write in this project that changes a record's size**, and the
+  /// reason it can exist yet is that the creation flow puts it in a `.chr`: one
+  /// length field in a 100-byte header, against a file this app built seconds
+  /// earlier. The same edit inside a savegame moves thirty-nine pointers and is
+  /// still Phase 1's work.
+  ///
+  /// What it does, in order:
+  ///
+  /// 1. **Creates the section if it is absent.** An offset of `0` means absent,
+  ///    so `CHARBASE` — carrying no effects at all — needs the section made
+  ///    rather than written at zero.
+  /// 2. Splices [entry] in at the end of the section.
+  /// 3. Raises that section's count by one.
+  /// 4. **Shifts every other section that started at or after the splice**, and
+  ///    leaves an absent section's `0` alone. Adding a stride to `0` would turn
+  ///    "absent" into a pointer at the stride.
+  ///
+  /// ⚠️ **[CreSection.memorizationInfo] entries hold an index into the
+  /// memorised-spell array**, so growing that array shifts windows this method
+  /// knows nothing about. Whoever inserts a memorised spell owns keeping those
+  /// indices honest — [withEntryField] is how.
+  ///
+  /// The result satisfies `contentEnd == bytes.length`, which is the single
+  /// check that reconciles all six pointers, every entry size and the
+  /// effect-version flag.
+  ///
+  /// Throws [ArgumentError] if [entry] is not exactly one entry wide.
+  Cre withEntryAppended({
+    required CreSection section,
+    required Uint8List entry,
+  }) => withEntryInserted(
+    section: section,
+    at: _read(section.countField),
+    entry: entry,
+  );
+
+  /// A copy of this creature with [entry] spliced into [section] at index [at].
+  ///
+  /// The general form of [withEntryAppended], and it exists for one structure:
+  /// a memorised spell belongs to the window its memorisation row names, so the
+  /// second spell of a level that already has one goes **inside** the array.
+  /// Appending would file it under whichever window happens to run last.
+  ///
+  /// [at] counts entries, not bytes, and may equal the current count — which is
+  /// an append. Everything [withEntryAppended] documents applies: an absent
+  /// section is created rather than written at zero, and a section carrying `0`
+  /// keeps it rather than being shifted into a pointer at the stride.
+  ///
+  /// Throws [ArgumentError] if [entry] is not exactly one entry wide, and
+  /// [RangeError] if [at] is outside the section.
+  Cre withEntryInserted({
+    required CreSection section,
+    required int at,
+    required Uint8List entry,
+  }) {
+    final stride = section.strideIn(this);
+    if (entry.length != stride) {
+      throw ArgumentError.value(
+        entry.length,
+        'entry',
+        'a ${section.name} entry is $stride bytes',
+      );
+    }
+
+    final offset = _read(section.offsetField);
+    final count = _read(section.countField);
+    if (at < 0 || at > count) {
+      RangeError.checkValueInInterval(at, 0, count, 'at');
+    }
+
+    // An absent section starts where the content currently ends, so the splice
+    // is an append to the file and nothing else moves.
+    final present = hasSection(offset);
+    final start = present ? offset : contentEnd;
+    final spliceAt = present ? offset + at * stride : contentEnd;
+
+    final out = Uint8List(bytes.length + stride)
+      ..setRange(0, spliceAt, bytes)
+      ..setRange(spliceAt, spliceAt + stride, entry)
+      ..setRange(spliceAt + stride, bytes.length + stride, bytes, spliceAt);
+
+    final view = ByteData.sublistView(out)
+      ..setUint32(section.offsetField.offset, start, Endian.little)
+      ..setUint32(section.countField.offset, count + 1, Endian.little);
+
+    for (final other in CreSection.all) {
+      if (other == section) continue;
+      final where = _read(other.offsetField);
+      if (!hasSection(where) || where < spliceAt) continue;
+      view.setUint32(other.offsetField.offset, where + stride, Endian.little);
+    }
+    // The slot table has an offset and no count, so it moves but never grows.
+    final slots = itemSlotsOffset;
+    if (hasSection(slots) && slots >= spliceAt) {
+      view.setUint32(
+        CreHeaderField.itemSlotsOffset.offset,
+        slots + stride,
+        Endian.little,
+      );
+    }
+
+    return Cre.trusted(out.asUnmodifiableView());
+  }
+
+  /// A copy of this creature with [field] of entry [at] in [section] set.
+  ///
+  /// Fixed-width and therefore cheap: nothing moves, and everything this
+  /// project does not understand about the entry survives untouched. It is the
+  /// counterpart of [withEntryInserted] — one grows the section, this repairs
+  /// what growing it invalidated, which for memorisation rows is a pointer into
+  /// a section the insert never touched.
+  ///
+  /// ⚠️ **[field] must belong to [section]'s own layout.** The stride is
+  /// checked, so a field from a wider structure is refused rather than allowed
+  /// to write through into the next entry.
+  ///
+  /// Throws [RangeError] if [at] is outside the section, and [ArgumentError] if
+  /// [field] does not fit the entry or [value] does not fit the field.
+  Cre withEntryField({
+    required CreSection section,
+    required int at,
+    required FormatField field,
+    required int value,
+  }) {
+    final stride = section.strideIn(this);
+    final count = _read(section.countField);
+    RangeError.checkValidIndex(at, this, 'at', count);
+
+    if (field.offset + field.length > stride) {
+      throw ArgumentError.value(
+        '$field',
+        'field',
+        'ends at ${field.offset + field.length}, past a ${section.name} '
+            'entry of $stride bytes',
+      );
+    }
+    if (!field.holds(value)) {
+      throw ArgumentError.value(
+        value,
+        'value',
+        '$field accepts ${field.minimum} to ${field.maximum}',
+      );
+    }
+
+    final at0 = entryStart(section, at) + field.offset;
+    final out = Uint8List.fromList(bytes);
+    final view = ByteData.sublistView(out);
+    switch ((field.length, field.signed)) {
+      case (1, false):
+        view.setUint8(at0, value);
+      case (1, true):
+        view.setInt8(at0, value);
+      case (2, false):
+        view.setUint16(at0, value, Endian.little);
+      case (2, true):
+        view.setInt16(at0, value, Endian.little);
+      case (4, false):
+        view.setUint32(at0, value, Endian.little);
+      case (4, true):
+        view.setInt32(at0, value, Endian.little);
+      case _:
+        throw InfinityFormatException.unreadableField(
+          what: '$field',
+          length: field.length,
+        );
+    }
+    return Cre.trusted(out.asUnmodifiableView());
+  }
+
+  /// A copy of this creature whose effects are [version] — `0` v1, `1` v2.
+  ///
+  /// ⚠️ **The one edit here that changes no bytes but changes what the file
+  /// means.** [effectVersion] picks the stride of every entry in the effects
+  /// section, so writing it while entries exist reinterprets all of them where
+  /// they lie — a corruption with no symptom until something reads them.
+  ///
+  /// It exists because the engine's own template needs it. `CHARBASE` stores
+  /// **0** and carries **no effects**; the character BG:EE finishes building
+  /// from it stores **1** with 264-byte records. Granting the first proficiency
+  /// is where a created character crosses that line, and the crossing is safe
+  /// for exactly the reason the template makes it: there is nothing to
+  /// reinterpret.
+  ///
+  /// Throws [ArgumentError] for a version the format does not define, and
+  /// [StateError] when this record already holds effects.
+  Cre withEffectVersion(int version) {
+    if (version != 0 && version != 1) {
+      throw ArgumentError.value(
+        version,
+        'version',
+        'a CRE effect version is 0 (v1) or 1 (v2)',
+      );
+    }
+    if (version == effectVersion) return this;
+    if (effectsCount != 0) {
+      throw StateError(
+        'this creature holds $effectsCount effects at '
+        '$effectLength bytes each; changing the version to $version would '
+        'reinterpret them where they lie rather than convert them',
+      );
+    }
+
+    final out = Uint8List.fromList(bytes);
+    out[CreHeaderField.effectVersion.offset] = version;
+    return Cre.trusted(out.asUnmodifiableView());
+  }
 
   /// Whether this creature has a section at [offset] at all.
   ///

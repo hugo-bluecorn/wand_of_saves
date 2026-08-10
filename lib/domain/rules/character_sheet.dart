@@ -60,7 +60,7 @@ class CharacterSheet {
   String get identity => [
     rules.genderName(character.genderId),
     rules.raceName(character.raceId),
-    _classOrKit,
+    classOrKitName,
     rules.alignmentName(character.alignmentId),
   ].nonNulls.join(' · ');
 
@@ -76,7 +76,7 @@ class CharacterSheet {
   /// Measured on a mage school, which is the only kit any fixture carries.
   /// BG:EE names the other kits the same way — a kitted fighter reads
   /// `Berserker` — but that part is convention here until one turns up.
-  String? get _classOrKit => kitName ?? rules.className(character.classId);
+  String? get classOrKitName => kitName ?? rules.className(character.classId);
 
   /// The character's kit, or `null` when they have none.
   ///
@@ -319,20 +319,102 @@ class CharacterSheet {
   int? get maximumRolledHitPoints {
     final identifier = rules.classIdentifier(character.classId);
     if (identifier == null) return null;
-    final classes = identifier.split('_');
-    final levels = classLevels;
-    // A name and a slot count that disagree mean one of them is junk, and
-    // inventing a ceiling from junk is worse than having none.
-    if (classes.length != levels.length) return null;
-
-    var total = 0;
-    for (var i = 0; i < classes.length; i++) {
-      final own = rules.maximumRolledHitPoints(classes[i], levels[i]);
-      if (own == null) return null;
-      total += own;
-    }
-    return (total + classes.length - 1) ~/ classes.length;
+    // ⚠️ **The composition lives in `GameRules`, not here.** A created
+    // character has to compute the same number with no `Character` to hang it
+    // on, and two copies of this arithmetic is how the sheet and the creation
+    // flow start disagreeing about what a Fighter/Mage rolls.
+    return rules.maximumRolledHitPointsFor(
+      classIdentifier: identifier,
+      levels: classLevels,
+    );
   }
+
+  /// Lore as the game will show it — stored plus Intelligence plus Wisdom.
+  ///
+  /// ⚠️ **Both abilities, and this is D14's second trap.** The stored value is
+  /// the class-and-level part alone: the probe stored **3** and its record
+  /// screen printed **83**, which is 3 + `LOREBON[Int 25]` 40 +
+  /// `LOREBON[Wis 25]` 40. An editor that recomputed the stored value when an
+  /// ability changed would double-count against the engine.
+  int? get loreInGame {
+    final fromIntelligence = rules.loreBonusFor(
+      character.abilities.intelligence,
+    );
+    final fromWisdom = rules.loreBonusFor(character.abilities.wisdom);
+    if (fromIntelligence == null || fromWisdom == null) return null;
+    return character.thiefSkills.lore + fromIntelligence + fromWisdom;
+  }
+
+  /// A thief skill as the game will show it, or `null`.
+  ///
+  /// Stored plus `SKILLDEX` for Dexterity plus `SKILLRAC` for the race —
+  /// confirmed on all seven of the probe's skills at once. `null` for a stat
+  /// that is not a thief skill at all.
+  int? thiefSkillInGame(CharacterStat stat) {
+    final row = stat.thiefSkillRow;
+    if (row == null) return null;
+
+    final bonus = rules.thiefSkillBonusFor(
+      row: row,
+      dexterity: character.abilities.dexterity,
+      raceIdentifier: rules.raceIdentifier(character.raceId),
+    );
+    if (bonus == null) return null;
+    return _storedSkill(stat) + bonus;
+  }
+
+  /// The stored value behind [stat], or `0` for a stat with no skill.
+  int _storedSkill(CharacterStat stat) {
+    final skills = character.thiefSkills;
+    return switch (stat) {
+      CharacterStat.pickPockets => skills.pickPockets,
+      CharacterStat.lockpicking => skills.lockpicking,
+      CharacterStat.findTraps => skills.findTraps,
+      CharacterStat.moveSilently => skills.moveSilently,
+      CharacterStat.hideInShadows => skills.hideInShadows,
+      CharacterStat.detectIllusion => skills.detectIllusion,
+      CharacterStat.setTraps => skills.setTraps,
+      _ => 0,
+    };
+  }
+
+  /// What Strength takes off THAC0, or `null` off the table.
+  ///
+  /// Positive is an improvement: the probe stored `Base THAC0: 25` and the
+  /// screen printed `THAC0: 22` with `Strength Modification: -3`.
+  int? get strengthToHit => rules.strengthToHitFor(
+    strength: character.abilities.strength,
+    percentile: character.abilities.strengthBonus,
+  );
+
+  /// THAC0 as the game will show it, or `null` off the table.
+  int? get thac0InGame {
+    final bonus = strengthToHit;
+    return bonus == null ? null : character.thac0 - bonus;
+  }
+
+  /// The chance this character has of learning a spell, as a percentage.
+  int? get chanceToLearnSpell =>
+      rules.chanceToLearnSpellFor(character.abilities.intelligence);
+
+  /// Attacks per round, as the game writes it — `1`, `3/2`, `9/2`.
+  ///
+  /// ⚠️ **The stored byte is not a count.** 0 to 5 are whole attacks and 6 to
+  /// 10 are halves, so a stored **10** is four and a half attacks and the game
+  /// prints **9/2**. The sheet printed the raw byte until this existed, which
+  /// showed that character as attacking ten times a round.
+  ///
+  /// Written as the game writes it — a vulgar fraction, not `4.5` — because
+  /// that is what the player will be comparing it against.
+  String get attacksPerRound {
+    final stored = character.numberOfAttacks;
+    if (stored <= wholeAttacksCeiling) return '$stored';
+    // 6 is one half, 7 is three halves, and so on: `(stored - 5) * 2 - 1`.
+    return '${(stored - wholeAttacksCeiling) * 2 - 1}/2';
+  }
+
+  /// The highest stored value that means whole attacks rather than halves.
+  static const int wholeAttacksCeiling = 5;
 
   /// Current hit points as the game will show them.
   ///

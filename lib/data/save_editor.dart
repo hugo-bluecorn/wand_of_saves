@@ -15,26 +15,44 @@
 /// Turns an [EditCommand] into bytes.
 ///
 /// The one place a domain command meets the format. It lives in the data layer
-/// because it knows `Gam`; the commands themselves know only domain concepts,
-/// so nothing in `lib/ui/` needs to.
+/// because it knows the codecs; the commands themselves know only domain
+/// concepts, so nothing in `lib/ui/` needs to.
+///
+/// **Two entry points, and the smaller one is the general one.**
+/// [applyCharacterEdit] works on anything holding a creature record, which is
+/// both documents this app opens; [applyEdit] adds the handful of edits that
+/// only a savegame can take.
 library;
+
+import 'dart:typed_data';
 
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 
-/// [gam] with [command] applied, as a new savegame.
+/// [document] with [command] applied, as a new document of the same kind.
+///
+/// **Generic over [CreatureDocument]**, so one implementation serves a savegame
+/// and an exported character alike — they wrap the same creature record, and an
+/// edit that behaved differently in one of them would reach the user as "that
+/// field only works when I open the save".
+///
+/// The type parameter is the concrete document rather than the interface, so
+/// editing a `Chr` yields a `Chr` and an editor's undo stack stays a
+/// `List<Chr>`.
 ///
 /// Never mutates: the result is a patched copy, and everything this project
 /// does not understand about the file survives untouched.
 ///
 /// The `switch` is **exhaustive over a sealed hierarchy**, so a new kind of
-/// edit does not compile until it is handled here — which is the whole reason
-/// commands are sealed rather than a bag of closures.
+/// character edit does not compile until it is handled here.
 ///
 /// Throws [InvalidEditException] if the value is outside what the stat
 /// accepts. The check is here rather than only at the format boundary because
 /// the field is the looser gate of the two: a Strength of 200 fits its byte.
-Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
+T applyCharacterEdit<T extends CreatureDocument<T>>(
+  T document,
+  CharacterEditCommand command,
+) => switch (command) {
   SetCharacterStat(:final creOffset, :final stat, :final value) => () {
     if (!stat.holds(value)) {
       throw InvalidEditException(
@@ -44,9 +62,155 @@ Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
         maximum: stat.maximum,
       );
     }
-    return gam.withCreatureField(
+    return document.withCreatureField(
       creOffset: creOffset,
       field: stat.field,
+      value: value,
+    );
+  }(),
+  // ⚠️ **The two that resize.** Both go through `Cre.withEntryAppended`, which
+  // creates the section when it is absent — `CHARBASE` has neither — and then
+  // through `withCreature`, which is where a savegame refuses.
+  GrantProficiency(:final creOffset, :final proficiencyId, :final pips) => () {
+    if (!EffectV2Field.parameter1.holds(pips)) {
+      throw InvalidEditException(
+        what: 'proficiency $proficiencyId',
+        value: pips,
+        minimum: EffectV2Field.parameter1.minimum,
+        maximum: EffectV2Field.parameter1.maximum,
+      );
+    }
+    final creature = CreCodec.decode(document.creatureAt(creOffset));
+    final effect = proficiencyEffectTemplate();
+    ByteData.sublistView(effect)
+      ..setUint32(EffectV2Field.parameter1.offset, pips, Endian.little)
+      ..setUint32(
+        EffectV2Field.parameter2.offset,
+        proficiencyId,
+        Endian.little,
+      );
+
+    return document.withCreature(
+      creOffset: creOffset,
+      // ⚠️ **The version comes first, and a created character needs it.**
+      // `CHARBASE` arrives claiming 48-byte v1 effects while carrying none;
+      // the character the engine finishes building from it stores v2, which is
+      // what `proficiencyEffectTemplate` writes. Without this the very first
+      // proficiency granted to a new character is refused outright — and the
+      // suite could not see it, because the synthetic record wrote v2 always.
+      // `withEffectVersion` refuses rather than converts once effects exist, so
+      // this can only ever fire on a record with nothing to reinterpret.
+      creature: creature
+          .withEffectVersion(1)
+          .withEntryAppended(section: CreSection.effects, entry: effect),
+    );
+  }(),
+  LearnSpell(:final creOffset, :final resref, :final level, :final type) => () {
+    final creature = CreCodec.decode(document.creatureAt(creOffset));
+
+    return document.withCreature(
+      creOffset: creOffset,
+      creature: creature.withEntryAppended(
+        section: CreSection.knownSpells,
+        // The "Spell Level -1" arithmetic lives in the builder, once.
+        entry: knownSpellEntry(
+          resref: resref,
+          level: level,
+          type: type.stored,
+        ),
+      ),
+    );
+  }(),
+  MemoriseSpell(
+    :final creOffset,
+    :final resref,
+    :final level,
+    :final type,
+    :final memorisable,
+  ) =>
+    () {
+      var creature = CreCodec.decode(document.creatureAt(creOffset));
+
+      // The window this spell belongs to, opened if the character has none.
+      // ⚠️ A new row starts at the **end** of the memorised array, which is
+      // what leaves every window already there pointing where it did.
+      var row = creature.memorizations.indexWhere(
+        (r) => r.level == level && r.type == type.stored,
+      );
+      if (row < 0) {
+        creature = creature.withEntryAppended(
+          section: CreSection.memorizationInfo,
+          entry: memorizationRowEntry(
+            level: level,
+            type: type.stored,
+            memorisable: memorisable,
+            firstIndex: creature.memorizedSpellsCount,
+          ),
+        );
+        row = creature.memorizationInfoCount - 1;
+      }
+
+      final window = creature.memorizations[row];
+      final insertAt = window.firstIndex + window.count;
+      creature = creature.withEntryInserted(
+        section: CreSection.memorizedSpells,
+        at: insertAt,
+        entry: memorizedSpellEntry(resref: resref),
+      );
+
+      creature = creature
+          .withEntryField(
+            section: CreSection.memorizationInfo,
+            at: row,
+            field: CreMemorizationField.count,
+            value: window.count + 1,
+          )
+          .withEntryField(
+            section: CreSection.memorizationInfo,
+            at: row,
+            field: CreMemorizationField.memorisable,
+            value: memorisable,
+          )
+          .withEntryField(
+            section: CreSection.memorizationInfo,
+            at: row,
+            field: CreMemorizationField.afterEffects,
+            value: memorisable,
+          );
+
+      // ⚠️ **The part `withEntryInserted` cannot do for itself.** Every window
+      // after this one begins one entry later than it did. Rows are checked on
+      // *both* their position and their index: on the engine's own characters
+      // the two agree — each row starts where the ones before it end — and a
+      // record where they disagree is one this must not make worse.
+      for (var i = row + 1; i < creature.memorizationInfoCount; i++) {
+        final other = creature.memorizations[i];
+        if (other.firstIndex < insertAt) continue;
+        creature = creature.withEntryField(
+          section: CreSection.memorizationInfo,
+          at: i,
+          field: CreMemorizationField.firstIndex,
+          value: other.firstIndex + 1,
+        );
+      }
+
+      return document.withCreature(creOffset: creOffset, creature: creature);
+    }(),
+  SetCharacterIdentity(:final creOffset, :final identity, :final value) => () {
+    // The field's bound, not the game's. Which classes an elf may take lives
+    // in the player's `clsrcreq.2da` and is settled before a command is built
+    // — the same division `SetProficiency` makes just below.
+    if (!identity.holds(value)) {
+      throw InvalidEditException(
+        what: identity.label,
+        value: value,
+        minimum: identity.field.minimum,
+        maximum: identity.field.maximum,
+      );
+    }
+    return document.withCreatureField(
+      creOffset: creOffset,
+      field: identity.field,
       value: value,
     );
   }(),
@@ -69,13 +233,85 @@ Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
           maximum: EffectV2Field.parameter1.maximum,
         );
       }
-      return gam.withEffectField(
+      return document.withEffectField(
         creOffset: creOffset,
         effectStart: effectOffset,
         field: EffectV2Field.parameter1,
         value: pips,
       );
     }(),
+  SetClassLevels(:final creOffset, :final levels) => () {
+    // ⚠️ Every slot is written, not only the ones in use. A record whose
+    // second slot still holds the template's value reads as a multi-class the
+    // character is not, and `classCount` would then disagree with the bytes.
+    const fields = [
+      CreHeaderField.levelFirstClass,
+      CreHeaderField.levelSecondClass,
+      CreHeaderField.levelThirdClass,
+    ];
+    if (levels.length > fields.length) {
+      throw InvalidEditException(
+        what: 'the class levels',
+        value: levels.length,
+        minimum: 0,
+        maximum: fields.length,
+      );
+    }
+
+    var updated = document;
+    for (var slot = 0; slot < fields.length; slot++) {
+      final level = slot < levels.length ? levels[slot] : 0;
+      if (!fields[slot].holds(level)) {
+        throw InvalidEditException(
+          what: 'a class level',
+          value: level,
+          minimum: fields[slot].minimum,
+          maximum: fields[slot].maximum,
+        );
+      }
+      updated = updated.withCreatureField(
+        creOffset: creOffset,
+        field: fields[slot],
+        value: level,
+      );
+    }
+    return updated;
+  }(),
+  SetPortrait(:final creOffset, :final baseName) => () {
+    // ⚠️ Checked here rather than left to the codec, because the codec sees
+    // the *suffixed* resref and would report a limit of 8 for a name the
+    // player typed at 7. The bound is the base name's, and it comes from the
+    // game's own naming: base plus one letter must fit an 8-byte field.
+    if (baseName.length > SetPortrait.baseNameLimit) {
+      throw InvalidEditException(
+        what: 'a portrait name',
+        value: baseName.length,
+        minimum: 0,
+        maximum: SetPortrait.baseNameLimit,
+      );
+    }
+    final portrait = SetPortrait(creOffset: creOffset, baseName: baseName);
+    return document
+        .withCreatureText(
+          creOffset: creOffset,
+          field: CreHeaderField.portraitMedium,
+          value: portrait.medium,
+        )
+        .withCreatureText(
+          creOffset: creOffset,
+          field: CreHeaderField.portraitLarge,
+          value: portrait.large,
+        );
+  }(),
+};
+
+/// [gam] with [command] applied, as a new savegame.
+///
+/// Every character edit is handed straight to [applyCharacterEdit], so there is
+/// exactly one implementation of what an edit does to a creature record. What
+/// is left here is what only a savegame has.
+Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
+  final CharacterEditCommand edit => applyCharacterEdit(gam, edit),
   SetPartyGold(:final value) => () {
     if (!GamHeaderField.partyGold.holds(value)) {
       throw InvalidEditException(

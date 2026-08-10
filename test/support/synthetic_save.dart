@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Builds savegames with real embedded creature records, so the app's suite
-/// needs no game data.
+/// Builds savegames and exported characters with real embedded creature
+/// records, so the app's suite needs no game data.
 ///
 /// `packages/infinity_formats` has a GAM builder of its own, but its creature
 /// blobs are an eight-byte marker — enough to prove the party stride, not
@@ -22,6 +22,11 @@
 /// **Every fixture on the developer's machine is a one-character party**, which
 /// is the same blind spot that let the spike's stride of −180 go unnoticed. So
 /// the multi-member cases live here, where a party of any size can be built.
+///
+/// Both document types are built from one [SyntheticCharacter] writer, which is
+/// the point: a `.chr` is a 100-byte header around exactly the record a
+/// savegame embeds, so a test that reads a stat must not care which it came
+/// from.
 library;
 
 import 'dart:convert';
@@ -87,7 +92,19 @@ final class SyntheticCharacter {
     this.turnUndeadLevel = 0,
     this.trackingSkill = 0,
     this.proficiencies = const {},
+    this.effectVersion = 1,
   });
+
+  /// The engine's own `CHARBASE`, as far as its effects section goes.
+  ///
+  /// ⚠️ **The template stores `effectVersion` 0 and no effects at all**, where
+  /// every character BG:EE has finished making stores 1. Measured against the
+  /// real file, not assumed. This shape exists because the default above is 1,
+  /// which is true of every *played* character and of nothing a new one is
+  /// built from — and that gap hid a defect for a whole slice.
+  static const SyntheticCharacter template = SyntheticCharacter(
+    effectVersion: 0,
+  );
 
   /// The CRE resref, written to `GamNpcField.creResref`.
   final String resref;
@@ -241,6 +258,13 @@ final class SyntheticCharacter {
   /// `0x6e`-`0x81` are zero on every character in a real save. A synthetic
   /// creature that put them in the header would test the wrong thing.
   final Map<int, int> proficiencies;
+
+  /// What `CreHeaderField.effectVersion` holds: `0` for v1, `1` for v2.
+  ///
+  /// Defaults to `1`, which is what BG:EE writes for every character in a save
+  /// — and what [proficiencies] needs, since it writes 264-byte v2 records.
+  /// Set it to `0` for a template-shaped record; see [template].
+  final int effectVersion;
 }
 
 /// Builds a `BALDUR.gam` image holding [party].
@@ -328,6 +352,63 @@ Uint8List buildSave({
   return out;
 }
 
+/// Builds a `.chr` image: a 100-byte header wrapped around [character].
+///
+/// [name] is the CHR header's own 32-byte name, which is **the only name an
+/// exported character has** — the embedded record carries neither a dialogue
+/// resref nor a name strref. It is deliberately not defaulted from
+/// [SyntheticCharacter.displayName]: that field belongs to the GAM struct, and
+/// keeping them separate is what lets a test prove the header is where the
+/// name was read from.
+Uint8List buildCharacterFile({
+  SyntheticCharacter character = const SyntheticCharacter(),
+  String name = 'Aard',
+  String signature = 'CHR ',
+  String version = 'V2.0',
+}) {
+  final creLength = _creLength(character);
+  final out = Uint8List(ChrHeaderField.headerSize + creLength)
+    ..setRange(0, 4, ascii.encode(signature))
+    ..setRange(4, 8, ascii.encode(version));
+  _putString(
+    out,
+    ChrHeaderField.name.offset,
+    ChrHeaderField.name.length,
+    name,
+  );
+  ByteData.sublistView(out)
+    ..setUint32(
+      ChrHeaderField.creOffset.offset,
+      ChrHeaderField.headerSize,
+      Endian.little,
+    )
+    ..setUint32(ChrHeaderField.creLength.offset, creLength, Endian.little);
+
+  _writeCre(out, ChrHeaderField.headerSize, character);
+  return out;
+}
+
+/// Writes [chr] into [root] as `<name>.chr` and returns its path.
+///
+/// [withBiography] writes the `.bio` sidecar the game puts beside every
+/// exported character — one document in two files, which is why deletion has to
+/// move both.
+String writeCharacterFile(
+  Directory root,
+  String name, {
+  Uint8List? chr,
+  bool withBiography = false,
+}) {
+  final separator = Platform.pathSeparator;
+  root.createSync(recursive: true);
+  final path = '${root.path}$separator$name.chr';
+  File(path).writeAsBytesSync(chr ?? buildCharacterFile());
+  if (withBiography) {
+    File('${root.path}$separator$name.bio').writeAsStringSync('A biography.');
+  }
+  return path;
+}
+
 /// Bytes one synthetic creature occupies: the header, then its effects.
 int _creLength(SyntheticCharacter character) =>
     CreHeaderField.headerSize +
@@ -380,7 +461,7 @@ void _writeCre(Uint8List out, int base, SyntheticCharacter character) {
   i32(CreHeaderField.gold, character.gold);
   u16(CreHeaderField.currentHitPoints, character.currentHitPoints);
   u16(CreHeaderField.maximumHitPoints, character.maximumHitPoints);
-  u8(CreHeaderField.effectVersion, 1);
+  u8(CreHeaderField.effectVersion, character.effectVersion);
   u8(CreHeaderField.reputation, character.reputationTimesTen);
   i16(CreHeaderField.armorClassNatural, character.armorClass);
   i16(CreHeaderField.armorClassEffective, character.armorClass);

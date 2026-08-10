@@ -104,8 +104,12 @@ points), `dexmod` (Dexterity → armour class), `strmod`/`strmodex`, `thac0`, `h
   `warriorRoots` was right.
 - ✅ **The armour-class question** — settled 2026-08-08, before this list was written: the engine
   reads the **effective** field `0x48`.
-- ⬅️ **The rules-based hit-point cap** is the only item here that still needs **Phase 3's real
-  tables** — IESDP ships no per-class dice tables, only a template.
+- ✅ **The rules-based hit-point cap** — closed 2026-08-09 by reading the player's own `hpclass.2da`
+  and the `hp*` tables it names.
+- ✅ **The display derivations** — closed 2026-08-10. `lorebon`, `skilldex`, `skillrac`, `strmod`,
+  `strmodex` and `intmod` are read from the installation, and the sheet shows what the game will
+  draw beside what the file holds. ⚠️ Including `numberOfAttacks`, which is **not a count**: 6–10
+  are halves, so a stored 10 draws as `9/2`.
 - ⬅️ **The multi-class hit-point multiplier** is open but *not* blocked on Phase 3, and **must not
   be answered by editing a level** — D10. It resolves itself when the protagonist's total
   experience is between 4000 and 5000.
@@ -131,8 +135,10 @@ KEY/BIFF reader in an isolate; 2DA/IDS tables; item and spell pickers.
   plain uncompressed `BIFFV1`, **~22 ms to index the lot**.
 - ⬅️ **The gate is not in doubt but is not yet proved in the app** — nothing runs it off the UI
   thread yet, because nothing in the app calls it yet.
-- ⬅️ **Item and spell pickers**, and reading the player's `2DA`s in place of the generated ones.
-- ⬅️ **The rules-based hit-point cap**, which needs the per-class dice tables IESDP does not ship.
+- ⬅️ **Item and spell pickers.** Reading the player's own `2DA`s **is done** — the rules layer now
+  takes saving throws, THAC0, Lore, thief-skill points, the bard and ranger progressions and every
+  display modifier from the installation rather than from IESDP.
+- ✅ **The rules-based hit-point cap**, from `hpclass.2da` and the tables it names.
 
 ## Phase 4 — inventory, spells, proficiencies
 

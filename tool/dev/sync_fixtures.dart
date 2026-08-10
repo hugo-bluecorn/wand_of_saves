@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Copies real BG:EE save slots into the test fixture directory.
+// Copies real BG:EE save slots and exported characters into the test fixture
+// directory.
 //
 // Usage, from the repository root:
 //   fvm dart run tool/dev/sync_fixtures.dart [saveRoot]
@@ -24,14 +25,26 @@
 // every test touches. Fixtures are gitignored (`**/fixtures/`) because
 // BALDUR.gam is BioWare's copyright and must never enter the repository.
 //
+// Characters live in `characters/`, a **sibling** of the save root rather than
+// a directory inside it — the same step `GameProfileService` takes to reach
+// `Baldur.lua`. Each `.chr` is copied with its `.bio` sidecar, because the two
+// are one document: a biography left behind is a half-copied character.
+//
 // A command-line tool: stdout is the output, written directly rather than
 // through dart:core's print(), because avoid_print is enabled repo-wide (D8).
 import 'dart:io';
 
-/// Where fixtures land, relative to the repository root.
+/// Where save fixtures land, relative to the repository root.
 const _destination = 'packages/infinity_formats/test/fixtures/saves';
 
+/// Where character fixtures land, relative to the repository root.
+const _characterDestination =
+    'packages/infinity_formats/test/fixtures/characters';
+
 const _gam = 'BALDUR.gam';
+
+/// The directory holding exported characters, beside the save root.
+const _characters = 'characters';
 
 String get _home =>
     Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
@@ -55,6 +68,21 @@ List<Directory> _slotsIn(String root) {
         (d) => File('${d.path}${Platform.pathSeparator}$_gam').existsSync(),
       )
       .toList();
+}
+
+/// Exported characters beside [root], as `.chr` files with any `.bio` sidecar.
+///
+/// Returns an empty list when the folder is absent, which is an ordinary state
+/// — a player who has never used the Record screen's EXPORT button has none.
+List<File> _charactersBeside(String root) {
+  final dir = Directory(
+    '${Directory(root).parent.path}${Platform.pathSeparator}$_characters',
+  );
+  if (!dir.existsSync()) return const [];
+  return dir.listSync().whereType<File>().where((f) {
+    final name = _basename(f.path).toLowerCase();
+    return name.endsWith('.chr') || name.endsWith('.bio');
+  }).toList();
 }
 
 Never _bail(String message) {
@@ -110,7 +138,27 @@ void main(List<String> args) {
     stdout.writeln('  $name  ($files files, $bytes bytes)');
   }
 
+  final characters = _charactersBeside(root)
+    ..sort((a, b) => _basename(a.path).compareTo(_basename(b.path)));
+  if (characters.isNotEmpty) {
+    final target = Directory(_characterDestination)
+      ..createSync(recursive: true);
+    final from =
+        '${Directory(root).parent.path}${Platform.pathSeparator}$_characters';
+    stdout
+      ..writeln()
+      ..writeln('characters: $from  (read-only)');
+    for (final file in characters) {
+      final name = _basename(file.path);
+      file.copySync('${target.path}${Platform.pathSeparator}$name');
+      stdout.writeln('  $name  (${file.lengthSync()} bytes)');
+    }
+  }
+
   stdout
     ..writeln()
-    ..writeln('${slots.length} slot(s) copied. Fixtures are gitignored.');
+    ..writeln(
+      '${slots.length} slot(s) and ${characters.length} character file(s) '
+      'copied. Fixtures are gitignored.',
+    );
 }
