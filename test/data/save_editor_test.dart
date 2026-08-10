@@ -657,6 +657,33 @@ void main() {
       expect(CreCodec.decode(chr.creBytes).proficiencies, {89: 1, 114: 2});
     });
 
+    test('⚠️ grants one to the template, whose effects are still v1', () {
+      // **The shape a created character actually arrives in.** `CHARBASE`
+      // stores `effectVersion` 0 — 48-byte v1 effects — and **zero** effects,
+      // while the character BG:EE itself builds from it stores 1 and 264-byte
+      // v2 records. A proficiency effect is v2, so granting one to the template
+      // as it comes asks a 48-byte section to accept 264 bytes.
+      //
+      // ⚠️ **Nothing else here could see it**: the synthetic builder wrote
+      // `effectVersion` 1 unconditionally, which is true of every character in
+      // a save and of nothing a new one is built from. Against the real
+      // template this threw `a effects entry is 48 bytes: 264`.
+      final chr = ChrCodec.decode(
+        buildCharacterFile(character: SyntheticCharacter.template),
+      );
+      expect(CreCodec.decode(chr.creBytes).effectVersion, 0);
+
+      final after = applyCharacterEdit(
+        chr,
+        GrantProficiency(creOffset: chr.creOffset, proficiencyId: 114, pips: 2),
+      );
+
+      final cre = CreCodec.decode(after.creBytes);
+      expect(cre.effectVersion, 1, reason: 'what the engine itself writes');
+      expect(cre.proficiencies[114], 2);
+      expect(cre.contentEnd, cre.bytes.length);
+    });
+
     test('learns a spell into a book that did not exist', () {
       final chr = blank();
 
@@ -673,6 +700,162 @@ void main() {
       final cre = CreCodec.decode(after.creBytes);
       expect(cre.knownSpellsCount, 1);
       expect(cre.contentEnd, cre.bytes.length);
+    });
+
+    test('memorises a spell into a book that had no sections at all', () {
+      final chr = blank();
+
+      final after = applyCharacterEdit(
+        chr,
+        MemoriseSpell(
+          creOffset: chr.creOffset,
+          resref: 'SPWI112',
+          level: 1,
+          type: SpellType.wizard,
+          memorisable: 1,
+        ),
+      );
+
+      final cre = CreCodec.decode(after.creBytes);
+      // The engine's own Aurel, row for row: one wizard row at first level
+      // saying one memorisable and one memorised, and `SPWI112` ready to cast.
+      expect(cre.memorizations.single, (
+        level: 1,
+        memorisable: 1,
+        afterEffects: 1,
+        type: SpellType.wizard.stored,
+        firstIndex: 0,
+        count: 1,
+      ));
+      expect(cre.memorizedSpells.single.resref, 'SPWI112');
+      expect(cre.memorizedSpells.single.isMemorized, isTrue);
+      expect(cre.contentEnd, cre.bytes.length);
+    });
+
+    test('a second spell of the same level widens the window it is in', () {
+      var chr = blank();
+      for (final resref in ['SPWI112', 'SPWI114']) {
+        chr = applyCharacterEdit(
+          chr,
+          MemoriseSpell(
+            creOffset: chr.creOffset,
+            resref: resref,
+            level: 1,
+            type: SpellType.wizard,
+            memorisable: 2,
+          ),
+        );
+      }
+
+      final cre = CreCodec.decode(chr.creBytes);
+      expect(cre.memorizations, hasLength(1));
+      expect(cre.memorizations.single.count, 2);
+      expect(cre.memorizedSpells.map((s) => s.resref), [
+        'SPWI112',
+        'SPWI114',
+      ]);
+    });
+
+    test('⚠️ filling an earlier window moves the later ones along', () {
+      // **The one place a resize is not mechanical.** A memorisation row names
+      // a window of the memorised array by index, so a spell inserted into an
+      // earlier window shifts a pointer in a section the insert never touched.
+      // Appending instead would file the new spell under the *last* window.
+      var chr = blank();
+      for (final (level, resref) in [
+        (1, 'SPWI112'),
+        (2, 'SPWI212'),
+        (1, 'SPWI114'),
+      ]) {
+        chr = applyCharacterEdit(
+          chr,
+          MemoriseSpell(
+            creOffset: chr.creOffset,
+            resref: resref,
+            level: level,
+            type: SpellType.wizard,
+            memorisable: 2,
+          ),
+        );
+      }
+
+      final cre = CreCodec.decode(chr.creBytes);
+      final first = cre.memorizations.singleWhere((r) => r.level == 1);
+      final second = cre.memorizations.singleWhere((r) => r.level == 2);
+
+      expect((first.firstIndex, first.count), (0, 2));
+      expect((second.firstIndex, second.count), (2, 1));
+      expect(cre.memorizedSpells.map((s) => s.resref), [
+        'SPWI112',
+        'SPWI114',
+        'SPWI212',
+      ]);
+      // The invariant the engine's own records satisfy: each window begins
+      // where the ones before it end.
+      var running = 0;
+      for (final row in cre.memorizations) {
+        expect(row.firstIndex, running);
+        running += row.count;
+      }
+      expect(running, cre.memorizedSpellsCount);
+      expect(cre.contentEnd, cre.bytes.length);
+    });
+
+    test('a priest spell opens a window of its own, not a wizard’s', () {
+      var chr = blank();
+      for (final type in [SpellType.wizard, SpellType.priest]) {
+        chr = applyCharacterEdit(
+          chr,
+          MemoriseSpell(
+            creOffset: chr.creOffset,
+            resref: type == SpellType.wizard ? 'SPWI112' : 'SPPR103',
+            level: 1,
+            type: type,
+            memorisable: 1,
+          ),
+        );
+      }
+
+      final cre = CreCodec.decode(chr.creBytes);
+      expect(cre.memorizations, hasLength(2));
+      expect(
+        cre.memorizations.map((r) => (r.type, r.firstIndex, r.count)),
+        [(SpellType.wizard.stored, 0, 1), (SpellType.priest.stored, 1, 1)],
+      );
+    });
+
+    test('⚠️ a savegame refuses to memorise, for the same reason', () {
+      // Every resizing command shares one refusal, and each is stated rather
+      // than assumed: `withCreature` is where a `Gam` says no, and a command
+      // that reached the section splice would already have moved bytes.
+      final gam = openSave();
+
+      expect(
+        () => applyEdit(
+          gam,
+          MemoriseSpell(
+            creOffset: creOffsetOf(gam),
+            resref: 'SPWI112',
+            level: 1,
+            type: SpellType.wizard,
+            memorisable: 1,
+          ),
+        ),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('says what it did, naming the spell', () {
+      expect(
+        const MemoriseSpell(
+          creOffset: 0,
+          resref: 'SPWI112',
+          level: 1,
+          type: SpellType.wizard,
+          memorisable: 1,
+        ).label,
+        contains('SPWI112'),
+      );
     });
 
     test(

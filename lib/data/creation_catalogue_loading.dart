@@ -54,6 +54,13 @@ Future<CreationCatalogue> loadCreationCatalogue({
       if (choice.nameStrref case final int strref) strref,
       if (choice.descriptionStrref case final int strref) strref,
     ],
+    // Spells carry theirs in the `SPL` header rather than in a table, and are
+    // the reason there is anything to look up at all: `SPWI112` is *Magic
+    // Missile* only once strref 12052 is resolved.
+    for (final spell in catalogue.wizardSpells) ...[
+      if (spell.nameStrref case final int strref) strref,
+      if (spell.descriptionStrref case final int strref) strref,
+    ],
   };
 
   return catalogue.withText({

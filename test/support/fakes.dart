@@ -307,6 +307,12 @@ class FakeResourceRepository implements ResourceRepository {
     required GameRules rules,
   }) async => creation;
 
+  /// Whatever [creation] already carries, so a test states the spell list in
+  /// one place. Reading them for real needs 1,207 `SPL` headers.
+  @override
+  Future<List<SpellChoice>> wizardSpells({required int level}) async =>
+      creation.wizardSpells;
+
   /// Nothing read, so `GameRules` falls back to the written-out dice — which is
   /// what every test written before D13 expects.
   @override

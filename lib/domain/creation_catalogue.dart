@@ -14,9 +14,93 @@
 
 import 'package:dart_mappable/dart_mappable.dart';
 import 'package:infinity_formats/infinity_formats.dart';
+import 'package:wand_of_saves/domain/character_stat.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 
 part 'creation_catalogue.mapper.dart';
+
+/// One of the six abilities a new character rolls.
+///
+/// **The join between three tables and one record field.** `abracerq.2da`,
+/// `abclasrq.2da` and `abracead.2da` all name the same six abilities and each
+/// prefixes them differently, so the prefixes are derived here rather than
+/// written out three times.
+///
+/// ⚠️ **The tables spell Charisma `CHR`, not `CHA`.** One letter, and a guess
+/// silently loses exactly one ability — the same shape of bug as `HALFORC`
+/// against `HALF_ORC`.
+enum CreationAbility {
+  /// Strength.
+  strength('STR', CharacterStat.strength),
+
+  /// Dexterity.
+  dexterity('DEX', CharacterStat.dexterity),
+
+  /// Constitution.
+  constitution('CON', CharacterStat.constitution),
+
+  /// Intelligence.
+  intelligence('INT', CharacterStat.intelligence),
+
+  /// Wisdom.
+  wisdom('WIS', CharacterStat.wisdom),
+
+  /// Charisma.
+  charisma('CHR', CharacterStat.charisma);
+
+  const CreationAbility(this.key, this.stat);
+
+  /// How the game's own tables abbreviate this ability.
+  final String key;
+
+  /// The record field it is stored in, and where its label comes from.
+  final CharacterStat stat;
+
+  /// What to call it on screen.
+  String get label => stat.label;
+
+  /// `abracerq.2da`'s and `abclasrq.2da`'s floor column.
+  String get minimumColumn => 'MIN_$key';
+
+  /// `abracerq.2da`'s ceiling column.
+  String get maximumColumn => 'MAX_$key';
+
+  /// `abracead.2da`'s racial adjustment column.
+  String get adjustmentColumn => 'MOD_$key';
+}
+
+/// One spell a new character may put in their book.
+///
+/// Its own type rather than a [CreationChoice], because a spell is named by a
+/// **resref** and not by a number the record stores — the other three choices
+/// all write an integer into a header field, and this one writes eight bytes
+/// into a section that has to be created first.
+@MappableClass()
+class SpellChoice with SpellChoiceMappable {
+  /// Records a spell.
+  const SpellChoice({
+    required this.resref,
+    required this.school,
+    this.nameStrref,
+    this.descriptionStrref,
+  });
+
+  /// The `SPL` resource, e.g. `SPWI112`.
+  final String resref;
+
+  /// Its school, as `mschool.2da` numbers them. `0` is no school.
+  ///
+  /// Carried because a specialist mage's screen outlines their own school's
+  /// spells and requires one of them — a rule nothing yet enforces.
+  final int school;
+
+  /// Strref of the displayed name, or `null` when the header carries none.
+  final int? nameStrref;
+
+  /// Strref of the description the game shows beside it.
+  final int? descriptionStrref;
+}
 
 /// One thing the player can pick while making a character.
 ///
@@ -97,6 +181,17 @@ class CreationCatalogue with CreationCatalogueMappable {
     required this.kitsByClass,
     required this.alignmentsByRow,
     required this.adjustmentsByRace,
+    this.proficiencySlotsByClass = const {},
+    this.proficiencyRankCapsByClass = const {},
+    this.abilityMinimaByRow = const {},
+    this.abilityMinimaByRace = const {},
+    this.abilityMaximaByRace = const {},
+    this.wizardSpells = const [],
+    this.wizardSpellsMemorisable = 0,
+    this.sorcererSpellsMemorisable = 0,
+    this.sorcererSpellsKnown = 0,
+    this.bardSpellsMemorisable = 0,
+    this.proficiencies = ProficiencyCatalogue.empty,
     this.textByStrref = const {},
   });
 
@@ -108,6 +203,19 @@ class CreationCatalogue with CreationCatalogueMappable {
     alignmentsByRow: {},
     adjustmentsByRace: {},
   );
+
+  /// How many first-level wizard spells a new character may learn.
+  ///
+  /// ⚠️ **A measurement, not a lookup, and the distinction is the point of
+  /// D13.** The engine's own screen says "You may choose 2 spells to put in
+  /// your spellbook" (`docs/findings/screens/char-create/20-…`). Tables checked
+  /// and rejected: `mxsplwiz.2da` is the *memorise* count; `splsrckn.2da` is
+  /// the sorcerer's, whose rules differ; `spells.2da` is a flat cap of 50 per
+  /// level; `speldesc.2da` is a partial description list. `intmod.2da` does
+  /// carry `MAX_SPELLS_PER_LEVEL` and it is **not** this — Aurel rolled
+  /// Intelligence 17, which that table gives 14, and the screen still offered
+  /// two.
+  static const int wizardSpellsLearnable = 2;
 
   /// Every playable race, in the order `clsrcreq.2da` lists its columns.
   final List<CreationChoice> races;
@@ -122,7 +230,69 @@ class CreationCatalogue with CreationCatalogueMappable {
   final Map<String, List<int>> alignmentsByRow;
 
   /// Racial ability adjustments by `RACE.IDS` id, zeroes dropped.
+  ///
+  /// Keyed by `abracead.2da`'s own column names — `MOD_DEX` and the rest. See
+  /// [CreationAbility.adjustmentColumn], which is where that spelling comes
+  /// from now that three tables share the vocabulary.
   final Map<int, Map<String, int>> adjustmentsByRace;
+
+  /// Proficiency slots at first level, by class identifier. `profs.2da`.
+  ///
+  /// ⚠️ **Not `profsmax.2da`.** One letter apart and a different question: this
+  /// is how many pips there are to spend, that is how many may go into any one
+  /// proficiency. MAGE 1, FIGHTER 4, CLERIC 2, THIEF 2.
+  final Map<String, int> proficiencySlotsByClass;
+
+  /// The most ranks one proficiency may hold at first level. `profsmax.2da`.
+  final Map<String, int> proficiencyRankCapsByClass;
+
+  /// Ability minima by class **or kit** row, keyed by [CreationAbility.key].
+  ///
+  /// `abclasrq.2da`. A kit raises the bar where it has a row: an Abjurer needs
+  /// Wisdom 15 where a plain Mage needs none.
+  final Map<String, Map<String, int>> abilityMinimaByRow;
+
+  /// Ability minima by `RACE.IDS` id, before racial adjustments. `abracerq`.
+  final Map<int, Map<String, int>> abilityMinimaByRace;
+
+  /// Ability maxima by `RACE.IDS` id, before racial adjustments. `abracerq`.
+  final Map<int, Map<String, int>> abilityMaximaByRace;
+
+  /// Every first-level wizard spell this installation ships.
+  ///
+  /// Read from the `SPL` resources themselves; see
+  /// `ResourceRepository.wizardSpells` for why no table answers this.
+  final List<SpellChoice> wizardSpells;
+
+  /// How many first-level wizard spells a first-level caster may memorise.
+  ///
+  /// `mxsplwiz.2da`, row 1, column 1 — **one**, which is exactly what the
+  /// engine's own screen offers. The count that is *not* here is how many may
+  /// be learned; see [wizardSpellsLearnable].
+  final int wizardSpellsMemorisable;
+
+  /// The same for a sorcerer. `mxsplsrc.2da` — **three**, not one.
+  final int sorcererSpellsMemorisable;
+
+  /// How many spells a first-level sorcerer knows. `splsrckn.2da`.
+  ///
+  /// ⚠️ **The only casting class whose learn count is in a table**, which is
+  /// why [wizardSpellsLearnable] has to be a measurement rather than a lookup.
+  final int sorcererSpellsKnown;
+
+  /// The same for a bard. `mxsplbrd.2da`, which **has no row 1** — a bard casts
+  /// nothing until second level, and the table is what says so.
+  final int bardSpellsMemorisable;
+
+  /// Every proficiency the player's `weapprof.2da` names, with its per-class
+  /// ceilings.
+  ///
+  /// Carried here rather than watched from `rulesCataloguesProvider` so the
+  /// flow reads **one** query: a second would give the creation state a second
+  /// thing to arrive late, and the notifier is shaped around not being rebuilt.
+  /// Its names are strrefs like everything else here, resolved by the same
+  /// pass — see [textFor].
+  final ProficiencyCatalogue proficiencies;
 
   /// Text from the talk table, by strref. Empty until it has been resolved.
   ///
@@ -167,6 +337,116 @@ class CreationCatalogue with CreationCatalogueMappable {
   /// What [raceId] adds to and takes from the ability scores, zeroes dropped.
   Map<String, int> abilityAdjustmentsFor(int raceId) =>
       adjustmentsByRace[raceId] ?? const {};
+
+  /// How many proficiency pips [characterClass] has to spend at first level.
+  ///
+  /// `0` when the table names no such class, which is the honest answer on a
+  /// machine with no installation — and better than a plausible default that
+  /// silently gives a Mage a Fighter's four.
+  ///
+  /// Takes the identifier rather than a [CreationChoice] because the
+  /// identifier **is** the table's key; a caller holding a choice passes
+  /// `choice.identifier`.
+  ///
+  /// ⚠️ **Kits are absent from `profs.2da`**, so a Kensai gets its Fighter
+  /// row. That is the table's own shape, not a fallback this code invented.
+  int proficiencySlotsFor(String characterClass) =>
+      proficiencySlotsByClass[characterClass] ?? 0;
+
+  /// The most pips [characterClass] may put in any one proficiency.
+  int proficiencyRankCapFor(String characterClass) =>
+      proficiencyRankCapsByClass[characterClass] ?? 0;
+
+  /// How many first-level wizard spells [characterClass] may memorise.
+  ///
+  /// ⚠️ **D13 — the join is a rule in code, and it had to be.** `hpclass.2da`
+  /// names the hit-die table for every class; nothing in the installation does
+  /// the same for the ten `mxspl*` progressions. So which table a class uses is
+  /// decided here, from its `CLASS.IDS` identifier: `SORCERER` uses
+  /// `mxsplsrc`, `BARD` uses `mxsplbrd`, and anything containing `MAGE` uses
+  /// `mxsplwiz`.
+  ///
+  /// `0` for a class that casts none, which includes a **bard** — `mxsplbrd`
+  /// has no first-level row at all, so that answer comes from the table rather
+  /// than from the rule above.
+  int spellsMemorisableFor(String characterClass) => switch (characterClass) {
+    _sorcerer => sorcererSpellsMemorisable,
+    _bard => bardSpellsMemorisable,
+    _ when characterClass.split('_').contains(_mage) => wizardSpellsMemorisable,
+    _ => 0,
+  };
+
+  /// How many first-level wizard spells [characterClass] may learn.
+  ///
+  /// A sorcerer's is `splsrckn.2da`; everyone else's is
+  /// [wizardSpellsLearnable], which no table carries.
+  int spellsLearnableFor(String characterClass) => switch (characterClass) {
+    _sorcerer => sorcererSpellsKnown,
+    _ when spellsMemorisableFor(characterClass) > 0 => wizardSpellsLearnable,
+    _ => 0,
+  };
+
+  /// Whether [characterClass] puts spells in a book at first level.
+  ///
+  /// Asked of the tables rather than of a list of class names: a class casts
+  /// spells exactly when a progression says how many, which is what keeps a
+  /// bard's empty first level from needing a special case.
+  bool castsWizardSpells(String characterClass) =>
+      spellsMemorisableFor(characterClass) > 0 &&
+      spellsLearnableFor(characterClass) > 0;
+
+  /// The range [ability] may be rolled into for this character.
+  ///
+  /// Three tables compose, and the composition is exactly what the game prints
+  /// beside each ability. An elf's Dexterity is `abracerq`'s 6–18 plus
+  /// `abracead`'s +1, which is the **7 to 19** on the engine's own screen; the
+  /// floor then rises to whichever of the race's and the class's is higher.
+  ///
+  /// ⚠️ **[kit] governs where it has a row, not its class** — the same
+  /// precedence [alignmentsFor] uses, and for the same reason: an Abjurer's
+  /// Wisdom 15 has nothing to do with what a Mage needs.
+  ///
+  /// With no installation there is no table to read, so this falls back to what
+  /// the *field* can hold. A screen that cannot say what the game allows is
+  /// better than one that invents it.
+  ({int minimum, int maximum}) abilityBoundsFor({
+    required int raceId,
+    required String characterClass,
+    required CreationAbility ability,
+    String? kit,
+  }) {
+    final race = abilityMinimaByRace[raceId];
+    if (race == null) {
+      return (
+        minimum: ability.stat.minimum,
+        maximum: ability.stat.maximum,
+      );
+    }
+
+    final adjustment =
+        adjustmentsByRace[raceId]?[ability.adjustmentColumn] ?? 0;
+    final fromClass =
+        abilityMinimaByRow[kit]?[ability.key] ??
+        abilityMinimaByRow[characterClass]?[ability.key] ??
+        0;
+    // ⚠️ **The adjustment applies to the race's floor and not to the class's**,
+    // because a class requirement is stated about the score the character ends
+    // up with — which is the adjusted one, and the one the record stores.
+    //
+    // ⚠️ **Open, and the two readings differ by exactly one character.** Every
+    // case the engine's own screens show agrees either way: an elf's Dexterity
+    // is 7 and its Intelligence 9 whichever order the maximum and the addition
+    // are taken in. **A Gnome Mage separates them** — `abracerq` floors a
+    // gnome's Intelligence at 6, `abracead` adds 1 and `abclasrq` asks a Mage
+    // for 9, so this says 9 and taking the maximum first would say 10. The
+    // reading here is the one that cannot forbid a character the game allows.
+    final fromRace = (race[ability.key] ?? 0) + adjustment;
+
+    return (
+      minimum: fromRace > fromClass ? fromRace : fromClass,
+      maximum: (abilityMaximaByRace[raceId]?[ability.key] ?? 0) + adjustment,
+    );
+  }
 }
 
 /// `alignmnt.2da`'s column headers, as `ALIGNMEN.IDS` numbers.
@@ -226,6 +506,16 @@ CreationCatalogue creationCatalogueFrom({
   required Table2da classText,
   required Table2da raceText,
   required Table2da racialAdjustments,
+  required Table2da proficiencySlots,
+  required Table2da proficiencyRankCaps,
+  required Table2da wizardMemorisation,
+  required Table2da sorcererMemorisation,
+  required Table2da sorcererKnownSpells,
+  required Table2da bardMemorisation,
+  required Table2da raceAbilityRequirements,
+  required Table2da classAbilityRequirements,
+  required List<SpellChoice> wizardSpells,
+  required ProficiencyCatalogue proficiencies,
   required GameRules rules,
 }) {
   final descriptionByRaceId = _raceDescriptions(raceText);
@@ -306,14 +596,90 @@ CreationCatalogue creationCatalogueFrom({
     if (adjustments.isNotEmpty) adjustmentsByRace[raceId] = adjustments;
   }
 
+  final abilityMinimaByRace = <int, Map<String, int>>{};
+  final abilityMaximaByRace = <int, Map<String, int>>{};
+  for (final row in raceAbilityRequirements.rows.keys) {
+    final raceId = rules.raceIdFor(row);
+    if (raceId == null) continue;
+    abilityMinimaByRace[raceId] = _abilityColumn(
+      raceAbilityRequirements,
+      row,
+      (a) => a.minimumColumn,
+    );
+    abilityMaximaByRace[raceId] = _abilityColumn(
+      raceAbilityRequirements,
+      row,
+      (a) => a.maximumColumn,
+    );
+  }
+
   return CreationCatalogue(
     races: races,
     classesByRace: classesByRace,
     kitsByClass: kitsByClass,
     alignmentsByRow: alignmentsByRow,
     adjustmentsByRace: adjustmentsByRace,
+    proficiencySlotsByClass: _firstLevelColumn(proficiencySlots),
+    proficiencyRankCapsByClass: _firstLevelColumn(proficiencyRankCaps),
+    abilityMinimaByRow: {
+      for (final row in classAbilityRequirements.rows.keys)
+        row: _abilityColumn(
+          classAbilityRequirements,
+          row,
+          (a) => a.minimumColumn,
+        ),
+    },
+    abilityMinimaByRace: abilityMinimaByRace,
+    abilityMaximaByRace: abilityMaximaByRace,
+    wizardSpells: wizardSpells,
+    // Row 1, column 1: a first-level caster and a first-level spell. The rest
+    // of the table is levelling, which creation never reaches.
+    //
+    // ⚠️ **A bard's `mxsplbrd.2da` has no row 1**, so this reads `null` and
+    // becomes zero — which is the table saying a first-level bard casts
+    // nothing, not a lookup that failed.
+    wizardSpellsMemorisable: wizardMemorisation.number('1', '1') ?? 0,
+    sorcererSpellsMemorisable: sorcererMemorisation.number('1', '1') ?? 0,
+    sorcererSpellsKnown: sorcererKnownSpells.number('1', '1') ?? 0,
+    bardSpellsMemorisable: bardMemorisation.number('1', '1') ?? 0,
+    proficiencies: proficiencies,
   );
 }
+
+/// `CLASS.IDS` identifiers the spell progressions are keyed on.
+///
+/// Written out because no table joins a class to its `mxspl*` file — see
+/// [CreationCatalogue.spellsMemorisableFor].
+const String _mage = 'MAGE';
+const String _sorcerer = 'SORCERER';
+const String _bard = 'BARD';
+
+/// `FIRST_LEVEL` of every row of [table], as a map by row label.
+///
+/// Serves `profs.2da` and `profsmax.2da`, which share the column and answer
+/// different questions with it — slots in one, a rank cap in the other.
+Map<String, int> _firstLevelColumn(Table2da table) => {
+  for (final row in table.rows.keys)
+    if (table.number(row, firstLevelColumn) case final int value) row: value,
+};
+
+/// One column family of [row], keyed by [CreationAbility.key].
+///
+/// [column] picks which of the three spellings the table uses — `MIN_STR`,
+/// `MAX_STR` or `MOD_STR` — from the ability itself, so the six names are
+/// never written out.
+Map<String, int> _abilityColumn(
+  Table2da table,
+  String row,
+  String Function(CreationAbility) column,
+) => {
+  for (final ability in CreationAbility.values)
+    if (table.number(row, column(ability)) case final int value)
+      ability.key: value,
+};
+
+/// The column both proficiency tables answer a new character's question with.
+const String firstLevelColumn = 'FIRST_LEVEL';
 
 /// Description strrefs by `RACE.IDS` id.
 ///

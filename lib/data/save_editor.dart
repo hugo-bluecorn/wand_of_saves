@@ -92,30 +92,110 @@ T applyCharacterEdit<T extends CreatureDocument<T>>(
 
     return document.withCreature(
       creOffset: creOffset,
-      creature: creature.withEntryAppended(
-        section: CreSection.effects,
-        entry: effect,
-      ),
+      // ⚠️ **The version comes first, and a created character needs it.**
+      // `CHARBASE` arrives claiming 48-byte v1 effects while carrying none;
+      // the character the engine finishes building from it stores v2, which is
+      // what `proficiencyEffectTemplate` writes. Without this the very first
+      // proficiency granted to a new character is refused outright — and the
+      // suite could not see it, because the synthetic record wrote v2 always.
+      // `withEffectVersion` refuses rather than converts once effects exist, so
+      // this can only ever fire on a record with nothing to reinterpret.
+      creature: creature
+          .withEffectVersion(1)
+          .withEntryAppended(section: CreSection.effects, entry: effect),
     );
   }(),
   LearnSpell(:final creOffset, :final resref, :final level, :final type) => () {
     final creature = CreCodec.decode(document.creatureAt(creOffset));
-    final entry = Uint8List(creKnownSpellLength)
-      ..setRange(0, 8, encodeFixedString(resref, 8));
-    ByteData.sublistView(entry)
-      // ⚠️ "Spell Level -1" in IESDP's own words. A book of level-0 spells is
-      // what happens when this is written straight through.
-      ..setUint16(0x08, level - 1, Endian.little)
-      ..setUint16(0x0a, type.stored, Endian.little);
 
     return document.withCreature(
       creOffset: creOffset,
       creature: creature.withEntryAppended(
         section: CreSection.knownSpells,
-        entry: entry,
+        // The "Spell Level -1" arithmetic lives in the builder, once.
+        entry: knownSpellEntry(
+          resref: resref,
+          level: level,
+          type: type.stored,
+        ),
       ),
     );
   }(),
+  MemoriseSpell(
+    :final creOffset,
+    :final resref,
+    :final level,
+    :final type,
+    :final memorisable,
+  ) =>
+    () {
+      var creature = CreCodec.decode(document.creatureAt(creOffset));
+
+      // The window this spell belongs to, opened if the character has none.
+      // ⚠️ A new row starts at the **end** of the memorised array, which is
+      // what leaves every window already there pointing where it did.
+      var row = creature.memorizations.indexWhere(
+        (r) => r.level == level && r.type == type.stored,
+      );
+      if (row < 0) {
+        creature = creature.withEntryAppended(
+          section: CreSection.memorizationInfo,
+          entry: memorizationRowEntry(
+            level: level,
+            type: type.stored,
+            memorisable: memorisable,
+            firstIndex: creature.memorizedSpellsCount,
+          ),
+        );
+        row = creature.memorizationInfoCount - 1;
+      }
+
+      final window = creature.memorizations[row];
+      final insertAt = window.firstIndex + window.count;
+      creature = creature.withEntryInserted(
+        section: CreSection.memorizedSpells,
+        at: insertAt,
+        entry: memorizedSpellEntry(resref: resref),
+      );
+
+      creature = creature
+          .withEntryField(
+            section: CreSection.memorizationInfo,
+            at: row,
+            field: CreMemorizationField.count,
+            value: window.count + 1,
+          )
+          .withEntryField(
+            section: CreSection.memorizationInfo,
+            at: row,
+            field: CreMemorizationField.memorisable,
+            value: memorisable,
+          )
+          .withEntryField(
+            section: CreSection.memorizationInfo,
+            at: row,
+            field: CreMemorizationField.afterEffects,
+            value: memorisable,
+          );
+
+      // ⚠️ **The part `withEntryInserted` cannot do for itself.** Every window
+      // after this one begins one entry later than it did. Rows are checked on
+      // *both* their position and their index: on the engine's own characters
+      // the two agree — each row starts where the ones before it end — and a
+      // record where they disagree is one this must not make worse.
+      for (var i = row + 1; i < creature.memorizationInfoCount; i++) {
+        final other = creature.memorizations[i];
+        if (other.firstIndex < insertAt) continue;
+        creature = creature.withEntryField(
+          section: CreSection.memorizationInfo,
+          at: i,
+          field: CreMemorizationField.firstIndex,
+          value: other.firstIndex + 1,
+        );
+      }
+
+      return document.withCreature(creOffset: creOffset, creature: creature);
+    }(),
   SetCharacterIdentity(:final creOffset, :final identity, :final value) => () {
     // The field's bound, not the game's. Which classes an elf may take lives
     // in the player's `clsrcreq.2da` and is settled before a command is built

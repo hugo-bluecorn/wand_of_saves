@@ -168,7 +168,7 @@ class _Controls extends ConsumerWidget {
     final name = state.name.trim();
 
     try {
-      final created = await ref
+      await ref
           .read(saveBrowserProvider.notifier)
           .createCharacter(
             name: name,
@@ -179,8 +179,20 @@ class _Controls extends ConsumerWidget {
             classId: state.characterClass?.value,
             alignmentId: state.alignmentId,
             kitValue: state.specialisation?.value,
+            abilities: {
+              for (final MapEntry(key: ability, value: score)
+                  in state.abilities.entries)
+                ability.stat: score,
+            },
+            proficiencies: state.proficiencies,
+            knownSpells: state.knownSpells,
+            memorisedSpells: state.memorisedSpells,
+            spellsMemorisable: state.spellsMemorisable,
           );
-      router.go(Routes.characterFor(created.fileName));
+      // ⚠️ **Home, not the new character's sheet.** Creating one is finishing
+      // something; being dropped straight back into an editor reads as though
+      // the flow had not finished at all. The character is on the list.
+      router.go(Routes.browser);
     } on CharacterFileExistsException {
       messenger.showSnackBar(
         SnackBar(content: Text('There is already a character called $name')),
@@ -246,6 +258,12 @@ class _StepBody extends ConsumerWidget {
         onChoose: model.chooseSpecialisation,
       ),
       CreationStep.alignment => _Alignment(state: state, rules: rules),
+      CreationStep.abilities => _Abilities(state: state, model: model),
+      CreationStep.proficiencies => _Proficiencies(
+        state: state,
+        model: model,
+      ),
+      CreationStep.spells => _Spells(state: state, model: model),
       CreationStep.name => _Name(state: state, onChanged: model.rename),
     };
   }
@@ -459,6 +477,392 @@ class _Alignment extends ConsumerWidget {
                   ),
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The six scores, rolled and then moved about.
+///
+/// Laid out the way the engine's own screen is: the abilities down the left
+/// with a pair of buttons each, the running total underneath, and Store /
+/// Recall / Reroll along the bottom. The bounds beside each one come from three
+/// of the game's tables and are the numbers it prints itself.
+class _Abilities extends StatelessWidget {
+  const _Abilities({required this.state, required this.model});
+
+  final CreationState state;
+  final CreationViewModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Abilities', style: text.titleLarge),
+            const Spacer(),
+            if (state.hasRolled)
+              Text(
+                'Total ${state.abilityPoints}   '
+                '${state.abilityPointsRemaining} to place',
+                style: text.titleMedium,
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: state.hasRolled
+              ? ListView(
+                  children: [
+                    for (final ability in CreationAbility.values)
+                      _AbilityRow(
+                        ability: ability,
+                        value: state.abilities[ability] ?? 0,
+                        bounds: state.boundsFor(ability),
+                        canRaise: state.abilityPointsRemaining > 0,
+                        onRaise: () => model.raiseAbility(ability),
+                        onLower: () => model.lowerAbility(ability),
+                      ),
+                  ],
+                )
+              : Center(
+                  child: Text(
+                    'Roll for this character’s abilities.',
+                    style: text.bodyLarge,
+                  ),
+                ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            FilledButton.tonal(
+              onPressed: model.roll,
+              child: Text(state.hasRolled ? 'Reroll' : 'Roll'),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton(
+              onPressed: state.hasRolled ? model.storeRoll : null,
+              child: const Text('Store'),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton(
+              onPressed: state.hasStoredRoll ? model.recallRoll : null,
+              child: const Text('Recall'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One ability, its value, and the two buttons that move a point.
+class _AbilityRow extends StatelessWidget {
+  const _AbilityRow({
+    required this.ability,
+    required this.value,
+    required this.bounds,
+    required this.canRaise,
+    required this.onRaise,
+    required this.onLower,
+  });
+
+  final CreationAbility ability;
+  final int value;
+  final ({int minimum, int maximum}) bounds;
+  final bool canRaise;
+  final VoidCallback onRaise;
+  final VoidCallback onLower;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          // ⚠️ **150, measured from a capture rather than borrowed.** The
+          // character sheet's tiles are 222 because "Paralysis / Poison /
+          // Death" needs it; the longest label here is "Constitution", and at
+          // 222 the number floated a third of the pane away from its name.
+          SizedBox(
+            width: 150,
+            child: Text(ability.label, style: text.bodyLarge),
+          ),
+          SizedBox(
+            width: 48,
+            child: Text(
+              '$value',
+              style: text.titleMedium,
+              textAlign: TextAlign.right,
+            ),
+          ),
+          const SizedBox(width: 12),
+          IconButton.filledTonal(
+            onPressed: value > bounds.minimum ? onLower : null,
+            icon: const Icon(Icons.remove),
+            tooltip: 'Lower ${ability.label}',
+          ),
+          const SizedBox(width: 4),
+          IconButton.filledTonal(
+            onPressed: canRaise && value < bounds.maximum ? onRaise : null,
+            icon: const Icon(Icons.add),
+            tooltip: 'Raise ${ability.label}',
+          ),
+          const SizedBox(width: 16),
+          // ⚠️ **Shown rather than only enforced.** A cap that appears only
+          // when a value is refused is a worse experience than no cap at all —
+          // the lesson the sheet's proficiency tiles already learned.
+          Text('${bounds.minimum}–${bounds.maximum}', style: text.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+/// Which weapons and fighting styles the pips go into.
+class _Proficiencies extends StatelessWidget {
+  const _Proficiencies({required this.state, required this.model});
+
+  final CreationState state;
+  final CreationViewModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final available = state.proficienciesAvailable;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Proficiencies', style: text.titleLarge),
+            const Spacer(),
+            // ⚠️ **"0 of 4 to spend" read as "none of four chosen".** What a
+            // capture showed with four pips already placed. The count that
+            // matters is what is *left*, and the total belongs in the line
+            // below it rather than fused into the same phrase.
+            Text(
+              '${state.proficiencyPipsRemaining} still to spend',
+              style: text.titleMedium,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${state.proficiencySlots} pips at first level, at most '
+          '${state.proficiencyRankCap} in any one.',
+          style: text.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: ListView(
+            children: [
+              for (final entry in available)
+                _PipRow(
+                  // ⚠️ The row label is not the name: `2WEAPON` is what the
+                  // table says and *Two-Weapon Style* is what the game draws.
+                  label:
+                      state.catalogue.textFor(entry.nameStrref) ??
+                      entry.identifier,
+                  pips: state.proficiencies[entry.id] ?? 0,
+                  cap: state.proficiencyRankCap,
+                  canRaise: state.proficiencyPipsRemaining > 0,
+                  onRaise: () => model.raiseProficiency(entry.id),
+                  onLower: () => model.lowerProficiency(entry.id),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One proficiency and the two buttons that move a pip.
+class _PipRow extends StatelessWidget {
+  const _PipRow({
+    required this.label,
+    required this.pips,
+    required this.cap,
+    required this.canRaise,
+    required this.onRaise,
+    required this.onLower,
+  });
+
+  final String label;
+  final int pips;
+  final int cap;
+  final bool canRaise;
+  final VoidCallback onRaise;
+  final VoidCallback onLower;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 222,
+          child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
+        ),
+        // The game draws pips as plus signs — "Two-Weapon Style +++".
+        SizedBox(
+          width: 48,
+          child: Text(
+            '+' * pips,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        IconButton.filledTonal(
+          onPressed: pips > 0 ? onLower : null,
+          icon: const Icon(Icons.remove),
+          tooltip: 'Fewer pips in $label',
+        ),
+        const SizedBox(width: 4),
+        IconButton.filledTonal(
+          onPressed: canRaise && pips < cap ? onRaise : null,
+          icon: const Icon(Icons.add),
+          tooltip: 'More pips in $label',
+        ),
+        const SizedBox(width: 16),
+        Text('max $cap', style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ),
+  );
+}
+
+/// The book, and which of it is prepared.
+///
+/// Two lists, because the engine asks two questions: *Mage Book: Level 1* picks
+/// what the character knows, and *Memorize Mage Spells* picks which of those
+/// are ready to cast. The second only ever lists the first's answers.
+class _Spells extends StatelessWidget {
+  const _Spells({required this.state, required this.model});
+
+  final CreationState state;
+  final CreationViewModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final catalogue = state.catalogue;
+
+    String nameOf(String resref) {
+      final spell = catalogue.wizardSpells
+          .where((s) => s.resref == resref)
+          .firstOrNull;
+      return catalogue.textFor(spell?.nameStrref) ?? resref;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Spells', style: text.titleLarge),
+            const Spacer(),
+            Text(
+              '${state.spellsLearnable - state.knownSpells.length} '
+              'still to choose',
+              style: text.titleMedium,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${state.spellsLearnable} for the book, of which '
+          '${state.spellsMemorisable} prepared.',
+          style: text.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // The engine's own heading for this list.
+                    Text('Mage Book: Level 1', style: text.titleMedium),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView(
+                        children: [
+                          for (final spell in catalogue.wizardSpells)
+                            CheckboxListTile(
+                              value: state.knownSpells.contains(spell.resref),
+                              // ⚠️ **Leading, not the default trailing.** A
+                              // capture showed the box sitting seven hundred
+                              // pixels from the name it belongs to, because a
+                              // `CheckboxListTile` puts its control at the far
+                              // edge of whatever width it is given.
+                              controlAffinity: ListTileControlAffinity.leading,
+                              // Unticking is always allowed; ticking stops at
+                              // the limit, so a full book refuses rather than
+                              // swapping out a spell chosen deliberately.
+                              onChanged:
+                                  state.knownSpells.contains(spell.resref) ||
+                                      state.knownSpells.length <
+                                          state.spellsLearnable
+                                  ? (_) => model.learnSpell(spell.resref)
+                                  : null,
+                              title: Text(nameOf(spell.resref)),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 24),
+              const VerticalDivider(width: 1),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Memorise ${state.spellsMemorisable}',
+                      style: text.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    if (state.knownSpells.isEmpty)
+                      Text(
+                        'Choose spells for the book first.',
+                        style: text.bodyMedium,
+                      ),
+                    Expanded(
+                      child: ListView(
+                        children: [
+                          for (final resref in state.knownSpells)
+                            CheckboxListTile(
+                              value: state.memorisedSpells.contains(resref),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              onChanged:
+                                  state.memorisedSpells.contains(resref) ||
+                                      state.memorisedSpells.length <
+                                          state.spellsMemorisable
+                                  ? (_) => model.memoriseSpell(resref)
+                                  : null,
+                              title: Text(nameOf(resref)),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ],

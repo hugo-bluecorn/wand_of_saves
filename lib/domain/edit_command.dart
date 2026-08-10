@@ -302,6 +302,53 @@ final class LearnSpell extends CharacterEditCommand {
   String get label => 'Learn $resref';
 }
 
+/// Prepares a spell the character already knows.
+///
+/// ⚠️ **The only edit here that touches two sections at once**, and the reason
+/// is in the format: a memorisation row names a *window* of the memorised-spell
+/// array by index and length, so preparing a spell inserts into one section and
+/// repairs pointers in another. Adding it at the end instead would file it
+/// under whichever window happens to run last.
+///
+/// `CHARBASE` has neither section, so this creates both — the row first, opened
+/// at the end of the array where it disturbs nothing.
+final class MemoriseSpell extends CharacterEditCommand {
+  /// Prepares [resref] at [level] for the creature at [creOffset].
+  const MemoriseSpell({
+    required this.creOffset,
+    required this.resref,
+    required this.level,
+    required this.type,
+    required this.memorisable,
+  });
+
+  @override
+  final int creOffset;
+
+  /// The `SPL` resource, e.g. `SPWI112` for Magic Missile.
+  final String resref;
+
+  /// The spell's level, as a player counts it — 1 for a first-level spell.
+  final int level;
+
+  /// Priest, wizard or innate. With [level] it picks the window.
+  final SpellType type;
+
+  /// How many spells of this level and type the character may prepare.
+  ///
+  /// ⚠️ **Carried rather than computed, and that is deliberate.** The number
+  /// comes from the player's own `mxsplwiz.2da` and depends on class and level;
+  /// a command that worked it out would be reaching for a data source, which is
+  /// the same line [SetProficiency] draws around its per-class pip ceiling.
+  ///
+  /// It is written to the row whether the row is new or not, so a caller that
+  /// knows the character's slots keeps the record saying the same thing twice.
+  final int memorisable;
+
+  @override
+  String get label => 'Memorise $resref';
+}
+
 /// Sets the shared party purse.
 ///
 /// Its own command rather than a [CharacterStat]: the purse lives in the GAM

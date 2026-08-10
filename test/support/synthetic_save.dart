@@ -92,7 +92,19 @@ final class SyntheticCharacter {
     this.turnUndeadLevel = 0,
     this.trackingSkill = 0,
     this.proficiencies = const {},
+    this.effectVersion = 1,
   });
+
+  /// The engine's own `CHARBASE`, as far as its effects section goes.
+  ///
+  /// ⚠️ **The template stores `effectVersion` 0 and no effects at all**, where
+  /// every character BG:EE has finished making stores 1. Measured against the
+  /// real file, not assumed. This shape exists because the default above is 1,
+  /// which is true of every *played* character and of nothing a new one is
+  /// built from — and that gap hid a defect for a whole slice.
+  static const SyntheticCharacter template = SyntheticCharacter(
+    effectVersion: 0,
+  );
 
   /// The CRE resref, written to `GamNpcField.creResref`.
   final String resref;
@@ -246,6 +258,13 @@ final class SyntheticCharacter {
   /// `0x6e`-`0x81` are zero on every character in a real save. A synthetic
   /// creature that put them in the header would test the wrong thing.
   final Map<int, int> proficiencies;
+
+  /// What `CreHeaderField.effectVersion` holds: `0` for v1, `1` for v2.
+  ///
+  /// Defaults to `1`, which is what BG:EE writes for every character in a save
+  /// — and what [proficiencies] needs, since it writes 264-byte v2 records.
+  /// Set it to `0` for a template-shaped record; see [template].
+  final int effectVersion;
 }
 
 /// Builds a `BALDUR.gam` image holding [party].
@@ -442,7 +461,7 @@ void _writeCre(Uint8List out, int base, SyntheticCharacter character) {
   i32(CreHeaderField.gold, character.gold);
   u16(CreHeaderField.currentHitPoints, character.currentHitPoints);
   u16(CreHeaderField.maximumHitPoints, character.maximumHitPoints);
-  u8(CreHeaderField.effectVersion, 1);
+  u8(CreHeaderField.effectVersion, character.effectVersion);
   u8(CreHeaderField.reputation, character.reputationTimesTen);
   i16(CreHeaderField.armorClassNatural, character.armorClass);
   i16(CreHeaderField.armorClassEffective, character.armorClass);

@@ -145,6 +145,106 @@ void main() {
     });
   });
 
+  group('listing the spells a wizard may learn', () {
+    /// An `SPL V1` header with the five fields the listing reads.
+    List<int> spell({
+      required int level,
+      int type = 1,
+      int nameStrref = 26344,
+    }) {
+      final out = Uint8List(splHeaderLength)
+        ..setRange(0, 4, 'SPL '.codeUnits)
+        ..setRange(4, 8, 'V1  '.codeUnits);
+      ByteData.sublistView(out)
+        ..setInt32(SplHeaderField.name.offset, nameStrref, Endian.little)
+        ..setUint16(SplHeaderField.spellType.offset, type, Endian.little)
+        ..setUint32(SplHeaderField.level.offset, level, Endian.little)
+        ..setInt32(SplHeaderField.description.offset, 26345, Endian.little);
+      return out;
+    }
+
+    test('takes the first-level ones and leaves the rest', () async {
+      final repository = repositoryOver([
+        (resref: 'SPWI101', type: ResourceType.spell, bytes: spell(level: 1)),
+        (resref: 'SPWI112', type: ResourceType.spell, bytes: spell(level: 1)),
+        (resref: 'SPWI201', type: ResourceType.spell, bytes: spell(level: 2)),
+      ]);
+
+      final spells = await repository.wizardSpells(level: 1);
+
+      expect(spells.map((s) => s.resref), ['SPWI101', 'SPWI112']);
+      expect(spells.first.nameStrref, 26344);
+      expect(spells.first.descriptionStrref, 26345);
+    });
+
+    test('⚠️ drops a header claiming a level its name does not', () async {
+      // The filter no one would think to write. `SPWI989` and `SPWI998` are
+      // named, are typed wizard, and say **level 1** — and are not first-level
+      // spells. Where the resref's digit and the header disagree, the resource
+      // is not what it looks like.
+      final repository = repositoryOver([
+        (resref: 'SPWI101', type: ResourceType.spell, bytes: spell(level: 1)),
+        (resref: 'SPWI989', type: ResourceType.spell, bytes: spell(level: 1)),
+        (resref: 'SPWI003', type: ResourceType.spell, bytes: spell(level: 1)),
+      ]);
+
+      expect(
+        (await repository.wizardSpells(level: 1)).map((s) => s.resref),
+        ['SPWI101'],
+      );
+    });
+
+    test('⚠️ drops the engine’s own plumbing, which carries no name', () async {
+      // Eighty-six of the installation's 108 first-level-wizard headers do.
+      final repository = repositoryOver([
+        (resref: 'SPWI101', type: ResourceType.spell, bytes: spell(level: 1)),
+        (
+          resref: 'SPWI151',
+          type: ResourceType.spell,
+          bytes: spell(level: 1, nameStrref: -1),
+        ),
+      ]);
+
+      expect(
+        (await repository.wizardSpells(level: 1)).map((s) => s.resref),
+        ['SPWI101'],
+      );
+    });
+
+    test('drops a priest spell that happens to be named SPWI1nn', () async {
+      final repository = repositoryOver([
+        (
+          resref: 'SPWI105',
+          type: ResourceType.spell,
+          bytes: spell(level: 1, type: 2),
+        ),
+      ]);
+
+      expect(await repository.wizardSpells(level: 1), isEmpty);
+    });
+
+    test('drops a sub-spell, whose resref carries a letter', () async {
+      // `SPWI119A` and `spwi117a` are real, and are not entries in a book.
+      final repository = repositoryOver([
+        (resref: 'SPWI119A', type: ResourceType.spell, bytes: spell(level: 1)),
+      ]);
+
+      expect(await repository.wizardSpells(level: 1), isEmpty);
+    });
+
+    test('a resource that will not parse costs that spell, not the list', () {
+      final repository = repositoryOver([
+        (resref: 'SPWI101', type: ResourceType.spell, bytes: spell(level: 1)),
+        (resref: 'SPWI102', type: ResourceType.spell, bytes: const [1, 2, 3]),
+      ]);
+
+      expect(
+        repository.wizardSpells(level: 1).then((s) => s.length),
+        completion(1),
+      );
+    });
+  });
+
   group('with no installation at all', () {
     test('answers null rather than failing', () async {
       // The app opens saves on machines with no game on them.
@@ -155,6 +255,7 @@ void main() {
       expect(await repository.portrait('AJANTISM'), isNull);
       expect(await repository.creature(characterTemplate), isNull);
       expect(await repository.portraitNames(), isEmpty);
+      expect(await repository.wizardSpells(level: 1), isEmpty);
     });
   });
 }

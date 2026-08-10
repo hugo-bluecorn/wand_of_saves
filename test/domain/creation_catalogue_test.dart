@@ -15,6 +15,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/domain/creation_catalogue.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 
 /// The real `clsrcreq.2da`, its 21 `CLASS.IDS` rows copied verbatim.
@@ -132,6 +133,116 @@ HALFLING -1       1        0        0        -1       0
 HALFORC  1        0        1        -2       0        0
 ''';
 
+/// `profs.2da`, copied verbatim — how many proficiency **slots** a new
+/// character has to spend.
+///
+/// ⚠️ **Not `profsmax.2da`, which is one letter away and answers a different
+/// question.** That one caps the ranks in any *one* proficiency; this one is
+/// the number of pips. A rule built on the wrong table gave every class two.
+const String _proficiencySlots = '''
+2DA V1.0
+0
+                        FIRST_LEVEL     RATE
+MAGE                    1               6
+FIGHTER                 4               3
+CLERIC                  2               4
+THIEF                   2               4
+BARD                    2               4
+PALADIN                 4               3
+DRUID                   2               4
+RANGER                  4               3
+FIGHTER_MAGE            4               3
+SORCERER                1               6
+''';
+
+/// `profsmax.2da`, copied verbatim — the most ranks one proficiency may hold.
+const String _proficiencyRankCaps = '''
+2DA V1.0
+0
+                    FIRST_LEVEL OTHER_LEVELS 3          6          9
+MAGE                2          5          3          4          5
+FIGHTER             2          5          3          4          5
+FIGHTER_MAGE        2          5          3          4          5
+''';
+
+/// `mxsplwiz.2da`, its first three rows — memorisable wizard spells by caster
+/// level (rows) and spell level (columns).
+const String _wizardMemorisation = '''
+2DA V1.0
+0
+        1   2   3   4   5   6   7   8   9
+1       1   0   0   0   0   0   0   0   0
+2       2   0   0   0   0   0   0   0   0
+3       2   1   0   0   0   0   0   0   0
+''';
+
+/// `abracerq.2da`, copied verbatim — what each race may roll, before its own
+/// adjustments are added.
+const String _raceAbilityRequirements = '''
+2DA      V1.0
+0
+         MIN_STR  MAX_STR  MIN_DEX  MAX_DEX  MIN_CON  MAX_CON  MIN_INT  MAX_INT  MIN_WIS  MAX_WIS  MIN_CHR  MAX_CHR
+HUMAN    3        18       3        18       3        18       3        18       3        18       3        18
+DWARF    8        18       3        18       11       18       3        18       3        18       3        18
+ELF      3        18       6        18       7        18       8        18       3        18       8        18
+GNOME    6        18       3        18       8        18       6        18       3        18       3        18
+HALF_ELF 3        18       6        18       6        18       4        18       3        18       3        18
+HALFLING 7        18       7        18       10       18       6        18       3        18       3        18
+HALFORC  3        18       3        18       3        18       3        18       3        18       3        18
+''';
+
+/// `abclasrq.2da`, the rows this suite reasons about, copied verbatim.
+///
+/// ⚠️ **Kits are rows here as well as classes**, and a specialist raises the
+/// bar: an Abjurer needs Wisdom 15 where a plain Mage needs none.
+const String _classAbilityRequirements = '''
+2DA V1.0
+0
+                        MIN_STR MIN_DEX MIN_CON MIN_INT MIN_WIS MIN_CHR
+MAGE                    0       0       0       9       0       0
+FIGHTER                 9       0       0       0       0       0
+FIGHTER_MAGE            9       0       0       9       0       0
+ABJURER                 0       0       0       9       15      0
+''';
+
+/// `mxsplsrc.2da`, its first two rows — a sorcerer memorises three at first
+/// level where a mage memorises one.
+const String _sorcererMemorisation = '''
+2DA V1.0
+0
+        1   2   3   4   5   6   7   8   9
+1       3   0   0   0   0   0   0   0   0
+2       4   0   0   0   0   0   0   0   0
+''';
+
+/// `splsrckn.2da`, its first two rows — how many a sorcerer *knows*.
+///
+/// ⚠️ **The one casting class whose learn count is tabled at all.** A mage's
+/// two is a flat allowance the engine's screen states and no table carries.
+const String _sorcererKnown = '''
+2DA V1.0
+0
+        1   2   3   4   5   6   7   8   9
+1       2   0   0   0   0   0   0   0   0
+2       2   0   0   0   0   0   0   0   0
+''';
+
+/// `mxsplbrd.2da`, copied verbatim — and ⚠️ **it starts at row 2**, which is
+/// the table saying a bard casts nothing at first level.
+const String _bardMemorisation = '''
+2DA V1.0
+0
+        1   2   3   4   5   6
+2       1   0   0   0   0   0
+3       2   0   0   0   0   0
+''';
+
+/// The two first-level wizard spells the walkthrough's Aurel ended up with.
+const List<SpellChoice> _wizardSpells = [
+  SpellChoice(resref: 'SPWI112', school: 6, nameStrref: 12052),
+  SpellChoice(resref: 'SPWI114', school: 6, nameStrref: 26366),
+];
+
 CreationCatalogue buildCatalogue() => creationCatalogueFrom(
   classRaceRequirements: Table2da.parse(_classRaceRequirements),
   alignmentRequirements: Table2da.parse(_alignmentRequirements),
@@ -139,6 +250,16 @@ CreationCatalogue buildCatalogue() => creationCatalogueFrom(
   classText: Table2da.parse(_classText),
   raceText: Table2da.parse(_raceText),
   racialAdjustments: Table2da.parse(_racialAdjustments),
+  proficiencySlots: Table2da.parse(_proficiencySlots),
+  proficiencyRankCaps: Table2da.parse(_proficiencyRankCaps),
+  wizardMemorisation: Table2da.parse(_wizardMemorisation),
+  sorcererMemorisation: Table2da.parse(_sorcererMemorisation),
+  sorcererKnownSpells: Table2da.parse(_sorcererKnown),
+  bardMemorisation: Table2da.parse(_bardMemorisation),
+  raceAbilityRequirements: Table2da.parse(_raceAbilityRequirements),
+  classAbilityRequirements: Table2da.parse(_classAbilityRequirements),
+  wizardSpells: _wizardSpells,
+  proficiencies: ProficiencyCatalogue.empty,
   rules: const GeneratedGameRules(),
 );
 
@@ -337,21 +458,208 @@ void main() {
     });
   });
 
+  group('proficiency slots', () {
+    // ⚠️ **The rule that was wrong.** An earlier plan had this as "two per
+    // class", from reading `profsmax.2da` where `profs.2da` was the table. A
+    // single Fighter gets four and a Mage one, which is the whole spread.
+    test('come from profs.2da, one per class, not a rule', () {
+      final catalogue = buildCatalogue();
+
+      expect(catalogue.proficiencySlotsFor('MAGE'), 1);
+      expect(catalogue.proficiencySlotsFor('FIGHTER'), 4);
+      expect(catalogue.proficiencySlotsFor('CLERIC'), 2);
+      expect(catalogue.proficiencySlotsFor('THIEF'), 2);
+    });
+
+    test('a Fighter / Mage gets four, which is what Aurel spent', () {
+      // The engine's own character holds War Hammer 1, Flail 1 and Two-Weapon
+      // Style 2 — four pips, exactly the four this table gives.
+      expect(buildCatalogue().proficiencySlotsFor('FIGHTER_MAGE'), 4);
+    });
+
+    test('a class the table does not name gets none rather than a guess', () {
+      expect(buildCatalogue().proficiencySlotsFor('MONK'), 0);
+    });
+
+    test('the rank cap is a different table and a different number', () {
+      // profsmax.2da FIRST_LEVEL: at most two ranks in any one proficiency,
+      // which is Specialized. Four slots and a cap of two are both true.
+      expect(buildCatalogue().proficiencyRankCapFor('FIGHTER_MAGE'), 2);
+    });
+  });
+
+  group('ability bounds', () {
+    test('an elf rolls Dexterity 7 to 19, exactly as the game prints', () {
+      // docs/findings/screens/char-create/14-abilities-rolled.png, verbatim.
+      // `abracerq` says 6 to 18 and `abracead` adds one to both ends.
+      final bounds = buildCatalogue().abilityBoundsFor(
+        raceId: elf,
+        characterClass: 'FIGHTER_MAGE',
+        ability: CreationAbility.dexterity,
+      );
+
+      expect(bounds, (minimum: 7, maximum: 19));
+    });
+
+    test('a class minimum can raise the race’s, and does for Aurel', () {
+      // Screen 15 prints Intelligence "Minimum: 9, Maximum: 18" for an elf
+      // Fighter / Mage. The elf's own floor is 8; the class asks for 9.
+      final bounds = buildCatalogue().abilityBoundsFor(
+        raceId: elf,
+        characterClass: 'FIGHTER_MAGE',
+        ability: CreationAbility.intelligence,
+      );
+
+      expect(bounds, (minimum: 9, maximum: 18));
+    });
+
+    test('an elf’s Constitution ceiling drops with its adjustment', () {
+      final bounds = buildCatalogue().abilityBoundsFor(
+        raceId: elf,
+        characterClass: 'FIGHTER_MAGE',
+        ability: CreationAbility.constitution,
+      );
+
+      expect(bounds, (minimum: 6, maximum: 17));
+    });
+
+    test('⚠️ a specialisation raises the bar where its class does not', () {
+      // An Abjurer needs Wisdom 15; a plain Mage needs none. The kit row wins
+      // where it exists — the same precedence alignments already use.
+      final catalogue = buildCatalogue();
+
+      expect(
+        catalogue.abilityBoundsFor(
+          raceId: human,
+          characterClass: 'MAGE',
+          ability: CreationAbility.wisdom,
+        ),
+        (minimum: 3, maximum: 18),
+      );
+      expect(
+        catalogue.abilityBoundsFor(
+          raceId: human,
+          characterClass: 'MAGE',
+          kit: 'ABJURER',
+          ability: CreationAbility.wisdom,
+        ),
+        (minimum: 15, maximum: 18),
+      );
+    });
+
+    test('⚠️ Charisma is CHR in the tables, not CHA', () {
+      // One letter, and it silently loses a whole ability if guessed.
+      expect(CreationAbility.charisma.key, 'CHR');
+      expect(
+        buildCatalogue().abilityBoundsFor(
+          raceId: dwarf,
+          characterClass: 'FIGHTER',
+          ability: CreationAbility.charisma,
+        ),
+        (minimum: 1, maximum: 16),
+      );
+    });
+
+    test('an unreadable table answers with the field’s own bounds', () {
+      // A machine with no game installed can still open the screen; what it
+      // cannot do is pretend to know the game's rules.
+      final nothing = _emptyCatalogue();
+
+      expect(
+        nothing.abilityBoundsFor(
+          raceId: elf,
+          characterClass: 'FIGHTER_MAGE',
+          ability: CreationAbility.strength,
+        ),
+        (minimum: 1, maximum: 25),
+      );
+    });
+  });
+
+  group('wizard spells', () {
+    test('are carried with the strrefs that name them', () {
+      final spells = buildCatalogue().wizardSpells;
+
+      expect(spells.map((s) => s.resref), ['SPWI112', 'SPWI114']);
+      expect(spells.first.nameStrref, 12052);
+    });
+
+    test('the memorisable count comes from mxsplwiz, not from a constant', () {
+      expect(buildCatalogue().wizardSpellsMemorisable, 1);
+    });
+
+    test('every class that casts them has its own progression table', () {
+      // ⚠️ **Three tables, and the numbers genuinely differ.** A mage memorises
+      // one first-level spell and knows two; a sorcerer memorises three and
+      // knows two; a bard casts nothing at all until second level, which is
+      // `mxsplbrd.2da` having no row 1 rather than a rule anyone wrote.
+      final catalogue = buildCatalogue();
+
+      expect(catalogue.spellsMemorisableFor('MAGE'), 1);
+      expect(catalogue.spellsMemorisableFor('FIGHTER_MAGE'), 1);
+      expect(catalogue.spellsMemorisableFor('SORCERER'), 3);
+      expect(catalogue.spellsMemorisableFor('BARD'), 0);
+      expect(catalogue.spellsMemorisableFor('FIGHTER'), 0);
+    });
+
+    test('⚠️ only the sorcerer’s learn count is in a table', () {
+      final catalogue = buildCatalogue();
+
+      expect(catalogue.spellsLearnableFor('SORCERER'), 2);
+      expect(catalogue.spellsLearnableFor('MAGE'), 2);
+      expect(catalogue.spellsLearnableFor('FIGHTER'), 0);
+    });
+
+    test('a class casts wizard spells only if a table says how many', () {
+      final catalogue = buildCatalogue();
+
+      expect(catalogue.castsWizardSpells('MAGE'), isTrue);
+      expect(catalogue.castsWizardSpells('FIGHTER_MAGE_THIEF'), isTrue);
+      expect(catalogue.castsWizardSpells('SORCERER'), isTrue);
+      expect(catalogue.castsWizardSpells('BARD'), isFalse);
+      expect(catalogue.castsWizardSpells('CLERIC'), isFalse);
+    });
+
+    test('⚠️ how many may be learned is not in any table that was found', () {
+      // Two, flatly — the engine's own screen says "You may choose 2 spells".
+      // `INTMOD.2da` does have MAX_SPELLS_PER_LEVEL, and it is not this: Aurel
+      // rolled Intelligence 17, which that table gives **14**, and the screen
+      // still offered two. Recorded as a measurement rather than a lookup.
+      expect(CreationCatalogue.wizardSpellsLearnable, 2);
+    });
+  });
+
   group('an installation that could not be read', () {
     test('answers empty rather than throwing', () {
-      final nothing = creationCatalogueFrom(
-        classRaceRequirements: Table2da.parse(''),
-        alignmentRequirements: Table2da.parse(''),
-        kits: Table2da.parse(''),
-        classText: Table2da.parse(''),
-        raceText: Table2da.parse(''),
-        racialAdjustments: Table2da.parse(''),
-        rules: const GeneratedGameRules(),
-      );
+      final nothing = _emptyCatalogue();
 
       expect(nothing.races, isEmpty);
       expect(nothing.classesFor(elf), isEmpty);
       expect(nothing.kitsFor(fighter), isEmpty);
+      expect(nothing.proficiencySlotsFor('FIGHTER'), 0);
+      expect(nothing.wizardSpells, isEmpty);
+      expect(nothing.wizardSpellsMemorisable, 0);
     });
   });
 }
+
+/// What a machine with no game installed produces.
+CreationCatalogue _emptyCatalogue() => creationCatalogueFrom(
+  classRaceRequirements: Table2da.parse(''),
+  alignmentRequirements: Table2da.parse(''),
+  kits: Table2da.parse(''),
+  classText: Table2da.parse(''),
+  raceText: Table2da.parse(''),
+  racialAdjustments: Table2da.parse(''),
+  proficiencySlots: Table2da.parse(''),
+  proficiencyRankCaps: Table2da.parse(''),
+  wizardMemorisation: Table2da.parse(''),
+  sorcererMemorisation: Table2da.parse(''),
+  sorcererKnownSpells: Table2da.parse(''),
+  bardMemorisation: Table2da.parse(''),
+  raceAbilityRequirements: Table2da.parse(''),
+  classAbilityRequirements: Table2da.parse(''),
+  wizardSpells: const [],
+  proficiencies: ProficiencyCatalogue.empty,
+  rules: const GeneratedGameRules(),
+);

@@ -22,6 +22,7 @@ import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/save_editor.dart';
 import 'package:wand_of_saves/domain/character_file.dart';
 import 'package:wand_of_saves/domain/character_identity.dart';
+import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/document_ref.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
@@ -206,6 +207,11 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
     int? classId,
     int? alignmentId,
     int? kitValue,
+    Map<CharacterStat, int> abilities = const {},
+    Map<int, int> proficiencies = const {},
+    List<String> knownSpells = const [],
+    List<String> memorisedSpells = const [],
+    int spellsMemorisable = 0,
   }) async {
     final template = await ref
         .read(resourceRepositoryProvider)
@@ -242,6 +248,55 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
           creOffset: created.creOffset,
           identity: identity,
           value: value,
+        ),
+      );
+    }
+
+    for (final MapEntry(key: stat, value: score) in abilities.entries) {
+      created = applyCharacterEdit(
+        created,
+        SetCharacterStat(
+          creOffset: created.creOffset,
+          stat: stat,
+          value: score,
+        ),
+      );
+    }
+
+    // ⚠️ **Everything below here changes the record's size**, which is why the
+    // flow writes a `.chr` and not a savegame: one length field in a 100-byte
+    // header against thirty-nine pointers. `CHARBASE` has no effects, no
+    // spellbook and no memorisation rows, so each of these creates its section.
+    for (final MapEntry(key: id, value: pips) in proficiencies.entries) {
+      created = applyCharacterEdit(
+        created,
+        GrantProficiency(
+          creOffset: created.creOffset,
+          proficiencyId: id,
+          pips: pips,
+        ),
+      );
+    }
+    for (final resref in knownSpells) {
+      created = applyCharacterEdit(
+        created,
+        LearnSpell(
+          creOffset: created.creOffset,
+          resref: resref,
+          level: 1,
+          type: SpellType.wizard,
+        ),
+      );
+    }
+    for (final resref in memorisedSpells) {
+      created = applyCharacterEdit(
+        created,
+        MemoriseSpell(
+          creOffset: created.creOffset,
+          resref: resref,
+          level: 1,
+          type: SpellType.wizard,
+          memorisable: spellsMemorisable,
         ),
       );
     }

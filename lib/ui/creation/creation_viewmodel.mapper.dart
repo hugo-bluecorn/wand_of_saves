@@ -74,6 +74,47 @@ class CreationStateMapper extends ClassMapperBase<CreationState> {
     _$alignmentId,
     opt: true,
   );
+  static Map<CreationAbility, int> _$abilities(CreationState v) => v.abilities;
+  static const Field<CreationState, Map<CreationAbility, int>> _f$abilities =
+      Field('abilities', _$abilities, opt: true, def: const {});
+  static int _$abilityPoints(CreationState v) => v.abilityPoints;
+  static const Field<CreationState, int> _f$abilityPoints = Field(
+    'abilityPoints',
+    _$abilityPoints,
+    opt: true,
+    def: 0,
+  );
+  static Map<CreationAbility, int>? _$storedAbilities(CreationState v) =>
+      v.storedAbilities;
+  static const Field<CreationState, Map<CreationAbility, int>>
+  _f$storedAbilities = Field('storedAbilities', _$storedAbilities, opt: true);
+  static int? _$storedAbilityPoints(CreationState v) => v.storedAbilityPoints;
+  static const Field<CreationState, int> _f$storedAbilityPoints = Field(
+    'storedAbilityPoints',
+    _$storedAbilityPoints,
+    opt: true,
+  );
+  static Map<int, int> _$proficiencies(CreationState v) => v.proficiencies;
+  static const Field<CreationState, Map<int, int>> _f$proficiencies = Field(
+    'proficiencies',
+    _$proficiencies,
+    opt: true,
+    def: const {},
+  );
+  static List<String> _$knownSpells(CreationState v) => v.knownSpells;
+  static const Field<CreationState, List<String>> _f$knownSpells = Field(
+    'knownSpells',
+    _$knownSpells,
+    opt: true,
+    def: const [],
+  );
+  static List<String> _$memorisedSpells(CreationState v) => v.memorisedSpells;
+  static const Field<CreationState, List<String>> _f$memorisedSpells = Field(
+    'memorisedSpells',
+    _$memorisedSpells,
+    opt: true,
+    def: const [],
+  );
   static String _$name(CreationState v) => v.name;
   static const Field<CreationState, String> _f$name = Field(
     'name',
@@ -92,6 +133,13 @@ class CreationStateMapper extends ClassMapperBase<CreationState> {
     #characterClass: _f$characterClass,
     #specialisation: _f$specialisation,
     #alignmentId: _f$alignmentId,
+    #abilities: _f$abilities,
+    #abilityPoints: _f$abilityPoints,
+    #storedAbilities: _f$storedAbilities,
+    #storedAbilityPoints: _f$storedAbilityPoints,
+    #proficiencies: _f$proficiencies,
+    #knownSpells: _f$knownSpells,
+    #memorisedSpells: _f$memorisedSpells,
     #name: _f$name,
   };
 
@@ -105,6 +153,13 @@ class CreationStateMapper extends ClassMapperBase<CreationState> {
       characterClass: data.dec(_f$characterClass),
       specialisation: data.dec(_f$specialisation),
       alignmentId: data.dec(_f$alignmentId),
+      abilities: data.dec(_f$abilities),
+      abilityPoints: data.dec(_f$abilityPoints),
+      storedAbilities: data.dec(_f$storedAbilities),
+      storedAbilityPoints: data.dec(_f$storedAbilityPoints),
+      proficiencies: data.dec(_f$proficiencies),
+      knownSpells: data.dec(_f$knownSpells),
+      memorisedSpells: data.dec(_f$memorisedSpells),
       name: data.dec(_f$name),
     );
   }
@@ -178,6 +233,14 @@ abstract class CreationStateCopyWith<$R, $In extends CreationState, $Out>
   get characterClass;
   CreationChoiceCopyWith<$R, CreationChoice, CreationChoice>?
   get specialisation;
+  MapCopyWith<$R, CreationAbility, int, ObjectCopyWith<$R, int, int>>
+  get abilities;
+  MapCopyWith<$R, CreationAbility, int, ObjectCopyWith<$R, int, int>>?
+  get storedAbilities;
+  MapCopyWith<$R, int, int, ObjectCopyWith<$R, int, int>> get proficiencies;
+  ListCopyWith<$R, String, ObjectCopyWith<$R, String, String>> get knownSpells;
+  ListCopyWith<$R, String, ObjectCopyWith<$R, String, String>>
+  get memorisedSpells;
   $R call({
     CreationCatalogue? catalogue,
     CreationStep? step,
@@ -187,6 +250,13 @@ abstract class CreationStateCopyWith<$R, $In extends CreationState, $Out>
     CreationChoice? characterClass,
     CreationChoice? specialisation,
     int? alignmentId,
+    Map<CreationAbility, int>? abilities,
+    int? abilityPoints,
+    Map<CreationAbility, int>? storedAbilities,
+    int? storedAbilityPoints,
+    Map<int, int>? proficiencies,
+    List<String>? knownSpells,
+    List<String>? memorisedSpells,
     String? name,
   });
   CreationStateCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(Then<$Out2, $R2> t);
@@ -215,6 +285,43 @@ class _CreationStateCopyWithImpl<$R, $Out>
   get specialisation =>
       $value.specialisation?.copyWith.$chain((v) => call(specialisation: v));
   @override
+  MapCopyWith<$R, CreationAbility, int, ObjectCopyWith<$R, int, int>>
+  get abilities => MapCopyWith(
+    $value.abilities,
+    (v, t) => ObjectCopyWith(v, $identity, t),
+    (v) => call(abilities: v),
+  );
+  @override
+  MapCopyWith<$R, CreationAbility, int, ObjectCopyWith<$R, int, int>>?
+  get storedAbilities => $value.storedAbilities != null
+      ? MapCopyWith(
+          $value.storedAbilities!,
+          (v, t) => ObjectCopyWith(v, $identity, t),
+          (v) => call(storedAbilities: v),
+        )
+      : null;
+  @override
+  MapCopyWith<$R, int, int, ObjectCopyWith<$R, int, int>> get proficiencies =>
+      MapCopyWith(
+        $value.proficiencies,
+        (v, t) => ObjectCopyWith(v, $identity, t),
+        (v) => call(proficiencies: v),
+      );
+  @override
+  ListCopyWith<$R, String, ObjectCopyWith<$R, String, String>>
+  get knownSpells => ListCopyWith(
+    $value.knownSpells,
+    (v, t) => ObjectCopyWith(v, $identity, t),
+    (v) => call(knownSpells: v),
+  );
+  @override
+  ListCopyWith<$R, String, ObjectCopyWith<$R, String, String>>
+  get memorisedSpells => ListCopyWith(
+    $value.memorisedSpells,
+    (v, t) => ObjectCopyWith(v, $identity, t),
+    (v) => call(memorisedSpells: v),
+  );
+  @override
   $R call({
     CreationCatalogue? catalogue,
     CreationStep? step,
@@ -224,6 +331,13 @@ class _CreationStateCopyWithImpl<$R, $Out>
     Object? characterClass = $none,
     Object? specialisation = $none,
     Object? alignmentId = $none,
+    Map<CreationAbility, int>? abilities,
+    int? abilityPoints,
+    Object? storedAbilities = $none,
+    Object? storedAbilityPoints = $none,
+    Map<int, int>? proficiencies,
+    List<String>? knownSpells,
+    List<String>? memorisedSpells,
     String? name,
   }) => $apply(
     FieldCopyWithData({
@@ -235,6 +349,14 @@ class _CreationStateCopyWithImpl<$R, $Out>
       if (characterClass != $none) #characterClass: characterClass,
       if (specialisation != $none) #specialisation: specialisation,
       if (alignmentId != $none) #alignmentId: alignmentId,
+      if (abilities != null) #abilities: abilities,
+      if (abilityPoints != null) #abilityPoints: abilityPoints,
+      if (storedAbilities != $none) #storedAbilities: storedAbilities,
+      if (storedAbilityPoints != $none)
+        #storedAbilityPoints: storedAbilityPoints,
+      if (proficiencies != null) #proficiencies: proficiencies,
+      if (knownSpells != null) #knownSpells: knownSpells,
+      if (memorisedSpells != null) #memorisedSpells: memorisedSpells,
       if (name != null) #name: name,
     }),
   );
@@ -248,6 +370,16 @@ class _CreationStateCopyWithImpl<$R, $Out>
     characterClass: data.get(#characterClass, or: $value.characterClass),
     specialisation: data.get(#specialisation, or: $value.specialisation),
     alignmentId: data.get(#alignmentId, or: $value.alignmentId),
+    abilities: data.get(#abilities, or: $value.abilities),
+    abilityPoints: data.get(#abilityPoints, or: $value.abilityPoints),
+    storedAbilities: data.get(#storedAbilities, or: $value.storedAbilities),
+    storedAbilityPoints: data.get(
+      #storedAbilityPoints,
+      or: $value.storedAbilityPoints,
+    ),
+    proficiencies: data.get(#proficiencies, or: $value.proficiencies),
+    knownSpells: data.get(#knownSpells, or: $value.knownSpells),
+    memorisedSpells: data.get(#memorisedSpells, or: $value.memorisedSpells),
     name: data.get(#name, or: $value.name),
   );
 

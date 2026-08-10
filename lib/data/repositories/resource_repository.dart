@@ -214,8 +214,87 @@ class ResourceRepository {
       classText: tables[3],
       raceText: tables[4],
       racialAdjustments: tables[5],
+      proficiencySlots: tables[6],
+      proficiencyRankCaps: tables[7],
+      wizardMemorisation: tables[8],
+      sorcererMemorisation: tables[9],
+      sorcererKnownSpells: tables[10],
+      bardMemorisation: tables[11],
+      raceAbilityRequirements: tables[12],
+      classAbilityRequirements: tables[13],
+      wizardSpells: await wizardSpells(level: 1),
+      proficiencies: await proficiencies(),
       rules: rules,
     );
+  }
+
+  /// Every wizard spell of [level] a character may learn.
+  ///
+  /// ⚠️ **D13, and the one case where the answer is in no table.** Checked and
+  /// rejected: `spells.2da` is a flat cap of fifty per level, `speldesc.2da`
+  /// lists descriptions for a few dozen, `mschool.2da` names the schools,
+  /// `splsrckn.2da` and the ten `mxspl*` tables are progressions. None
+  /// enumerates the spells. The spells themselves do.
+  ///
+  /// So this reads the `SPL` headers, and needs **three** filters rather than
+  /// the obvious one, each measured against a real installation:
+  ///
+  /// 1. **The header's own type and level.** Necessary, and nowhere near
+  ///    sufficient: 108 resources claim first-level wizard.
+  /// 2. **A name strref.** Eighty-six of those 108 carry `-1` — the engine's
+  ///    own plumbing, cast at creatures rather than learned.
+  /// 3. ⚠️ **The resref's level digit must agree with the header's.** What is
+  ///    left after the first two filters still holds `SPWI003`, `SPWI020`,
+  ///    `SPWI989` and `SPWI998` — all named, all claiming level 1, none of them
+  ///    a first-level spell. The naming is `SPWI<level><nn>`, and where the
+  ///    name and the header disagree the resource is not what it looks like.
+  ///
+  /// With all three, first level yields **22** — which is the count the
+  /// engine's own Mage Book screen shows.
+  ///
+  /// Never throws: no installation means no spells, and the step says so.
+  Future<List<SpellChoice>> wizardSpells({required int level}) async {
+    final index = await _keyIndex();
+    if (index == null) return const [];
+
+    final prefix = '$wizardSpellPrefix$level';
+    final found = <SpellChoice>[];
+    for (final resref in index.resrefsOf(ResourceType.spell)) {
+      if (!_isWizardSpellName(resref, prefix)) continue;
+
+      final bytes = await _resource(resref, ResourceType.spell);
+      if (bytes == null) continue;
+      final Spl spell;
+      try {
+        spell = SplCodec.decode(bytes, source: resref);
+      } on InfinityFormatException {
+        continue;
+      }
+      if (spell.type != SplType.wizard || spell.level != level) continue;
+      if (spell.nameStrref case final int strref) {
+        found.add(
+          SpellChoice(
+            resref: resref.toUpperCase(),
+            school: spell.school,
+            nameStrref: strref,
+            descriptionStrref: spell.descriptionStrref,
+          ),
+        );
+      }
+    }
+    // By resref, so the order is stable whatever the archive's is. The screen
+    // sorts by name, which needs the talk table and happens above this layer.
+    return found..sort((a, b) => a.resref.compareTo(b.resref));
+  }
+
+  /// Whether [resref] is `SPWI` + a level digit + exactly two more digits.
+  ///
+  /// Rejects `SPWI119A` and `spwi117a`, which are sub-spells rather than
+  /// entries in anyone's book.
+  static bool _isWizardSpellName(String resref, String prefix) {
+    if (resref.length != wizardSpellNameLength) return false;
+    if (!resref.toUpperCase().startsWith(prefix.toUpperCase())) return false;
+    return int.tryParse(resref.substring(prefix.length)) != null;
   }
 
   /// The bitmap named [resref], or `null` if there is none.
@@ -432,7 +511,58 @@ const List<String> creationTables = [
   classTextTable,
   raceTextTable,
   racialAdjustmentTable,
+  proficiencySlotTable,
+  proficiencyRankCapTable,
+  wizardMemorisationTable,
+  sorcererMemorisationTable,
+  sorcererKnownSpellTable,
+  bardMemorisationTable,
+  raceAbilityTable,
+  classAbilityTable,
 ];
+
+/// How many proficiency pips each class has at first level, and its rate after.
+///
+/// ⚠️ **Not [proficiencyRankCapTable], which is one letter away.** This is the
+/// number of pips to spend — MAGE 1, FIGHTER 4 — where that is how many may go
+/// into any one proficiency.
+const String proficiencySlotTable = 'profs';
+
+/// The most ranks one proficiency may hold, by class and level band.
+const String proficiencyRankCapTable = 'profsmax';
+
+/// Memorisable wizard spells: a row per caster level, a column per spell level.
+///
+/// ⚠️ **Three of these, one per casting class, and nothing joins a class to
+/// its own.** `hpclass.2da` does exactly that job for hit dice; there is no
+/// equivalent here, which is why `CreationCatalogue.spellsMemorisableFor`
+/// carries the mapping as a stated rule.
+const String wizardMemorisationTable = 'mxsplwiz';
+
+/// The sorcerer's memorisation progression — three at first level, not one.
+const String sorcererMemorisationTable = 'mxsplsrc';
+
+/// How many spells a sorcerer *knows*, which for every other class is untabled.
+const String sorcererKnownSpellTable = 'splsrckn';
+
+/// The bard's, and ⚠️ **it starts at row 2** — a bard casts nothing at first.
+const String bardMemorisationTable = 'mxsplbrd';
+
+/// What each race may roll for each ability, before its own adjustments.
+///
+/// ⚠️ **Composes with [racialAdjustmentTable]** to give what the game prints:
+/// an elf's Dexterity is this table's 6–18 plus that one's +1, and the engine's
+/// own screen says 7 to 19.
+const String raceAbilityTable = 'abracerq';
+
+/// The ability minima each class **and kit** requires.
+const String classAbilityTable = 'abclasrq';
+
+/// The resref prefix every wizard spell carries, before its level digit.
+const String wizardSpellPrefix = 'SPWI';
+
+/// How long a wizard spell's resref is: `SPWI` plus three digits.
+const int wizardSpellNameLength = 7;
 
 /// Which classes each race may take — a row per class or kit, a column per
 /// race. **Its columns are the playable races.**
