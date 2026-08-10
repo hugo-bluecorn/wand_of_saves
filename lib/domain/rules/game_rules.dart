@@ -16,6 +16,9 @@ import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/rules/identifiers.g.dart';
 import 'package:wand_of_saves/domain/rules/modifiers.g.dart';
 import 'package:wand_of_saves/domain/rules/name_tables.dart';
+import 'package:wand_of_saves/domain/rules/rules_tables.dart';
+import 'package:wand_of_saves/domain/rules/saving_throw_tables.dart';
+import 'package:wand_of_saves/domain/saving_throws.dart';
 
 /// What the game's own tables say.
 ///
@@ -109,6 +112,96 @@ abstract interface class GameRules {
   /// multi-class one: a `FIGHTER_MAGE` rolls its two halves separately, and
   /// composing them belongs to the caller.
   int? maximumRolledHitPoints(String classIdentifier, int level);
+
+  /// The same for a whole character, composed across their classes.
+  ///
+  /// **Each class rolls its own die to its own level and the total is split
+  /// between them**, rounded up. `null` when the tables cannot name a class or
+  /// when the name and the level count disagree.
+  int? maximumRolledHitPointsFor({
+    required String classIdentifier,
+    required List<int> levels,
+  });
+
+  /// Which saving-throw table one class uses, e.g. `SAVEWIZ` for a `MAGE`.
+  ///
+  /// [classIdentifier] is a single `CLASS.IDS` name. `null` when nothing names
+  /// it.
+  String? savingThrowTableFor(String classIdentifier);
+
+  /// The saving throws [classIdentifier] at [levels] should have.
+  ///
+  /// [levels] is one level per class, in the identifier's own order —
+  /// `FIGHTER_MAGE` with `[3, 1]` is a Fighter 3 / Mage 1. `null` when the
+  /// tables cannot answer, including when the two disagree about how many
+  /// classes there are.
+  ///
+  /// ⚠️ **[raceIdentifier] and [constitution] are not decoration.** A dwarf,
+  /// gnome or halfling takes a Constitution bonus of up to five on three of
+  /// the five saves, so leaving them out is wrong rather than merely
+  /// incomplete for three of the seven playable races.
+  SavingThrows? savingThrowsFor({
+    required String classIdentifier,
+    required List<int> levels,
+    String? raceIdentifier,
+    int constitution = 0,
+  });
+
+  /// Which Constitution-bonus table a race uses, e.g. `SAVECNG` for a gnome.
+  ///
+  /// `null` for the four races that take no such bonus.
+  String? racialSavingThrowTableFor(String raceIdentifier);
+
+  /// The THAC0 [classIdentifier] at [levels] should have, or `null`.
+  ///
+  /// ⚠️ **A multi-class has a row of its own** — `thac0.2da` enumerates
+  /// `FIGHTER_MAGE` and the rest — so nothing here is composed.
+  int? thac0For({
+    required String classIdentifier,
+    required List<int> levels,
+  });
+
+  /// The Lore [classIdentifier] at [levels] should have, or `null`.
+  ///
+  /// `lore.2da` gives a rate per level for each single class.
+  int? loreFor({required String classIdentifier, required List<int> levels});
+
+  /// How many thief-skill points [classColumn] has to spend at first level.
+  ///
+  /// `null` for a class with no row, which is not the same as zero: a fighter
+  /// is absent from the table because the question does not apply.
+  int? thiefSkillPointsFor(String classColumn);
+
+  /// What [ability] adds to Lore. `lorebon.2da`, consulted for Intelligence
+  /// *and* Wisdom.
+  int? loreBonusFor(int ability);
+
+  /// What [dexterity] and [raceIdentifier] add to the thief skill [row].
+  ///
+  /// `skilldex.2da` and `skillrac.2da`. `null` when neither can answer, and a
+  /// table that answers alone contributes on its own.
+  int? thiefSkillBonusFor({
+    required String row,
+    required int dexterity,
+    required String? raceIdentifier,
+  });
+
+  /// What [strength] takes off THAC0. `strmod.2da`, or `strmodex.2da` at 18.
+  ///
+  /// Positive is an improvement, because THAC0 runs downwards.
+  int? strengthToHitFor({required int strength, required int percentile});
+
+  /// The chance [intelligence] gives of learning a spell. `intmod.2da`.
+  int? chanceToLearnSpellFor(int intelligence);
+
+  /// The thief skills [classIdentifier] gets **without allocating them**.
+  ///
+  /// A ranger's stealth and a bard's pick pockets are fixed by level, not
+  /// spent. Empty for every class that has neither.
+  Map<String, int> fixedThiefSkillsFor({
+    required String classIdentifier,
+    required List<int> levels,
+  });
 }
 
 /// [GameRules] backed by the tables generated from IESDP, plus whatever the
@@ -120,11 +213,13 @@ abstract interface class GameRules {
 /// no game installed, where the app still has to open a savegame and name what
 /// is in it.
 class GeneratedGameRules implements GameRules {
-  /// Creates the rules over [tables] and [hitDice], both defaulting to
-  /// nothing read.
+  /// Creates the rules over the tables that could be read, each defaulting to
+  /// nothing.
   const GeneratedGameRules({
     this.tables = NameTables.empty,
     this.hitDice = HitDieTables.empty,
+    this.savingThrows = SavingThrowTables.empty,
+    this.rulesTables = RulesTables.empty,
   });
 
   /// What the player's installation calls things. Data, separate from this.
@@ -132,6 +227,13 @@ class GeneratedGameRules implements GameRules {
 
   /// How many hit points each class gains per level. Data, separate from this.
   final HitDieTables hitDice;
+
+  /// The five saving-throw progressions. Data, separate from this.
+  final SavingThrowTables savingThrows;
+
+  /// The game's other numeric tables — THAC0, Lore, skill points and the two
+  /// fixed skill progressions. Data, separate from this.
+  final RulesTables rulesTables;
 
   /// Class identifiers whose hit points come from the warrior column.
   ///
@@ -269,18 +371,51 @@ class GeneratedGameRules implements GameRules {
     return identifier?.split('_').length;
   }
 
+  /// What the engine substitutes into `clastext.2da`'s own names.
+  ///
+  /// ⚠️ **The table's names are TEMPLATES, not names.** Resolved against the
+  /// player's talk table, `FIGHTER` reads `<FIGHTERTYPE>` and `CLERIC_MAGE`
+  /// reads `Cleric / <MAGESCHOOL>` — the engine fills each token with the
+  /// character's kit, or with the base class where there is none. Ours had
+  /// been drawing the tokens on the class-selection screen.
+  ///
+  /// Each token maps to a `CLASS.IDS` identifier rather than to a literal, so
+  /// the word comes from the same derivation every other class name uses.
+  static const Map<String, String> classNameTokens = {
+    '<FIGHTERTYPE>': 'FIGHTER',
+    '<MAGESCHOOL>': 'MAGE',
+  };
+
+  /// Whether [name] still holds a token nothing could fill in.
+  static bool _hasToken(String name) => name.contains('<');
+
   @override
   String? className(int id) {
-    // ⚠️ **D13: `clastext.2da`'s MIXED column already says it** — separator,
-    // capitalisation and ordering included, in the player's language. The
-    // derivation below is the no-installation fallback and nothing else.
-    final fromTable = tables.classNames[id];
-    if (fromTable != null) return fromTable;
-
     final identifier = classIdentifier(id);
     // A multi-class is one identifier with underscores, and the game renders
     // it with slashes: FIGHTER_MAGE is "Fighter / Mage".
-    return identifier == null ? null : _words(identifier).join(' / ');
+    final derived = identifier == null ? null : _words(identifier).join(' / ');
+
+    // ⚠️ **D13: `clastext.2da`'s MIXED column already says it** — separator,
+    // capitalisation and ordering included, in the player's language. The
+    // derivation above is the no-installation fallback.
+    final fromTable = tables.classNames[id];
+    if (fromTable == null) return derived;
+
+    // ⚠️ **Substituted in place, never swapped wholesale.** `Cleric /
+    // <MAGESCHOOL>` has one real word in it, and the separator and ordering
+    // are the table's — which is the whole reason to read it rather than
+    // derive one. Falling back on any token would throw both away.
+    var name = fromTable;
+    for (final MapEntry(key: token, value: root) in classNameTokens.entries) {
+      if (!name.contains(token)) continue;
+      final word = _words(root).join();
+      name = name.replaceAll(token, word);
+    }
+
+    // A token nothing filled in is one the engine knows and we do not. Drawing
+    // it is worse than the derived name, which at least reads as English.
+    return _hasToken(name) ? derived : name;
   }
 
   @override
@@ -403,6 +538,382 @@ class GeneratedGameRules implements GameRules {
     final (die, afterNine) = entry;
     final rolled = level < lastRollingLevel ? level : lastRollingLevel;
     return die * rolled + afterNine * (level - rolled);
+  }
+
+  @override
+  int? maximumRolledHitPointsFor({
+    required String classIdentifier,
+    required List<int> levels,
+  }) {
+    final classes = classIdentifier.split('_');
+    // A name and a slot count that disagree mean one of them is junk, and
+    // inventing a ceiling from junk is worse than having none.
+    if (classes.length != levels.length || classes.isEmpty) return null;
+
+    var total = 0;
+    for (var i = 0; i < classes.length; i++) {
+      final own = maximumRolledHitPoints(classes[i], levels[i]);
+      if (own == null) return null;
+      total += own;
+    }
+    // **Rounded up.** A ceiling a point low refuses a value the game would
+    // happily produce; a ceiling a point high merely fails to catch one
+    // absurd value.
+    return (total + classes.length - 1) ~/ classes.length;
+  }
+
+  /// Which saving-throw table each single class uses.
+  ///
+  /// ⚠️ **D13 — a written rule, and here is why no table answers.** `hpclass`
+  /// does exactly this job for hit dice and `thac0.2da` enumerates the
+  /// multi-classes outright, so a table was the first thing looked for.
+  /// Checked and rejected: `hpclass`, `clsrcreq`, `profs`, `clastext`,
+  /// `clasthac`, `classcat` — none names a `save…` file, and ⚠️ `savename.2da`
+  /// is savegame *slot* names, a near name with nothing to do with saves. What
+  /// states it is IESDP's prose on `savexxx.2da`, which lists the five tables
+  /// and the classes each serves. Confirmed at level 1 against BG:EE's own
+  /// Aurel, a `FIGHTER_MAGE`, whose five are `savewiz` verbatim.
+  static const Map<String, String> savingThrowTables = {
+    'FIGHTER': 'SAVEWAR',
+    'PALADIN': 'SAVEWAR',
+    'RANGER': 'SAVEWAR',
+    'MAGE': 'SAVEWIZ',
+    'SORCERER': 'SAVEWIZ',
+    'CLERIC': 'SAVEPRS',
+    'DRUID': 'SAVEPRS',
+    'THIEF': 'SAVEROG',
+    'BARD': 'SAVEROG',
+    'MONK': 'SAVEMONK',
+  };
+
+  @override
+  String? savingThrowTableFor(String classIdentifier) =>
+      savingThrowTables[classIdentifier];
+
+  /// Which Constitution-bonus table each race uses.
+  ///
+  /// ⚠️ **D13 — a written rule, and the table names are what state it.**
+  /// `savecndh` is Constitution / Dwarf-Halfling and `savecng` is
+  /// Constitution / Gnome; there are exactly two such files in the
+  /// installation and `racetext.2da` has no column naming either. **Measured,
+  /// not read off the names**: KAGAIN (dwarf, Constitution 20) stores
+  /// 9/11/15/17/12 where the class tables alone give 14/16/15/17/17, and ALORA
+  /// (halfling, 12) and QUAYLE and TIAX (gnomes, 11 and 16) each land exactly
+  /// on their table's row.
+  ///
+  /// The four races with no entry take nothing, which is why an elf, a human,
+  /// a half-elf and a half-orc agree with the class tables untouched.
+  static const Map<String, String> racialSavingThrowTables = {
+    'DWARF': 'SAVECNDH',
+    'HALFLING': 'SAVECNDH',
+    'GNOME': 'SAVECNG',
+  };
+
+  @override
+  String? racialSavingThrowTableFor(String raceIdentifier) =>
+      racialSavingThrowTables[raceIdentifier];
+
+  @override
+  SavingThrows? savingThrowsFor({
+    required String classIdentifier,
+    required List<int> levels,
+    String? raceIdentifier,
+    int constitution = 0,
+  }) {
+    final classes = classIdentifier.split('_');
+    // The same refusal maximumRolledHitPoints makes: a name and a slot count
+    // that disagree mean one of them is junk, and composing from junk is worse
+    // than answering nothing.
+    if (classes.length != levels.length) return null;
+
+    final rows = <SavingThrows>[];
+    for (var i = 0; i < classes.length; i++) {
+      final table = savingThrowTableFor(classes[i]);
+      if (table == null) return null;
+      final row = savingThrows.at(table: table, level: levels[i]);
+      if (row == null) return null;
+      rows.add(row);
+    }
+    if (rows.isEmpty) return null;
+
+    // ⚠️ **The best of each column, and each class read at its OWN level.**
+    // Lower is better, so this is a minimum. **Measured**, not reasoned — see
+    // `saving_throw_oracle_test.dart`. Aurel could not separate this from "the
+    // caster's table wins", because at level 1 `savewar` is worse in all five
+    // and a fighter multi-class gives the other table's row under either rule.
+    // QUAYLE settles it: a Cleric/Mage 2/2, he stores the priest's death save
+    // *and* the wizard's other four, which is a row neither table holds.
+    final table = raceIdentifier == null
+        ? null
+        : racialSavingThrowTableFor(raceIdentifier);
+    final bonus = table == null
+        ? null
+        : savingThrows.bonusAt(table: table, constitution: constitution);
+
+    int best(int Function(SavingThrows) of) =>
+        rows.map(of).reduce(_better) - (bonus == null ? 0 : of(bonus));
+
+    return SavingThrows(
+      death: best((r) => r.death),
+      wands: best((r) => r.wands),
+      polymorph: best((r) => r.polymorph),
+      breath: best((r) => r.breath),
+      spells: best((r) => r.spells),
+    );
+  }
+
+  /// The better of two saving throws, which is the **lower**.
+  static int _better(int a, int b) => a < b ? a : b;
+
+  /// `lorebon.2da` — a bonus per Intelligence and per Wisdom.
+  static const String loreBonusTable = 'lorebon';
+
+  /// `skilldex.2da` — thief-skill bonuses by Dexterity.
+  static const String dexteritySkillTable = 'skilldex';
+
+  /// `skillrac.2da` — thief-skill bonuses by race.
+  static const String racialSkillTable = 'skillrac';
+
+  /// `strmod.2da` — what Strength is worth.
+  static const String strengthTable = 'strmod';
+
+  /// `strmodex.2da` — the percentile rows, reached only at Strength 18.
+  static const String exceptionalStrengthTable = 'strmodex';
+
+  /// `intmod.2da` — including the chance to learn a spell.
+  static const String intelligenceTable = 'intmod';
+
+  /// `lorebon.2da`'s only column.
+  static const String loreBonusColumn = 'VALUE';
+
+  /// The `strmod` column that improves THAC0.
+  static const String toHitColumn = 'TO_HIT';
+
+  /// `intmod.2da`'s chance-to-learn column.
+  static const String learnSpellColumn = 'LEARN_SPELL';
+
+  @override
+  int? loreBonusFor(int ability) => rulesTables.at(
+    table: loreBonusTable,
+    row: '$ability',
+    column: loreBonusColumn,
+  );
+
+  @override
+  int? thiefSkillBonusFor({
+    required String row,
+    required int dexterity,
+    required String? raceIdentifier,
+  }) {
+    final fromDexterity = rulesTables.at(
+      table: dexteritySkillTable,
+      row: '$dexterity',
+      column: row,
+    );
+    final fromRace = raceIdentifier == null
+        ? null
+        : rulesTables.at(
+            table: racialSkillTable,
+            row: raceIdentifier,
+            column: row,
+          );
+    // ⚠️ `null` only when *neither* answered. A machine with one table read
+    // and not the other still has something true to say.
+    if (fromDexterity == null && fromRace == null) return null;
+    return (fromDexterity ?? 0) + (fromRace ?? 0);
+  }
+
+  @override
+  int? strengthToHitFor({required int strength, required int percentile}) {
+    // ⚠️ **Only a Strength of exactly 18 has a percentile.** The engine
+    // consults `strmodex.2da` nowhere else, and a percentile stored beside a
+    // 17 is a leftover rather than a modifier.
+    if (strength == 18 && percentile > 0) {
+      final exceptional = rulesTables.at(
+        table: exceptionalStrengthTable,
+        row: '$percentile',
+        column: toHitColumn,
+      );
+      if (exceptional != null) return exceptional;
+    }
+    return rulesTables.at(
+      table: strengthTable,
+      row: '$strength',
+      column: toHitColumn,
+    );
+  }
+
+  @override
+  int? chanceToLearnSpellFor(int intelligence) => rulesTables.at(
+    table: intelligenceTable,
+    row: '$intelligence',
+    column: learnSpellColumn,
+  );
+
+  /// The resref of each table [thac0For] and its neighbours read.
+  ///
+  /// Named here rather than in the repository because these are what the
+  /// *rules* know: which file answers which question is a rule, and the
+  /// repository's job is only to hand over what it read.
+  static const String thac0Table = 'thac0';
+
+  /// `lore.2da` — a `RATE` per level, per single class.
+  static const String loreTable = 'lore';
+
+  /// `thiefskl.2da` — points to spend. ⚠️ **Not `thiefscl.2da`**, which is
+  /// which skills a class may have at all.
+  static const String thiefSkillPointTable = 'thiefskl';
+
+  /// `skillbrd.2da` — a bard's Pick Pockets by level.
+  static const String bardSkillTable = 'skillbrd';
+
+  /// `skillrng.2da` — a ranger's stealth by level.
+  static const String rangerSkillTable = 'skillrng';
+
+  /// The column `thiefskl.2da` gives a first-level character.
+  static const String startingPointsColumn = 'START_POINTS';
+
+  /// `lore.2da`'s only column.
+  static const String loreRateColumn = 'RATE';
+
+  /// The value a table holds at the character's own level, with the last
+  /// column governing anything past the end.
+  ///
+  /// The tables run to 40 and repeat their tails, exactly as the saving-throw
+  /// and hit-die tables do, so out-levelling one is not a reason to answer
+  /// nothing.
+  int? _atLevel({
+    required String table,
+    required String row,
+    required int level,
+  }) {
+    if (level < 1) return null;
+    for (var each = level; each >= 1; each--) {
+      final value = rulesTables.at(
+        table: table,
+        row: row,
+        column: '$each',
+      );
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  @override
+  int? thac0For({
+    required String classIdentifier,
+    required List<int> levels,
+  }) {
+    if (levels.isEmpty) return null;
+    // ⚠️ **The highest level, and it is NOT separated.** Every multi-class NPC
+    // in the game is equal-levelled — Coran 3/3, Tiax 2/2, Quayle 2/2 — so
+    // nothing measured says whether a Fighter 3 / Mage 1 reads column 3 or
+    // column 1. The highest is what a single class reduces to, and it is the
+    // reading that cannot make a character worse than one of their halves.
+    final level = levels.reduce((a, b) => a > b ? a : b);
+    return _atLevel(table: thac0Table, row: classIdentifier, level: level);
+  }
+
+  @override
+  int? loreFor({required String classIdentifier, required List<int> levels}) {
+    final classes = classIdentifier.split('_');
+    if (classes.length != levels.length) return null;
+
+    int? best;
+    for (var i = 0; i < classes.length; i++) {
+      final rate = rulesTables.at(
+        table: loreTable,
+        row: classes[i],
+        column: loreRateColumn,
+      );
+      if (rate == null) continue;
+      final own = rate * levels[i];
+      if (best == null || own > best) best = own;
+    }
+    // ⚠️ **The highest, and the two candidate rules disagree.** The engine's
+    // own recomputation stored **3** for a Fighter/Mage/Thief at 1/1/1, where
+    // a sum gives 7 — so the engine says highest. The shipped NPC records read
+    // like sums (Coran 12, Tiax 8, Quayle 8), and cannot referee it: the same
+    // files hold a Fighter 1 with Lore 4 and a Mage 1 with Lore 0, which no
+    // rule produces. Engine outranks table outranks file, so this follows the
+    // engine and the disagreement is recorded in the findings.
+    return best;
+  }
+
+  @override
+  int? thiefSkillPointsFor(String classColumn) => rulesTables.at(
+    table: thiefSkillPointTable,
+    row: classColumn,
+    column: startingPointsColumn,
+  );
+
+  /// The one column `skillrng.2da` has, and the second skill it also fills.
+  ///
+  /// ⚠️ **A ranger's stealth is one number written twice.** The table gives
+  /// only `MOVE_SILENTLY`, and the records hold the same value in Hide in
+  /// Shadows — Minsc at level 1 is 15/15 and Kivan at 2 is 21/21. Reading the
+  /// table alone would leave every created ranger half-stealthy.
+  static const String moveSilentlyColumn = 'MOVE_SILENTLY';
+
+  /// The skill a ranger's `MOVE_SILENTLY` value is copied into.
+  static const String hideInShadowsColumn = 'HIDE_IN_SHADOWS';
+
+  /// The column `skillbrd.2da` has.
+  static const String pickPocketsColumn = 'PICK_POCKETS';
+
+  /// ⚠️ **These two tables are the other way up**: the level is the *row* and
+  /// the skill is the column, where `thac0.2da` puts the level in the column.
+  /// Reading one like the other silently answers nothing.
+  int? _byLevelRow({
+    required String table,
+    required int level,
+    required String column,
+  }) {
+    if (level < 1) return null;
+    for (var each = level; each >= 1; each--) {
+      final value = rulesTables.at(
+        table: table,
+        row: '$each',
+        column: column,
+      );
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  @override
+  Map<String, int> fixedThiefSkillsFor({
+    required String classIdentifier,
+    required List<int> levels,
+  }) {
+    final classes = classIdentifier.split('_');
+    if (classes.length != levels.length) return const {};
+
+    final skills = <String, int>{};
+    for (var i = 0; i < classes.length; i++) {
+      // ⚠️ Each read at its OWN class's level: a Fighter 3 / Ranger 1 is a
+      // level-1 ranger however good a fighter they are.
+      switch (classes[i]) {
+        case 'RANGER':
+          final stealth = _byLevelRow(
+            table: rangerSkillTable,
+            level: levels[i],
+            column: moveSilentlyColumn,
+          );
+          if (stealth != null) {
+            skills[moveSilentlyColumn] = stealth;
+            skills[hideInShadowsColumn] = stealth;
+          }
+        case 'BARD':
+          final pockets = _byLevelRow(
+            table: bardSkillTable,
+            level: levels[i],
+            column: pickPocketsColumn,
+          );
+          if (pockets != null) skills[pickPocketsColumn] = pockets;
+      }
+    }
+    return skills;
   }
 
   /// `FIGHTER_MAGE` → `['Fighter', 'Mage']`.

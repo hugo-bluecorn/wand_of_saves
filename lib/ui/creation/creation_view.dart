@@ -19,6 +19,7 @@ import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/config/router.dart';
 import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
+import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/ui/character/portrait_image.dart';
@@ -184,6 +185,14 @@ class _Controls extends ConsumerWidget {
                   in state.abilities.entries)
                 ability.stat: score,
             },
+            // What the tables say follows from those choices — saving throws,
+            // THAC0, Lore, hit points and the skills a bard or ranger gets
+            // without asking. The engine maintains none of them (D14).
+            derived: ref.read(creationProvider.notifier).derivedStats(),
+            // Allocated, not derived: the player spent these themselves, and
+            // they win over anything a table would have written.
+            allocated: state.allocatedSkillStats,
+            classLevels: state.classLevels,
             proficiencies: state.proficiencies,
             knownSpells: state.knownSpells,
             memorisedSpells: state.memorisedSpells,
@@ -263,6 +272,7 @@ class _StepBody extends ConsumerWidget {
         state: state,
         model: model,
       ),
+      CreationStep.thiefSkills => _ThiefSkills(state: state, model: model),
       CreationStep.spells => _Spells(state: state, model: model),
       CreationStep.name => _Name(state: state, onChanged: model.rename),
     };
@@ -628,6 +638,115 @@ class _AbilityRow extends StatelessWidget {
 }
 
 /// Which weapons and fighting styles the pips go into.
+/// Where a thief's starting points go.
+///
+/// ⚠️ **Sliders rather than the proficiency step's plus and minus.** A skill
+/// runs 0 to 100 in fives where a proficiency runs 0 to 3, and forty points
+/// placed a pip at a time is eight taps for one skill.
+class _ThiefSkills extends StatelessWidget {
+  const _ThiefSkills({required this.state, required this.model});
+
+  final CreationState state;
+  final CreationViewModel model;
+
+  /// What the game calls each `thiefscl.2da` row.
+  ///
+  /// Taken from `CharacterStat`, which already carries the pairing — the
+  /// character sheet and this screen name a skill the same way or one of them
+  /// is wrong.
+  static final Map<String, String> _labels = {
+    for (final stat in CharacterStat.values)
+      if (stat.thiefSkillRow case final String row) row: stat.label,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final remaining = state.thiefSkillPointsRemaining;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Thief skills', style: text.titleLarge),
+            const Spacer(),
+            Text('$remaining still to spend', style: text.titleMedium),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${state.thiefSkillPoints} points at first level.',
+          style: text.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: ListView(
+            children: [
+              for (final row in state.thiefSkillsAvailable)
+                _SkillRow(
+                  label: _labels[row] ?? row,
+                  points: state.thiefSkills[row] ?? 0,
+                  // The pool, not the skill's own ceiling: what is left plus
+                  // what is already here is everything this skill could hold.
+                  ceiling: (state.thiefSkills[row] ?? 0) + remaining,
+                  onChanged: (points) => model.allocateSkill(row, points),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One skill, its points, and a slider bounded by what is left to spend.
+class _SkillRow extends StatelessWidget {
+  const _SkillRow({
+    required this.label,
+    required this.points,
+    required this.ceiling,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int points;
+  final int ceiling;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(width: 180, child: Text(label, style: text.bodyLarge)),
+          Expanded(
+            child: Slider(
+              value: points.toDouble(),
+              max: ceiling == 0 ? 1 : ceiling.toDouble(),
+              // ⚠️ Divisions of five, which is the step the game's own screen
+              // moves in. A slider free to land on 37 offers a precision the
+              // engine does not.
+              divisions: ceiling < 5 ? null : ceiling ~/ 5,
+              label: '$points',
+              onChanged: ceiling == 0
+                  ? null
+                  : (value) => onChanged(value.round()),
+            ),
+          ),
+          SizedBox(
+            width: 48,
+            child: Text('$points', style: text.titleMedium),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Proficiencies extends StatelessWidget {
   const _Proficiencies({required this.state, required this.model});
 
@@ -757,7 +876,7 @@ class _Spells extends StatelessWidget {
     final catalogue = state.catalogue;
 
     String nameOf(String resref) {
-      final spell = catalogue.wizardSpells
+      final spell = state.spellsAvailable
           .where((s) => s.resref == resref)
           .firstOrNull;
       return catalogue.textFor(spell?.nameStrref) ?? resref;
@@ -798,7 +917,7 @@ class _Spells extends StatelessWidget {
                     Expanded(
                       child: ListView(
                         children: [
-                          for (final spell in catalogue.wizardSpells)
+                          for (final spell in state.spellsAvailable)
                             CheckboxListTile(
                               value: state.knownSpells.contains(spell.resref),
                               // ⚠️ **Leading, not the default trailing.** A

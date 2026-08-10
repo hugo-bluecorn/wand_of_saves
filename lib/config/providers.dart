@@ -46,6 +46,8 @@ import 'package:wand_of_saves/domain/document_ref.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/rules/name_tables.dart';
+import 'package:wand_of_saves/domain/rules/rules_tables.dart';
+import 'package:wand_of_saves/domain/rules/saving_throw_tables.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 
 /// Locates the game installation and save directory on this machine.
@@ -99,6 +101,22 @@ final hitDieTablesProvider = FutureProvider<HitDieTables>(
   (ref) => ref.watch(resourceRepositoryProvider).hitDieTables(),
 );
 
+/// The five saving-throw progressions, from the installation.
+///
+/// Its own query rather than a field of [hitDieTablesProvider]'s: they are
+/// different files answering different questions, and a query is the unit that
+/// gets invalidated (D12).
+final savingThrowTablesProvider = FutureProvider<SavingThrowTables>(
+  retry: neverRetry,
+  (ref) => ref.watch(resourceRepositoryProvider).savingThrowTables(),
+);
+
+/// THAC0, Lore, thief-skill points and the display modifiers.
+final rulesTablesProvider = FutureProvider<RulesTables>(
+  retry: neverRetry,
+  (ref) => ref.watch(resourceRepositoryProvider).rulesTables(),
+);
+
 /// The rules, over whatever names could be read.
 ///
 /// ⚠️ **Stays synchronous while depending on an async read**, by taking the
@@ -110,6 +128,9 @@ final gameRulesProvider = Provider<GameRules>(
   (ref) => GeneratedGameRules(
     tables: ref.watch(nameTablesProvider).value ?? NameTables.empty,
     hitDice: ref.watch(hitDieTablesProvider).value ?? HitDieTables.empty,
+    savingThrows:
+        ref.watch(savingThrowTablesProvider).value ?? SavingThrowTables.empty,
+    rulesTables: ref.watch(rulesTablesProvider).value ?? RulesTables.empty,
   ),
 );
 

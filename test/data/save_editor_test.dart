@@ -891,4 +891,59 @@ void main() {
       },
     );
   });
+
+  group('SetClassLevels', () {
+    test('writes one level per class and clears the slots past them', () {
+      // ⚠️ The clearing is the part that matters. `CHARBASE` carries its own
+      // level slots, so a single-class character built from it would keep a
+      // second and a third and read as a multi-class to anything counting
+      // filled slots.
+      final gam = openSave();
+
+      final edited = applyEdit(
+        gam,
+        SetClassLevels(creOffset: creOffsetOf(gam), levels: const [2, 1]),
+      );
+
+      expect(creatureIn(edited).levels, (2, 1, 0));
+    });
+
+    test('a single class clears both of the others', () {
+      final gam = openSave();
+
+      final edited = applyEdit(
+        gam,
+        SetClassLevels(creOffset: creOffsetOf(gam), levels: const [1]),
+      );
+
+      expect(creatureIn(edited).levels, (1, 0, 0));
+    });
+
+    test('refuses more levels than the record has slots', () {
+      final gam = openSave();
+
+      expect(
+        () => applyEdit(
+          gam,
+          SetClassLevels(
+            creOffset: creOffsetOf(gam),
+            levels: const [1, 1, 1, 1],
+          ),
+        ),
+        throwsA(isA<InvalidEditException>()),
+      );
+    });
+
+    test('refuses a level the field cannot hold', () {
+      final gam = openSave();
+
+      expect(
+        () => applyEdit(
+          gam,
+          SetClassLevels(creOffset: creOffsetOf(gam), levels: const [999]),
+        ),
+        throwsA(isA<InvalidEditException>()),
+      );
+    });
+  });
 }

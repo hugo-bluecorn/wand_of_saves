@@ -26,6 +26,13 @@ class SpellChoiceMapper extends ClassMapperBase<SpellChoice> {
   static const Field<SpellChoice, String> _f$resref = Field('resref', _$resref);
   static int _$school(SpellChoice v) => v.school;
   static const Field<SpellChoice, int> _f$school = Field('school', _$school);
+  static Set<int> _$excludedSchools(SpellChoice v) => v.excludedSchools;
+  static const Field<SpellChoice, Set<int>> _f$excludedSchools = Field(
+    'excludedSchools',
+    _$excludedSchools,
+    opt: true,
+    def: const {},
+  );
   static int? _$nameStrref(SpellChoice v) => v.nameStrref;
   static const Field<SpellChoice, int> _f$nameStrref = Field(
     'nameStrref',
@@ -43,6 +50,7 @@ class SpellChoiceMapper extends ClassMapperBase<SpellChoice> {
   final MappableFields<SpellChoice> fields = const {
     #resref: _f$resref,
     #school: _f$school,
+    #excludedSchools: _f$excludedSchools,
     #nameStrref: _f$nameStrref,
     #descriptionStrref: _f$descriptionStrref,
   };
@@ -51,6 +59,7 @@ class SpellChoiceMapper extends ClassMapperBase<SpellChoice> {
     return SpellChoice(
       resref: data.dec(_f$resref),
       school: data.dec(_f$school),
+      excludedSchools: data.dec(_f$excludedSchools),
       nameStrref: data.dec(_f$nameStrref),
       descriptionStrref: data.dec(_f$descriptionStrref),
     );
@@ -119,6 +128,7 @@ abstract class SpellChoiceCopyWith<$R, $In extends SpellChoice, $Out>
   $R call({
     String? resref,
     int? school,
+    Set<int>? excludedSchools,
     int? nameStrref,
     int? descriptionStrref,
   });
@@ -137,12 +147,14 @@ class _SpellChoiceCopyWithImpl<$R, $Out>
   $R call({
     String? resref,
     int? school,
+    Set<int>? excludedSchools,
     Object? nameStrref = $none,
     Object? descriptionStrref = $none,
   }) => $apply(
     FieldCopyWithData({
       if (resref != null) #resref: resref,
       if (school != null) #school: school,
+      if (excludedSchools != null) #excludedSchools: excludedSchools,
       if (nameStrref != $none) #nameStrref: nameStrref,
       if (descriptionStrref != $none) #descriptionStrref: descriptionStrref,
     }),
@@ -151,6 +163,7 @@ class _SpellChoiceCopyWithImpl<$R, $Out>
   SpellChoice $make(CopyWithData data) => SpellChoice(
     resref: data.get(#resref, or: $value.resref),
     school: data.get(#school, or: $value.school),
+    excludedSchools: data.get(#excludedSchools, or: $value.excludedSchools),
     nameStrref: data.get(#nameStrref, or: $value.nameStrref),
     descriptionStrref: data.get(
       #descriptionStrref,
@@ -337,6 +350,7 @@ class CreationCatalogueMapper extends ClassMapperBase<CreationCatalogue> {
       CreationChoiceMapper.ensureInitialized();
       SpellChoiceMapper.ensureInitialized();
       ProficiencyCatalogueMapper.ensureInitialized();
+      SkillCatalogueMapper.ensureInitialized();
     }
     return _instance!;
   }
@@ -459,6 +473,25 @@ class CreationCatalogueMapper extends ClassMapperBase<CreationCatalogue> {
         opt: true,
         def: ProficiencyCatalogue.empty,
       );
+  static SkillCatalogue _$skills(CreationCatalogue v) => v.skills;
+  static const Field<CreationCatalogue, SkillCatalogue> _f$skills = Field(
+    'skills',
+    _$skills,
+    opt: true,
+    def: SkillCatalogue.empty,
+  );
+  static Map<String, int> _$thiefSkillPointsByClass(CreationCatalogue v) =>
+      v.thiefSkillPointsByClass;
+  static const Field<CreationCatalogue, Map<String, int>>
+  _f$thiefSkillPointsByClass = Field(
+    'thiefSkillPointsByClass',
+    _$thiefSkillPointsByClass,
+    opt: true,
+    def: const {},
+  );
+  static Map<String, int> _$schoolByKit(CreationCatalogue v) => v.schoolByKit;
+  static const Field<CreationCatalogue, Map<String, int>> _f$schoolByKit =
+      Field('schoolByKit', _$schoolByKit, opt: true, def: const {});
   static Map<int, String> _$textByStrref(CreationCatalogue v) => v.textByStrref;
   static const Field<CreationCatalogue, Map<int, String>> _f$textByStrref =
       Field('textByStrref', _$textByStrref, opt: true, def: const {});
@@ -481,6 +514,9 @@ class CreationCatalogueMapper extends ClassMapperBase<CreationCatalogue> {
     #sorcererSpellsKnown: _f$sorcererSpellsKnown,
     #bardSpellsMemorisable: _f$bardSpellsMemorisable,
     #proficiencies: _f$proficiencies,
+    #skills: _f$skills,
+    #thiefSkillPointsByClass: _f$thiefSkillPointsByClass,
+    #schoolByKit: _f$schoolByKit,
     #textByStrref: _f$textByStrref,
   };
 
@@ -502,6 +538,9 @@ class CreationCatalogueMapper extends ClassMapperBase<CreationCatalogue> {
       sorcererSpellsKnown: data.dec(_f$sorcererSpellsKnown),
       bardSpellsMemorisable: data.dec(_f$bardSpellsMemorisable),
       proficiencies: data.dec(_f$proficiencies),
+      skills: data.dec(_f$skills),
+      thiefSkillPointsByClass: data.dec(_f$thiefSkillPointsByClass),
+      schoolByKit: data.dec(_f$schoolByKit),
       textByStrref: data.dec(_f$textByStrref),
     );
   }
@@ -639,6 +678,10 @@ abstract class CreationCatalogueCopyWith<
   get wizardSpells;
   ProficiencyCatalogueCopyWith<$R, ProficiencyCatalogue, ProficiencyCatalogue>
   get proficiencies;
+  SkillCatalogueCopyWith<$R, SkillCatalogue, SkillCatalogue> get skills;
+  MapCopyWith<$R, String, int, ObjectCopyWith<$R, int, int>>
+  get thiefSkillPointsByClass;
+  MapCopyWith<$R, String, int, ObjectCopyWith<$R, int, int>> get schoolByKit;
   MapCopyWith<$R, int, String, ObjectCopyWith<$R, String, String>>
   get textByStrref;
   $R call({
@@ -658,6 +701,9 @@ abstract class CreationCatalogueCopyWith<
     int? sorcererSpellsKnown,
     int? bardSpellsMemorisable,
     ProficiencyCatalogue? proficiencies,
+    SkillCatalogue? skills,
+    Map<String, int>? thiefSkillPointsByClass,
+    Map<String, int>? schoolByKit,
     Map<int, String>? textByStrref,
   });
   CreationCatalogueCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(
@@ -793,6 +839,23 @@ class _CreationCatalogueCopyWithImpl<$R, $Out>
   get proficiencies =>
       $value.proficiencies.copyWith.$chain((v) => call(proficiencies: v));
   @override
+  SkillCatalogueCopyWith<$R, SkillCatalogue, SkillCatalogue> get skills =>
+      $value.skills.copyWith.$chain((v) => call(skills: v));
+  @override
+  MapCopyWith<$R, String, int, ObjectCopyWith<$R, int, int>>
+  get thiefSkillPointsByClass => MapCopyWith(
+    $value.thiefSkillPointsByClass,
+    (v, t) => ObjectCopyWith(v, $identity, t),
+    (v) => call(thiefSkillPointsByClass: v),
+  );
+  @override
+  MapCopyWith<$R, String, int, ObjectCopyWith<$R, int, int>> get schoolByKit =>
+      MapCopyWith(
+        $value.schoolByKit,
+        (v, t) => ObjectCopyWith(v, $identity, t),
+        (v) => call(schoolByKit: v),
+      );
+  @override
   MapCopyWith<$R, int, String, ObjectCopyWith<$R, String, String>>
   get textByStrref => MapCopyWith(
     $value.textByStrref,
@@ -817,6 +880,9 @@ class _CreationCatalogueCopyWithImpl<$R, $Out>
     int? sorcererSpellsKnown,
     int? bardSpellsMemorisable,
     ProficiencyCatalogue? proficiencies,
+    SkillCatalogue? skills,
+    Map<String, int>? thiefSkillPointsByClass,
+    Map<String, int>? schoolByKit,
     Map<int, String>? textByStrref,
   }) => $apply(
     FieldCopyWithData({
@@ -844,6 +910,10 @@ class _CreationCatalogueCopyWithImpl<$R, $Out>
       if (bardSpellsMemorisable != null)
         #bardSpellsMemorisable: bardSpellsMemorisable,
       if (proficiencies != null) #proficiencies: proficiencies,
+      if (skills != null) #skills: skills,
+      if (thiefSkillPointsByClass != null)
+        #thiefSkillPointsByClass: thiefSkillPointsByClass,
+      if (schoolByKit != null) #schoolByKit: schoolByKit,
       if (textByStrref != null) #textByStrref: textByStrref,
     }),
   );
@@ -895,6 +965,12 @@ class _CreationCatalogueCopyWithImpl<$R, $Out>
       or: $value.bardSpellsMemorisable,
     ),
     proficiencies: data.get(#proficiencies, or: $value.proficiencies),
+    skills: data.get(#skills, or: $value.skills),
+    thiefSkillPointsByClass: data.get(
+      #thiefSkillPointsByClass,
+      or: $value.thiefSkillPointsByClass,
+    ),
+    schoolByKit: data.get(#schoolByKit, or: $value.schoolByKit),
     textByStrref: data.get(#textByStrref, or: $value.textByStrref),
   );
 

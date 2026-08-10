@@ -22,6 +22,8 @@ import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
+import 'package:wand_of_saves/domain/rules/rules_tables.dart';
+import 'package:wand_of_saves/domain/rules/saving_throw_tables.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 /// Source of truth for the rules tables that live inside the game's archives.
@@ -140,6 +142,39 @@ class ResourceRepository {
     return HitDieTables(tableByClass: tableByClass, rowsByTable: rowsByTable);
   }
 
+  /// The five saving-throw progressions.
+  ///
+  /// ⚠️ **D13, and unlike the hit dice there is no index table to follow.**
+  /// `hpclass.2da` names the table for each class; nothing does that for
+  /// saving throws, so the five files are read by name and the class-to-table
+  /// mapping is a written rule in `GeneratedGameRules.savingThrowTables`.
+  ///
+  /// No strrefs anywhere, so this comes back finished — the same as
+  /// [thiefSkills]. Not cached here; see [proficiencies].
+  Future<SavingThrowTables> savingThrowTables() async {
+    final tables = await Future.wait(savingThrowTableNames.map(_table));
+    return savingThrowTablesFrom({
+      for (var i = 0; i < savingThrowTableNames.length; i++)
+        savingThrowTableNames[i]: tables[i],
+    });
+  }
+
+  /// The game's other numeric rules tables, by resref.
+  ///
+  /// One reader for all of them because they are one shape — a row, a column
+  /// and a number. Which row and which column answers which question is a rule
+  /// and lives in `GameRules`; this only hands over what the files hold.
+  ///
+  /// No strrefs anywhere, so this comes back finished. Not cached here; see
+  /// [proficiencies].
+  Future<RulesTables> rulesTables() async {
+    final tables = await Future.wait(numericRulesTables.map(_table));
+    return rulesTablesFrom({
+      for (var i = 0; i < numericRulesTables.length; i++)
+        numericRulesTables[i]: tables[i],
+    });
+  }
+
   /// What the installation calls races, classes and kits — as **strrefs**.
   ///
   /// ⚠️ **D13.** These names used to be derived from the IDS identifiers inside
@@ -174,12 +209,21 @@ class ResourceRepository {
               if (strref >= 0) id: strref,
       },
       // Only the plain-class rows — a kit row shares its `CLASSID`.
+      //
+      // ⚠️ **And the FALLEN rows share everything.** `FALLEN_CLERIC` carries
+      // `CLASSID 3` and `KITID 16384` exactly as `CLERIC` does, and it comes
+      // later in the file — so keying on those two alone let it win, and the
+      // creation screen offered **"Fallen Cleric"** where the game draws
+      // "Cleric". The same displaced-row trap `IdsMap` and `Table2da` were
+      // both fixed for. The table's own `FALLEN` column is the discriminator.
       classes: {
         for (final row in classText.rows.keys)
           if (classText.number(row, 'KITID') == trueClassKitId)
-            if (classText.number(row, 'CLASSID') case final int id)
-              if (classText.number(row, classNameColumn) case final int strref)
-                if (strref >= 0) id: strref,
+            if (classText.number(row, fallenColumn) != fallenClass)
+              if (classText.number(row, 'CLASSID') case final int id)
+                if (classText.number(row, classNameColumn)
+                    case final int strref)
+                  if (strref >= 0) id: strref,
       },
       kits: {
         for (final row in kits.rows.keys)
@@ -222,6 +266,9 @@ class ResourceRepository {
       bardMemorisation: tables[11],
       raceAbilityRequirements: tables[12],
       classAbilityRequirements: tables[13],
+      thiefSkillPoints: tables[14],
+      thiefSkillClasses: tables[15],
+      magicSchools: tables[16],
       wizardSpells: await wizardSpells(level: 1),
       proficiencies: await proficiencies(),
       rules: rules,
@@ -276,6 +323,10 @@ class ResourceRepository {
           SpellChoice(
             resref: resref.toUpperCase(),
             school: spell.school,
+            excludedSchools: {
+              for (var each = 1; each <= Spl.lastSchoolExcluded; each++)
+                if (spell.excludesSpecialist(each)) each,
+            },
             nameStrref: strref,
             descriptionStrref: spell.descriptionStrref,
           ),
@@ -519,7 +570,25 @@ const List<String> creationTables = [
   bardMemorisationTable,
   raceAbilityTable,
   classAbilityTable,
+  // ⚠️ **Two tables one letter apart**, and creation needs both: `thiefskl`
+  // says how many points there are to spend and `thiefscl` which skills they
+  // may go into. Reading either alone gives a Thief 40 points and nowhere to
+  // put them, or seven skills and nothing to spend.
+  thiefSkillPointTable,
+  thiefSkillTable,
+  magicSchoolTable,
 ];
+
+/// The magic schools, in the order that **is** their numbering.
+///
+/// ⚠️ **The row's position is the school number**, and the file has no column
+/// carrying it — `RES_REF` is the strref of the message shown when magic of
+/// that school is dispelled. `None` is row 0, `ABJURER` is 1, and a spell's
+/// `SPL` header stores exactly these numbers.
+const String magicSchoolTable = 'mschool';
+
+/// How many thief-skill points each class and kit starts with.
+const String thiefSkillPointTable = 'thiefskl';
 
 /// How many proficiency pips each class has at first level, and its rate after.
 ///
@@ -587,6 +656,54 @@ const String raceTextTable = 'racetext';
 /// What each race adds to and takes from the ability scores.
 const String racialAdjustmentTable = 'abracead';
 
+/// The five saving-throw tables, one per class group.
+///
+/// ⚠️ **`savename.2da` is not one of them.** It is the list of savegame *slot*
+/// names — the near-name trap this project has walked into twice, with
+/// `thiefskl`/`thiefscl` and `profs`/`profsmax`. `savecng` and `savecndh` are
+/// not saving throws either.
+/// ⚠️ **Plus the two racial Constitution bonuses**, which are the same shape
+/// and are read together because a derivation without them is wrong rather
+/// than merely incomplete: a dwarf, gnome or halfling improves three of the
+/// five by up to five points.
+const List<String> savingThrowTableNames = [
+  'savewar',
+  'savewiz',
+  'saveprs',
+  'saverog',
+  'savemonk',
+  'savecndh',
+  'savecng',
+];
+
+/// Every numeric rules table that is a plain row-by-column grid.
+///
+/// Two groups, and both are read together because they are one mechanism:
+///
+/// - **What a character's stored values should be** — `thac0`, `lore`,
+///   `thiefskl` for the points a thief spends, and `skillbrd` and `skillrng`
+///   for the two skills that are fixed by level rather than allocated.
+/// - **What the game adds before showing them** — `lorebon` by Intelligence
+///   and Wisdom, `skilldex` by Dexterity, `skillrac` by race, `strmod` and
+///   `strmodex` by Strength, `intmod` for the chance to learn a spell.
+///
+/// ⚠️ **Read the file before believing the name**, which this list has already
+/// paid for twice: `thiefskl` is the points and `thiefscl` is which skills a
+/// class may have; `savename` is savegame slots and not a saving throw at all.
+const List<String> numericRulesTables = [
+  'thac0',
+  'lore',
+  'thiefskl',
+  'skillbrd',
+  'skillrng',
+  'lorebon',
+  'skilldex',
+  'skillrac',
+  'strmod',
+  'strmodex',
+  'intmod',
+];
+
 /// Which hit-die table each class and kit uses.
 ///
 /// ⚠️ **Kits are listed individually and do not follow their class** —
@@ -601,6 +718,15 @@ const String tableAbsent = '*';
 
 /// `racetext.2da`'s capitalised name column — `Half-Orc`, not `half-orc`.
 const String raceNameColumn = 'UPPERCASE';
+
+/// `clastext.2da`'s column marking a class that has fallen from grace.
+///
+/// ⚠️ **A fallen row is a duplicate of its class in every other column**, so
+/// nothing but this tells them apart.
+const String fallenColumn = 'FALLEN';
+
+/// What [fallenColumn] holds for a row that is not a real class choice.
+const int fallenClass = 1;
 
 /// `clastext.2da`'s display-name column — `Cleric / Ranger`, separator and all.
 ///
@@ -667,6 +793,71 @@ List<_ClassColumn> _classColumns(
 String? _cell(Table2da table, TableRow row, int at) {
   if (at < 0) return null;
   return at < row.cells.length ? row.cells[at] : table.defaultValue;
+}
+
+/// [SavingThrowTables] from the parsed `save…2da` files, keyed by resref.
+///
+/// A free function for the same reason [proficienciesFrom] is one: it is pure,
+/// so it is testable without an installation.
+///
+/// ⚠️ **The level columns are read by name, not by position.** They are headed
+/// `1` to `40`, and taking a row's cells in file order would work right up
+/// until a table with an extra leading column, at which point every character
+/// in the game gets the wrong saving throws by one level.
+SavingThrowTables savingThrowTablesFrom(Map<String, Table2da> tables) {
+  final rowsByTable = <String, Map<String, List<int>>>{};
+
+  for (final MapEntry(key: name, value: table) in tables.entries) {
+    final rows = <String, List<int>>{};
+    for (final row in SavingThrowTables.rows) {
+      final values = <int>[];
+      for (final column in table.columns) {
+        final value = table.number(row, column);
+        // A row that stops answering has reached the end of the table; a row
+        // that never answered is not in this file at all.
+        if (value == null) break;
+        values.add(value);
+      }
+      if (values.isNotEmpty) rows[row] = values;
+    }
+    // All five or none: a half-read table would answer some categories and
+    // silently drop others, which is worse than saying the file is not there.
+    if (rows.length == SavingThrowTables.rows.length) {
+      rowsByTable[name.toUpperCase()] = rows;
+    }
+  }
+
+  return SavingThrowTables(rowsByTable: rowsByTable);
+}
+
+/// [RulesTables] from parsed 2DAs, keyed by resref.
+///
+/// Pure, so it is testable without an installation — the same reason
+/// [proficienciesFrom] and [savingThrowTablesFrom] are free functions.
+///
+/// ⚠️ **Walks `allRows`, not `rows`.** A repeated row label is real data in
+/// these files, as `weapprof.2da` proved; the first one wins here, which keeps
+/// the reading the same as `Table2da`'s own.
+RulesTables rulesTablesFrom(Map<String, Table2da> tables) {
+  final byName = <String, Map<String, Map<String, int>>>{};
+
+  for (final MapEntry(key: name, value: table) in tables.entries) {
+    final rows = <String, Map<String, int>>{};
+    for (final row in table.allRows) {
+      final cells = <String, int>{};
+      for (var i = 0; i < table.columns.length; i++) {
+        if (int.tryParse(_cell(table, row, i) ?? '') case final int value) {
+          cells[table.columns[i]] = value;
+        }
+      }
+      if (cells.isNotEmpty) {
+        rows.putIfAbsent(row.label.toUpperCase(), () => cells);
+      }
+    }
+    if (rows.isNotEmpty) byName[name.toUpperCase()] = rows;
+  }
+
+  return RulesTables(byName: byName);
 }
 
 /// [SkillCatalogue] from a parsed `thiefscl.2da`.

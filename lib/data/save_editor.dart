@@ -240,6 +240,43 @@ T applyCharacterEdit<T extends CreatureDocument<T>>(
         value: pips,
       );
     }(),
+  SetClassLevels(:final creOffset, :final levels) => () {
+    // ⚠️ Every slot is written, not only the ones in use. A record whose
+    // second slot still holds the template's value reads as a multi-class the
+    // character is not, and `classCount` would then disagree with the bytes.
+    const fields = [
+      CreHeaderField.levelFirstClass,
+      CreHeaderField.levelSecondClass,
+      CreHeaderField.levelThirdClass,
+    ];
+    if (levels.length > fields.length) {
+      throw InvalidEditException(
+        what: 'the class levels',
+        value: levels.length,
+        minimum: 0,
+        maximum: fields.length,
+      );
+    }
+
+    var updated = document;
+    for (var slot = 0; slot < fields.length; slot++) {
+      final level = slot < levels.length ? levels[slot] : 0;
+      if (!fields[slot].holds(level)) {
+        throw InvalidEditException(
+          what: 'a class level',
+          value: level,
+          minimum: fields[slot].minimum,
+          maximum: fields[slot].maximum,
+        );
+      }
+      updated = updated.withCreatureField(
+        creOffset: creOffset,
+        field: fields[slot],
+        value: level,
+      );
+    }
+    return updated;
+  }(),
   SetPortrait(:final creOffset, :final baseName) => () {
     // ⚠️ Checked here rather than left to the codec, because the codec sees
     // the *suffixed* resref and would report a limit of 8 for a name the

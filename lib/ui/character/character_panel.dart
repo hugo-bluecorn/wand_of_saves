@@ -49,6 +49,7 @@ class CharacterPanel extends ConsumerWidget {
     this.proficiencies = ProficiencyCatalogue.empty,
     this.skills = SkillCatalogue.empty,
     this.reputation,
+    this.warnsAboutImport = false,
     super.key,
   });
 
@@ -84,6 +85,15 @@ class CharacterPanel extends ConsumerWidget {
   /// exported character has no party at all, so the row is absent there rather
   /// than showing a number the game would never print.
   final double? reputation;
+
+  /// Whether to say which fields the engine discards when this is imported.
+  ///
+  /// ⚠️ **True for a character file, false for a savegame, and D14 is why.**
+  /// The measurement was made across the *import* boundary: gold and fatigue
+  /// were reset when a `.chr` was taken into a new game. Editing gold in a
+  /// running save works and has been proven in game, so the same warning on a
+  /// savegame would be false.
+  final bool warnsAboutImport;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -147,6 +157,7 @@ class CharacterPanel extends ConsumerWidget {
           child: TabBarView(
             children: [
               _CharacterFacts(
+                warnsAboutImport: warnsAboutImport,
                 character: character,
                 sheet: sheet,
                 reputation: reputation,
@@ -279,12 +290,22 @@ class _CharacterFacts extends StatelessWidget {
     required this.sheet,
     required this.reputation,
     required this.onCommitted,
+    this.warnsAboutImport = false,
   });
 
   final Character character;
   final CharacterSheet sheet;
   final double? reputation;
   final void Function(CharacterStat, int) onCommitted;
+  final bool warnsAboutImport;
+
+  /// What to add to a hint for a field the engine rewrites on import.
+  ///
+  /// Empty on a savegame, where the claim would be false.
+  String get _importWarning => warnsAboutImport
+      ? ' ⚠️ The engine resets this when the character is imported into a new '
+            'game, so an edit here will not survive that.'
+      : '';
 
   @override
   Widget build(BuildContext context) {
@@ -342,7 +363,7 @@ class _CharacterFacts extends StatelessWidget {
               onCommitted: onCommitted,
               hint:
                   'Gold on this character. The shared party purse is stored '
-                  'separately and is not this number.',
+                  'separately and is not this number.$_importWarning',
             ),
             // Absent rather than blank when there is no party: an exported
             // character has no reputation the game would print.
@@ -374,6 +395,9 @@ class _CharacterFacts extends StatelessWidget {
               value: character.fatigue,
               label: CharacterStat.fatigue.label,
               onCommitted: onCommitted,
+              hint:
+                  'How tired the character is, which the game raises as they '
+                  'travel.$_importWarning',
             ),
             _StatField(
               character: character,
@@ -528,9 +552,84 @@ class _Skills extends StatelessWidget {
               ),
           ],
         ),
+        // ⚠️ **What the game will actually print**, beside the stored values
+        // above. Every number here was confirmed against the D14 probe's own
+        // record screen — seven skills, Lore and the chance to learn a spell,
+        // all exact. Read-only throughout: the engine adds these at display
+        // and recomputing the stored value would double-count them.
+        _StatGroup(
+          title: 'What the game shows',
+          children: [
+            if (sheet.loreInGame != null)
+              _ReadOnlyStat(
+                label: 'Lore',
+                value: sheet.loreInGame.toString(),
+                hint:
+                    'Stored ${character.thiefSkills.lore}, plus what '
+                    'Intelligence and Wisdom each add. The engine consults '
+                    'lorebon.2da twice, once per ability.',
+              ),
+            // ⚠️ **Only the skills this class actually has.** The bonuses are
+            // real for anyone — an elf gets +20 Pick Pockets from their race
+            // whatever their class — but the game draws no thief skills at all
+            // for a Fighter/Mage, so showing a computed 35 would be inventing
+            // a number the player will never see. Same rule as the editable
+            // group: allowed by the table, or already holding something.
+            for (final stat in _shownSkills)
+              if (sheet.allows(stat) || _storedFor(character, stat) != 0)
+                if (sheet.thiefSkillInGame(stat) case final int shown)
+                  _ReadOnlyStat(
+                    label: stat.label,
+                    value: shown.toString(),
+                    hint:
+                        'The allocated value plus what Dexterity and this '
+                        'character’s race add — skilldex.2da and skillrac.2da.',
+                  ),
+            if (sheet.chanceToLearnSpell case final int chance)
+              _ReadOnlyStat(
+                label: 'Chance to learn a spell',
+                value: '$chance%',
+                hint:
+                    'From Intelligence '
+                    '${character.abilities.intelligence}, by intmod.2da. The '
+                    'game prints this on the spellbook screen.',
+              ),
+          ],
+        ),
       ],
     );
   }
+
+  /// The skills the display group shows, in the record's own order.
+  ///
+  /// Lore is not among them: it takes its bonus from two *abilities* rather
+  /// than from Dexterity and race, so it has a row of its own above.
+  /// The stored value behind [stat], so a skill the class cannot allocate is
+  /// still shown when the record holds one — an anomaly you cannot see is one
+  /// you cannot correct.
+  static int _storedFor(Character character, CharacterStat stat) {
+    final skills = character.thiefSkills;
+    return switch (stat) {
+      CharacterStat.pickPockets => skills.pickPockets,
+      CharacterStat.lockpicking => skills.lockpicking,
+      CharacterStat.findTraps => skills.findTraps,
+      CharacterStat.moveSilently => skills.moveSilently,
+      CharacterStat.hideInShadows => skills.hideInShadows,
+      CharacterStat.detectIllusion => skills.detectIllusion,
+      CharacterStat.setTraps => skills.setTraps,
+      _ => 0,
+    };
+  }
+
+  static const List<CharacterStat> _shownSkills = [
+    CharacterStat.lockpicking,
+    CharacterStat.findTraps,
+    CharacterStat.pickPockets,
+    CharacterStat.moveSilently,
+    CharacterStat.hideInShadows,
+    CharacterStat.detectIllusion,
+    CharacterStat.setTraps,
+  ];
 
   /// The skills a character spends points on, in the record's own order.
   List<(CharacterStat, int)> _allocated(Character character) {
@@ -591,12 +690,19 @@ class _Combat extends StatelessWidget {
               onCommitted: onCommitted,
               hint:
                   'The game calls this "Base THAC0" and shows a second, lower '
-                  'number beside it — Strength, Dexterity and weapon '
-                  'proficiencies are applied before display, and a Necromancer '
-                  'with 20 here reads 20 while a thief with 20 reads 18. '
-                  'Working the modified value out needs proficiency data this '
-                  'app does not read yet, so only the stored base is shown.',
+                  'number beside it — Strength is applied before display, and '
+                  'weapon proficiencies move it further still.',
             ),
+            if (sheet.thac0InGame != null)
+              _ReadOnlyStat(
+                label: 'THAC0 (in game)',
+                value: sheet.thac0InGame.toString(),
+                hint:
+                    'Base THAC0 less ${sheet.strengthToHit} from Strength. '
+                    'The engine prints this as "Strength Modification". A '
+                    'weapon this character is proficient with moves it '
+                    'further, and that needs the item records.',
+              ),
             _StatField(
               character: character,
               sheet: sheet,
@@ -630,6 +736,17 @@ class _Combat extends StatelessWidget {
                     'Dexterity ${character.abilities.dexterity}. Equipment '
                     'moves it further, and that needs the item records.',
               ),
+            // ⚠️ **Attacks per round is not a count**, so the stored byte and
+            // what the game draws are different numbers: 6 to 10 are halves.
+            // Both are shown, the same way armour class shows its two.
+            _ReadOnlyStat(
+              label: 'Attacks per round (in game)',
+              value: sheet.attacksPerRound,
+              hint:
+                  'The record stores ${character.numberOfAttacks}. Values 0 '
+                  'to 5 are whole attacks and 6 to 10 are halves, so the game '
+                  'draws this as ${sheet.attacksPerRound}.',
+            ),
             for (final (stat, value) in _fighting(character))
               _StatField(
                 character: character,

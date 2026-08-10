@@ -316,4 +316,72 @@ STEALTH         0    0       0     0    0      0            0     0
       );
     });
   });
+
+  group('savingThrowTablesFrom', () {
+    /// `savewar.2da`'s first three levels, in the real file's own shape.
+    const savewar = '''
+2DA V1.0
+0
+                        1   2   3
+DEATH                   14  14  13
+WANDS                   16  16  15
+POLY                    15  15  14
+BREATH                  17  17  16
+SPELL                   17  17  16
+''';
+
+    /// `savewiz.2da`'s, which differ in every category but DEATH.
+    const savewiz = '''
+2DA V1.0
+0
+       1      2      3
+DEATH  14     14     14
+WANDS  11     11     11
+POLY   13     13     13
+BREATH 15     15     15
+SPELL  12     12     12
+''';
+
+    test('a table becomes one list per category, level 1 first', () {
+      final tables = savingThrowTablesFrom({
+        'savewar': Table2da.parse(savewar),
+      });
+
+      expect(tables.rowsByTable['SAVEWAR']?['DEATH'], [14, 14, 13]);
+      expect(tables.rowsByTable['SAVEWAR']?['SPELL'], [17, 17, 16]);
+    });
+
+    test('the levels come back in column order, not in file order', () {
+      // The columns are numbered, and a map's iteration order is not a
+      // promise. Reading them as `1`, `2`, `3` is what makes the list index
+      // the level.
+      final tables = savingThrowTablesFrom({
+        'savewiz': Table2da.parse(savewiz),
+      });
+
+      expect(tables.at(table: 'SAVEWIZ', level: 1)?.wands, 11);
+      expect(tables.at(table: 'SAVEWIZ', level: 3)?.spells, 12);
+    });
+
+    test('the table name is uppercased, whatever the resref was', () {
+      final tables = savingThrowTablesFrom({
+        'savewar': Table2da.parse(savewar),
+      });
+
+      expect(tables.rowsByTable.keys, contains('SAVEWAR'));
+    });
+
+    test('a table that would not parse is left out rather than half-read', () {
+      final tables = savingThrowTablesFrom({
+        'savewar': Table2da.parse(savewar),
+        'savewiz': Table2da.parse('not a 2da'),
+      });
+
+      expect(tables.rowsByTable.keys, ['SAVEWAR']);
+    });
+
+    test('nothing read is empty, not an exception', () {
+      expect(savingThrowTablesFrom(const {}).isEmpty, isTrue);
+    });
+  });
 }

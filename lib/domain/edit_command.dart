@@ -166,6 +166,41 @@ final class SetProficiency extends CharacterEditCommand {
   String get label => 'Set proficiency $proficiencyId to $pips';
 }
 
+/// Sets the character's level in each of their classes.
+///
+/// **Its own command rather than three [CharacterStat] entries**, because it is
+/// one fact about a character rather than three numbers: a Fighter/Mage has two
+/// levels and a Thief has one, and the slots past the class count are not
+/// smaller levels but *absent* ones.
+///
+/// ⚠️ **The bytes cannot say how many slots are in use.** A savegame leaves the
+/// unused ones holding `1` in every shipped NPC record and `0` in the player's
+/// own, so `CLASS.IDS` is what the count comes from. This command is given the
+/// levels already resolved, and writes `0` to every slot beyond them — which is
+/// what the protagonist's own record holds.
+///
+/// Fixed-width: three single bytes, nothing resizes.
+final class SetClassLevels extends CharacterEditCommand {
+  /// Sets the creature at [creOffset] to [levels], one per class.
+  const SetClassLevels({required this.creOffset, required this.levels});
+
+  @override
+  final int creOffset;
+
+  /// The level in each class, in `CLASS.IDS` order — `[2, 1]` is a Fighter 2 /
+  /// Mage 1. Anything past the end is written as `0`.
+  final List<int> levels;
+
+  /// How many level slots the record has.
+  ///
+  /// Three, and it is a fact about the format rather than about any character:
+  /// `CLASS.IDS` names no class with four parts.
+  static const int slots = 3;
+
+  @override
+  String get label => 'Set the class levels to ${levels.join('/')}';
+}
+
 /// Sets which portrait a character uses.
 ///
 /// **The first edit that writes text rather than a number.** A portrait is

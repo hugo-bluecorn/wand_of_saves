@@ -258,6 +258,9 @@ CreationCatalogue buildCatalogue() => creationCatalogueFrom(
   bardMemorisation: Table2da.parse(_bardMemorisation),
   raceAbilityRequirements: Table2da.parse(_raceAbilityRequirements),
   classAbilityRequirements: Table2da.parse(_classAbilityRequirements),
+  thiefSkillPoints: Table2da.parse(_thiefSkillPoints),
+  thiefSkillClasses: Table2da.parse(_thiefSkillClasses),
+  magicSchools: Table2da.parse(_magicSchools),
   wizardSpells: _wizardSpells,
   proficiencies: ProficiencyCatalogue.empty,
   rules: const GeneratedGameRules(),
@@ -659,7 +662,47 @@ CreationCatalogue _emptyCatalogue() => creationCatalogueFrom(
   bardMemorisation: Table2da.parse(''),
   raceAbilityRequirements: Table2da.parse(''),
   classAbilityRequirements: Table2da.parse(''),
+  thiefSkillPoints: Table2da.parse(''),
+  thiefSkillClasses: Table2da.parse(''),
+  magicSchools: Table2da.parse(''),
   wizardSpells: const [],
   proficiencies: ProficiencyCatalogue.empty,
   rules: const GeneratedGameRules(),
 );
+
+/// `thiefskl.2da`: the points each class spends at first level.
+const String _thiefSkillPoints = '''
+2DA V1.0
+0
+              START_POINTS  LEVEL_POINTS
+THIEF         40            25
+FIGHTER_THIEF 40            25
+MONK          0             10
+''';
+
+/// `thiefscl.2da`: which skills each class may put them into.
+const String _thiefSkillClasses = '''
+2DA V1.0
+0
+                THIEF FIGHTER MONK
+PICK_POCKETS    100   0       0
+OPEN_LOCKS      100   0       0
+FIND_TRAPS      100   0       0
+''';
+
+/// `mschool.2da`: the row's position **is** the school number.
+const String _magicSchools = '''
+2DA V1.0
+4294967296
+            RES_REF
+None        4294967296
+ABJURER     8933
+CONJURER    8935
+DIVINER     8937
+ENCHANTER   18863
+ILLUSIONIST 20836
+INVOKER     24274
+NECROMANCER 27977
+TRANSMUTER  27978
+GENERALIST  27979
+''';

@@ -84,6 +84,10 @@ class CharacterFileView extends ConsumerWidget {
           data: (found) => DefaultTabController(
             length: CharacterPanel.tabCount,
             child: CharacterPanel(
+              // ⚠️ A `.chr` is imported into a new game, and D14 measured
+              // which fields that discards. A savegame is not, so the same
+              // warning there would be false.
+              warnsAboutImport: true,
               character: found.character,
               proficiencies: found.proficiencies,
               skills: found.skills,

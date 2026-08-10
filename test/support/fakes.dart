@@ -39,6 +39,8 @@ import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/resistances.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
+import 'package:wand_of_saves/domain/rules/rules_tables.dart';
+import 'package:wand_of_saves/domain/rules/saving_throw_tables.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/domain/saving_throws.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
@@ -276,6 +278,8 @@ class FakeResourceRepository implements ResourceRepository {
     this.portraits = const {},
     this.creatures = const {},
     this.creation = CreationCatalogue.empty,
+    this.saves = SavingThrowTables.empty,
+    this.numericTables = RulesTables.empty,
   });
 
   /// What [creationCatalogue] returns. Empty means "no installation", which is
@@ -317,6 +321,22 @@ class FakeResourceRepository implements ResourceRepository {
   /// what every test written before D13 expects.
   @override
   Future<HitDieTables> hitDieTables() async => HitDieTables.empty;
+
+  /// What [savingThrowTables] returns.
+  ///
+  /// Empty by default, and unlike the hit dice there is no fallback behind it —
+  /// so a test that wants derived saving throws has to say what the tables
+  /// hold, which is the point.
+  final SavingThrowTables saves;
+
+  @override
+  Future<SavingThrowTables> savingThrowTables() async => saves;
+
+  /// What [rulesTables] returns — THAC0, Lore, skill points and the rest.
+  final RulesTables numericTables;
+
+  @override
+  Future<RulesTables> rulesTables() async => numericTables;
 
   /// Nothing read, so `GameRules` falls back to deriving names from the IDS
   /// identifiers — which is exactly what every test written before D13 expects.
@@ -388,7 +408,15 @@ Character fakeCharacter({
   int strength = 18,
   int strengthBonus = 100,
   int classId = 7,
+  int raceId = 2,
   int kitId = 0x40000000,
+  int dexterity = 17,
+  int constitution = 16,
+  int intelligence = 18,
+  int wisdom = 9,
+  int lore = 3,
+  int pickPockets = 0,
+  int numberOfAttacks = 1,
   List<Proficiency> proficiencies = const [
     // Two-Weapon Style and Flail/Morning Star, at the offsets the fixture
     // holds them: Aard dual-wields a Battle Axe and a Flail +1.
@@ -416,17 +444,17 @@ Character fakeCharacter({
   levelThirdClass: levelThirdClass,
   reputation: 11,
   classId: classId,
-  raceId: 2,
+  raceId: raceId,
   alignmentId: 0x21,
   genderId: 1,
   kitId: kitId,
   abilities: AbilityScores(
     strength: strength,
     strengthBonus: strengthBonus,
-    dexterity: 17,
-    constitution: 16,
-    intelligence: 18,
-    wisdom: 9,
+    dexterity: dexterity,
+    constitution: constitution,
+    intelligence: intelligence,
+    wisdom: wisdom,
     charisma: 9,
   ),
   // The same five the game printed on the record screen, and the one block of
@@ -440,18 +468,18 @@ Character fakeCharacter({
   ),
   resistances: Resistances.none,
   // A Fighter/Mage has no thief skills; Lore every class has.
-  thiefSkills: const ThiefSkills(
+  thiefSkills: ThiefSkills(
     hideInShadows: 0,
     detectIllusion: 0,
     setTraps: 0,
-    lore: 3,
+    lore: lore,
     lockpicking: 0,
     moveSilently: 0,
     findTraps: 0,
-    pickPockets: 0,
+    pickPockets: pickPockets,
   ),
   armorClassModifiers: ArmorClassModifiers.none,
-  numberOfAttacks: 1,
+  numberOfAttacks: numberOfAttacks,
   morale: 10,
   // 0 here and 1 for recovery is the *protagonist's* shape; every recruited
   // companion in the same save stores 4 or 5 and 60.

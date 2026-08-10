@@ -14,9 +14,11 @@
 
 import 'package:dart_mappable/dart_mappable.dart';
 import 'package:infinity_formats/infinity_formats.dart';
+import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 part 'creation_catalogue.mapper.dart';
 
@@ -82,6 +84,7 @@ class SpellChoice with SpellChoiceMappable {
   const SpellChoice({
     required this.resref,
     required this.school,
+    this.excludedSchools = const {},
     this.nameStrref,
     this.descriptionStrref,
   });
@@ -89,10 +92,17 @@ class SpellChoice with SpellChoiceMappable {
   /// The `SPL` resource, e.g. `SPWI112`.
   final String resref;
 
+  /// The specialist schools this spell is closed to, by `mschool.2da` number.
+  ///
+  /// ⚠️ **From the `SPL` header's own exclusion bits, not from a table.** No
+  /// file in the installation pairs a school with its opposite; each spell
+  /// carries the answer for itself.
+  final Set<int> excludedSchools;
+
   /// Its school, as `mschool.2da` numbers them. `0` is no school.
   ///
   /// Carried because a specialist mage's screen outlines their own school's
-  /// spells and requires one of them — a rule nothing yet enforces.
+  /// spells and requires one of them.
   final int school;
 
   /// Strref of the displayed name, or `null` when the header carries none.
@@ -192,6 +202,9 @@ class CreationCatalogue with CreationCatalogueMappable {
     this.sorcererSpellsKnown = 0,
     this.bardSpellsMemorisable = 0,
     this.proficiencies = ProficiencyCatalogue.empty,
+    this.skills = SkillCatalogue.empty,
+    this.thiefSkillPointsByClass = const {},
+    this.schoolByKit = const {},
     this.textByStrref = const {},
   });
 
@@ -294,6 +307,29 @@ class CreationCatalogue with CreationCatalogueMappable {
   /// pass — see [textFor].
   final ProficiencyCatalogue proficiencies;
 
+  /// Which thief skills each class and kit may allocate points to.
+  ///
+  /// `thiefscl.2da`, carried here for the same reason [proficiencies] is: the
+  /// flow reads one query, and a second would give the creation state a second
+  /// thing to arrive late.
+  final SkillCatalogue skills;
+
+  /// How many thief-skill points each class starts with. `thiefskl.2da`.
+  ///
+  /// ⚠️ **Not `thiefscl.2da`, which is the field above.** One letter apart and
+  /// a different question: this is how many points there are to spend, that is
+  /// which skills they may go into. A class with no row here has none to spend
+  /// — a fighter is absent rather than zero.
+  final Map<String, int> thiefSkillPointsByClass;
+
+  /// Each specialisation's school number, by `kitlist.2da` row name.
+  ///
+  /// ⚠️ **From `mschool.2da`'s row *order*, which is the numbering itself** —
+  /// no column carries it. `ABJURER` is 1 through `TRANSMUTER` at 8, and a
+  /// spell's `SPL` header stores the same numbers in its own school field and
+  /// in its exclusion bits.
+  final Map<String, int> schoolByKit;
+
   /// Text from the talk table, by strref. Empty until it has been resolved.
   ///
   /// Merged in rather than read here, because reaching the talk table means
@@ -350,6 +386,20 @@ class CreationCatalogue with CreationCatalogueMappable {
   ///
   /// ⚠️ **Kits are absent from `profs.2da`**, so a Kensai gets its Fighter
   /// row. That is the table's own shape, not a fallback this code invented.
+  /// How many thief-skill points [characterClass] has to spend, or `0`.
+  int thiefSkillPointsFor(String characterClass) =>
+      thiefSkillPointsByClass[characterClass] ?? 0;
+
+  /// The thief skills [characterClass] may put them into, in table order.
+  ///
+  /// Empty for a class the table gives nothing, which is what makes the step
+  /// disappear rather than draw an empty screen.
+  List<String> thiefSkillsFor(String characterClass) => [
+    for (final row in skills.allowanceByRow.keys)
+      if ((skills.allowanceFor(row, characterClass) ?? 0) > 0) row,
+  ];
+
+  /// How many proficiency pips [characterClass] has to spend. `profs.2da`.
   int proficiencySlotsFor(String characterClass) =>
       proficiencySlotsByClass[characterClass] ?? 0;
 
@@ -514,6 +564,9 @@ CreationCatalogue creationCatalogueFrom({
   required Table2da bardMemorisation,
   required Table2da raceAbilityRequirements,
   required Table2da classAbilityRequirements,
+  required Table2da thiefSkillPoints,
+  required Table2da thiefSkillClasses,
+  required Table2da magicSchools,
   required List<SpellChoice> wizardSpells,
   required ProficiencyCatalogue proficiencies,
   required GameRules rules,
@@ -643,6 +696,21 @@ CreationCatalogue creationCatalogueFrom({
     sorcererSpellsKnown: sorcererKnownSpells.number('1', '1') ?? 0,
     bardSpellsMemorisable: bardMemorisation.number('1', '1') ?? 0,
     proficiencies: proficiencies,
+    skills: thiefSkillsFrom(thiefSkillClasses),
+    // The row's index is the school number. `rows` is insertion-ordered, so
+    // walking it in file order is what makes the position meaningful.
+    schoolByKit: {
+      for (final (index, row) in magicSchools.rows.keys.indexed)
+        if (index > 0) row.toUpperCase(): index,
+    },
+    // ⚠️ `START_POINTS`, not `LEVEL_POINTS`. The second column is what each
+    // level after the first grants, and creation never reaches it.
+    thiefSkillPointsByClass: {
+      for (final row in thiefSkillPoints.rows.keys)
+        if (thiefSkillPoints.number(row, thiefSkillStartColumn)
+            case final int points)
+          if (points > 0) row: points,
+    },
   );
 }
 
@@ -695,13 +763,18 @@ Map<int, int> _raceDescriptions(Table2da raceText) => {
         if (strref >= 0) id: strref,
 };
 
+/// `thiefskl.2da`'s first-level column — the points a new character spends.
+const String thiefSkillStartColumn = 'START_POINTS';
+
 /// Description strrefs by `CLASS.IDS` id, taking only the plain-class rows.
 Map<int, int> _classDescriptions(Table2da classText) => {
   for (final row in classText.rows.keys)
-    if (classText.number(row, 'KITID') == trueClassKitId)
-      if (classText.number(row, 'CLASSID') case final int id)
-        if (classText.number(row, 'DESCSTR') case final int strref)
-          if (strref >= 0) id: strref,
+    // The same FALLEN filter the names need — see `nameStrrefs`.
+    if (classText.number(row, fallenColumn) != fallenClass)
+      if (classText.number(row, 'KITID') == trueClassKitId)
+        if (classText.number(row, 'CLASSID') case final int id)
+          if (classText.number(row, 'DESCSTR') case final int strref)
+            if (strref >= 0) id: strref,
 };
 
 /// The dword a kit is stored as, or `null` if this build will not write it.

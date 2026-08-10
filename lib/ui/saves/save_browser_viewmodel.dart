@@ -208,6 +208,9 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
     int? alignmentId,
     int? kitValue,
     Map<CharacterStat, int> abilities = const {},
+    Map<CharacterStat, int> derived = const {},
+    Map<CharacterStat, int> allocated = const {},
+    List<int> classLevels = const [],
     Map<int, int> proficiencies = const {},
     List<String> knownSpells = const [],
     List<String> memorisedSpells = const [],
@@ -252,7 +255,17 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
       );
     }
 
-    for (final MapEntry(key: stat, value: score) in abilities.entries) {
+    // ⚠️ **Two maps, and the difference is D14.** [abilities] is what the
+    // player rolled and [derived] is what the game's tables say follows from
+    // their class, race and level. The engine maintains neither: a character
+    // created with saving throws of zero keeps them for the whole game.
+    //
+    // Derived first, so that anything the player chose or spent themselves —
+    // [abilities] and the thief skills in [allocated] — wins over it.
+    for (final MapEntry(key: stat, value: score) in <CharacterStat, int>{
+      ...derived,
+      ...abilities,
+    }.entries) {
       created = applyCharacterEdit(
         created,
         SetCharacterStat(
@@ -260,6 +273,17 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
           stat: stat,
           value: score,
         ),
+      );
+    }
+
+    // ⚠️ **After the class, and every slot written.** `CHARBASE` carries the
+    // template's levels, so a single-class Thief built from it would otherwise
+    // keep a second and third level that make `classCount` disagree with the
+    // bytes.
+    if (classLevels.isNotEmpty) {
+      created = applyCharacterEdit(
+        created,
+        SetClassLevels(creOffset: created.creOffset, levels: classLevels),
       );
     }
 

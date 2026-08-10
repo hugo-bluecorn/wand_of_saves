@@ -299,6 +299,8 @@ void main() {
                 in state.abilities.entries)
               ability.stat: score,
           },
+          derived: container.read(creationProvider.notifier).derivedStats(),
+          classLevels: state.classLevels,
           proficiencies: state.proficiencies,
           knownSpells: state.knownSpells,
           memorisedSpells: state.memorisedSpells,
@@ -461,6 +463,75 @@ void main() {
             reason: ability.label,
           );
         }
+      },
+      skip: installed && golden ? false : why,
+    );
+  });
+
+  group('the fields the engine writes at creation and never maintains', () {
+    // ⚠️ **D14's sixty-seven.** The engine wrote these into its own Aurel and
+    // then left them alone through import and play, so a character created
+    // without them keeps the template's values for the whole game. Comparing
+    // against the engine's own record is the only way to know ours are right.
+    test(
+      'the five saving throws are the engine’s, exactly',
+      () async {
+        final theirs = theEnginesAurel().savingThrows;
+        final ours = (await ourAurel()).savingThrows;
+
+        expect(ours.death, theirs.death, reason: 'death');
+        expect(ours.wands, theirs.wands, reason: 'wands');
+        expect(ours.polymorph, theirs.polymorph, reason: 'polymorph');
+        expect(ours.breath, theirs.breath, reason: 'breath');
+        expect(ours.spells, theirs.spells, reason: 'spells');
+      },
+      skip: installed && golden ? false : why,
+    );
+
+    test(
+      'THAC0 and Lore are the engine’s',
+      () async {
+        final theirs = theEnginesAurel();
+        final ours = await ourAurel();
+
+        expect(
+          ours.readField(CreHeaderField.thac0),
+          theirs.readField(CreHeaderField.thac0),
+          reason: 'THAC0',
+        );
+        expect(
+          ours.readField(CreHeaderField.lore),
+          theirs.readField(CreHeaderField.lore),
+          reason: 'Lore',
+        );
+      },
+      skip: installed && golden ? false : why,
+    );
+
+    test(
+      'the class levels are 1/1/0, and the third slot is cleared',
+      () async {
+        // ⚠️ The template's own levels would otherwise survive, and a Fighter /
+        // Mage carrying a third would read as a triple-class to anything
+        // counting filled slots.
+        final theirs = theEnginesAurel();
+        final ours = await ourAurel();
+
+        expect(ours.levels, theirs.levels);
+        expect(ours.levels, (1, 1, 0));
+      },
+      skip: installed && golden ? false : why,
+    );
+
+    test(
+      'the morale break is below morale, so the character can be played',
+      () async {
+        final ours = await ourAurel();
+
+        expect(
+          ours.readField(CreHeaderField.moraleBreak),
+          lessThan(ours.readField(CreHeaderField.morale)),
+        );
       },
       skip: installed && golden ? false : why,
     );

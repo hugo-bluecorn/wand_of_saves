@@ -17,8 +17,10 @@ import 'dart:math';
 import 'package:dart_mappable/dart_mappable.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wand_of_saves/config/providers.dart';
+import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
+import 'package:wand_of_saves/domain/rules/creation_derivation.dart';
 
 part 'creation_viewmodel.mapper.dart';
 
@@ -79,6 +81,14 @@ enum CreationStep {
   /// differs from the engine's.
   proficiencies('Proficiencies'),
 
+  /// Where a thief's starting points go.
+  ///
+  /// ⚠️ **Conditional, and on two things at once**: the class must have points
+  /// to spend (`thiefskl.2da`) *and* skills to spend them on (`thiefscl.2da`).
+  /// A monk has a row in the first with `START_POINTS 0`, so asking on the
+  /// strength of either table alone would draw a screen with nothing to do.
+  thiefSkills('Thief skills'),
+
   /// Which spells go in the book, and which of those are prepared.
   spells('Spells'),
 
@@ -109,6 +119,7 @@ class CreationState with CreationStateMappable {
     this.storedAbilities,
     this.storedAbilityPoints,
     this.proficiencies = const {},
+    this.thiefSkills = const {},
     this.knownSpells = const [],
     this.memorisedSpells = const [],
     this.name = '',
@@ -167,6 +178,9 @@ class CreationState with CreationStateMappable {
   /// Pips by the id `weapprof.2da` gives each proficiency.
   final Map<int, int> proficiencies;
 
+  /// Points allocated per `thiefscl.2da` row. Absent means none spent.
+  final Map<String, int> thiefSkills;
+
   /// Resrefs of the spells chosen for the book, in the order they were picked.
   final List<String> knownSpells;
 
@@ -217,6 +231,22 @@ class CreationState with CreationStateMappable {
       ? specialisation!.identifier
       : characterClass?.identifier;
 
+  /// The level in each of this character's classes — all `1`, one per class.
+  ///
+  /// ⚠️ **Written explicitly rather than left to the template.** `CHARBASE`
+  /// carries its own level slots, so a single-class Thief built from it would
+  /// keep a second and a third, and `CLASS.IDS` would then disagree with the
+  /// bytes about how many classes they have. The class *name* is the count: a
+  /// `FIGHTER_MAGE_THIEF` is three.
+  ///
+  /// No `GameRules` lookup, for the same reason [proficiencyColumn] needs none
+  /// — the choice already carries the identifier.
+  List<int> get classLevels {
+    final identifier = characterClass?.identifier;
+    if (identifier == null) return const [];
+    return List<int>.filled(identifier.split('_').length, 1);
+  }
+
   /// How many pips this character has to spend. `profs.2da`.
   int get proficiencySlots => characterClass == null
       ? 0
@@ -226,6 +256,45 @@ class CreationState with CreationStateMappable {
   int get proficiencyRankCap => characterClass == null
       ? 0
       : catalogue.proficiencyRankCapFor(characterClass!.identifier);
+
+  /// How many thief-skill points this character has to spend. `thiefskl.2da`.
+  ///
+  /// ⚠️ **Keyed on the class, not on [proficiencyColumn].** A kit has its own
+  /// row here — a Shadowdancer starts with 30 where a Thief starts with 40 —
+  /// so the kit's identifier is tried first and the class's is the fallback,
+  /// which is the same precedence every other kit-aware lookup uses.
+  int get thiefSkillPoints {
+    final column = proficiencyColumn;
+    if (column == null) return 0;
+    final own = catalogue.thiefSkillPointsFor(column);
+    if (own > 0) return own;
+    final base = characterClass?.identifier;
+    return base == null ? 0 : catalogue.thiefSkillPointsFor(base);
+  }
+
+  /// The thief skills this character may put them into, in table order.
+  List<String> get thiefSkillsAvailable {
+    final column = proficiencyColumn;
+    if (column == null) return const [];
+    final own = catalogue.thiefSkillsFor(column);
+    if (own.isNotEmpty) return own;
+    final base = characterClass?.identifier;
+    return base == null ? const [] : catalogue.thiefSkillsFor(base);
+  }
+
+  /// Points not yet spent.
+  int get thiefSkillPointsRemaining =>
+      thiefSkillPoints - thiefSkills.values.fold(0, (a, b) => a + b);
+
+  /// What has been spent, as the stats the record stores them in.
+  ///
+  /// The row names are the game's and each [CharacterStat] already carries its
+  /// own, so this is that table read backwards rather than a second copy.
+  Map<CharacterStat, int> get allocatedSkillStats => {
+    for (final stat in CharacterStat.values)
+      if (stat.thiefSkillRow case final String row)
+        if (thiefSkills[row] case final int points) stat: points,
+  };
 
   /// Pips not yet spent.
   int get proficiencyPipsRemaining =>
@@ -240,6 +309,49 @@ class CreationState with CreationStateMappable {
     for (final entry in catalogue.proficiencies.entries.values)
       if ((entry.maximumFor(proficiencyColumn) ?? 0) > 0) entry,
   ];
+
+  /// The school this character specialises in, or `0` for none.
+  ///
+  /// From `mschool.2da`'s own numbering, which is what a spell's `SPL` header
+  /// stores in both its school field and its exclusion bits.
+  int get specialistSchool {
+    final kit = specialisation;
+    if (kit == null || kit == CreationChoice.noSpecialisation) return 0;
+    return catalogue.schoolByKit[kit.identifier.toUpperCase()] ?? 0;
+  }
+
+  /// The spells this character may actually put in their book.
+  ///
+  /// ⚠️ **A specialist is barred from their opposed school, and the bar is in
+  /// the spell rather than in any table.** Each `SPL` header carries a bit per
+  /// specialist; checked and rejected as sources first: `mschool.2da` is
+  /// dispel text, `kitlist.2da` has no such column, and nothing in the
+  /// installation pairs a school with its opposite. Measured against the
+  /// player's own spells — an Abjurer is refused exactly the four Alteration
+  /// spells of first level, and a Transmuter exactly the Abjuration ones.
+  List<SpellChoice> get spellsAvailable {
+    final school = specialistSchool;
+    if (school == 0) return catalogue.wizardSpells;
+    return [
+      for (final spell in catalogue.wizardSpells)
+        if (!spell.excludedSchools.contains(school)) spell,
+    ];
+  }
+
+  /// Whether a specialist has taken at least one spell of their own school.
+  ///
+  /// ⚠️ **The game requires it** — its own spellbook screen says a specialist
+  /// must choose a spell from their school — and it is `true` for everyone
+  /// else, so the check costs a plain mage nothing.
+  bool get hasOwnSchoolSpell {
+    final school = specialistSchool;
+    if (school == 0) return true;
+    return knownSpells.any(
+      (resref) => catalogue.wizardSpells
+          .where((spell) => spell.resref == resref)
+          .any((spell) => spell.school == school),
+    );
+  }
 
   /// How many first-level spells may go in the book.
   int get spellsLearnable => characterClass == null
@@ -298,6 +410,9 @@ class CreationState with CreationStateMappable {
       if (switch (step) {
         CreationStep.kit => specialisationsAvailable.isNotEmpty,
         CreationStep.proficiencies => proficiencySlots > 0,
+        // Both tables have to agree there is something to do here.
+        CreationStep.thiefSkills =>
+          thiefSkillPoints > 0 && thiefSkillsAvailable.isNotEmpty,
         CreationStep.spells => castsSpells,
         _ => true,
       })
@@ -316,9 +431,11 @@ class CreationState with CreationStateMappable {
     // with points outstanding either.
     CreationStep.abilities => hasRolled && abilityPointsRemaining == 0,
     CreationStep.proficiencies => proficiencyPipsRemaining == 0,
+    CreationStep.thiefSkills => thiefSkillPointsRemaining == 0,
     CreationStep.spells =>
       knownSpells.length == spellsLearnable &&
-          memorisedSpells.length == spellsMemorisable,
+          memorisedSpells.length == spellsMemorisable &&
+          hasOwnSchoolSpell,
     CreationStep.name => name.trim().isNotEmpty,
   };
 
@@ -437,7 +554,25 @@ class CreationViewModel extends Notifier<CreationState> {
   /// Chooses an alignment.
   void chooseAlignment(int id) => state = state.copyWith(alignmentId: id);
 
-  /// Throws the dice for all six abilities.
+  /// The total a roll keeps throwing until it reaches.
+  ///
+  /// ⚠️ **Not a rule the game states anywhere** — six 3d6 average **63**, and
+  /// 85 turns up about once in eight hundred throws. It is what a player gets
+  /// by holding the reroll button for ten minutes, done for them. Every point
+  /// is still theirs to move afterwards, and the sheet can set any score
+  /// outright, so this changes what is *convenient* rather than what is
+  /// possible.
+  static const int abilityTotalWanted = 85;
+
+  /// How many throws to spend looking for [abilityTotalWanted].
+  ///
+  /// ⚠️ **The search is bounded because the target may be unreachable.** Six
+  /// abilities capped at 17 by a race and a kit cannot total 85 at all, and a
+  /// loop with no floor under it would spin for ever on exactly the character
+  /// nobody tested. Whatever the best throw was is kept instead.
+  static const int rollAttempts = 4000;
+
+  /// Throws the dice for all six abilities, keeping the best of many.
   ///
   /// **3d6 each, then the race's own adjustment, then clamped into what the
   /// tables allow.** ⚠️ **D13, and the reason is that no table was found.** The
@@ -452,6 +587,24 @@ class CreationViewModel extends Notifier<CreationState> {
   /// reached for inside a ViewModel is a screen no test can pin.
   void roll() {
     final dice = ref.read(abilityDiceProvider);
+
+    var best = <CreationAbility, int>{};
+    var bestTotal = -1;
+    for (var attempt = 0; attempt < rollAttempts; attempt++) {
+      final rolled = _throwDice(dice);
+      final total = rolled.values.fold<int>(0, (a, b) => a + b);
+      if (total > bestTotal) {
+        best = rolled;
+        bestTotal = total;
+      }
+      if (total >= abilityTotalWanted) break;
+    }
+
+    state = state.copyWith(abilities: best, abilityPoints: bestTotal);
+  }
+
+  /// One throw: 3d6 an ability, plus the race's adjustment, clamped.
+  Map<CreationAbility, int> _throwDice(Random dice) {
     final rolled = <CreationAbility, int>{};
     for (final ability in CreationAbility.values) {
       final bounds = state.boundsFor(ability);
@@ -467,10 +620,7 @@ class CreationViewModel extends Notifier<CreationState> {
       }
       rolled[ability] = total.clamp(bounds.minimum, bounds.maximum);
     }
-    state = state.copyWith(
-      abilities: rolled,
-      abilityPoints: rolled.values.fold<int>(0, (a, b) => a + b),
-    );
+    return rolled;
   }
 
   /// Spends one point on [ability], if there is one and it has room.
@@ -512,6 +662,36 @@ class CreationViewModel extends Notifier<CreationState> {
       abilities: Map.of(kept),
       abilityPoints: state.storedAbilityPoints ?? 0,
     );
+  }
+
+  /// Puts [points] into [row], as long as the pool can pay for it.
+  ///
+  /// **Absolute rather than incremental**, unlike the proficiency pips: a skill
+  /// runs 0 to 100 in steps a slider makes, and applying a delta would need the
+  /// caller to know the current value to avoid drifting.
+  ///
+  /// ⚠️ **Refuses silently in two cases**, both of which the screen already
+  /// prevents and neither of which should be able to reach the record: a skill
+  /// this class may not allocate at all, and more points than remain. A
+  /// creation flow that could overspend would write a character the engine
+  /// never offers.
+  void allocateSkill(String row, int points) {
+    if (points < 0) return;
+    if (!state.thiefSkillsAvailable.contains(row)) return;
+
+    final current = state.thiefSkills[row] ?? 0;
+    if (points - current > state.thiefSkillPointsRemaining) return;
+
+    // Dropping to zero removes the entry, for the same reason a proficiency
+    // does: a stored zero and an unspent skill are the same thing, and only one
+    // of them should be written down.
+    final skills = {...state.thiefSkills};
+    if (points == 0) {
+      skills.remove(row);
+    } else {
+      skills[row] = points;
+    }
+    state = state.copyWith(thiefSkills: skills);
   }
 
   /// Puts one more pip into [proficiencyId], if there is one to spend.
@@ -607,6 +787,29 @@ class CreationViewModel extends Notifier<CreationState> {
 
   /// The tables the flow is offering from.
   CreationCatalogue get catalogue => state.catalogue;
+
+  /// What the game's tables say this character's record should hold.
+  ///
+  /// ⚠️ **Separate from the player's own choices, and D14 is why.** The engine
+  /// overwrites six fields on import and leaves sixty-seven alone; the saving
+  /// throws, THAC0 and Lore below are all in the sixty-seven, so a character
+  /// created without them keeps the template's values for the whole game.
+  ///
+  /// Empty when the class has not been chosen yet, and short by whatever the
+  /// tables could not answer — a machine with no installation writes nothing
+  /// rather than zeros.
+  Map<CharacterStat, int> derivedStats() {
+    final identifier = state.characterClass?.identifier;
+    if (identifier == null) return const {};
+
+    return derivedStatsFor(
+      rules: ref.read(gameRulesProvider),
+      classIdentifier: identifier,
+      raceIdentifier: state.race?.identifier,
+      levels: state.classLevels,
+      constitution: state.abilities[CreationAbility.constitution] ?? 0,
+    );
+  }
 }
 
 /// The creation flow's state, for one trip through it.

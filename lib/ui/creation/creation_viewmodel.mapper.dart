@@ -101,6 +101,13 @@ class CreationStateMapper extends ClassMapperBase<CreationState> {
     opt: true,
     def: const {},
   );
+  static Map<String, int> _$thiefSkills(CreationState v) => v.thiefSkills;
+  static const Field<CreationState, Map<String, int>> _f$thiefSkills = Field(
+    'thiefSkills',
+    _$thiefSkills,
+    opt: true,
+    def: const {},
+  );
   static List<String> _$knownSpells(CreationState v) => v.knownSpells;
   static const Field<CreationState, List<String>> _f$knownSpells = Field(
     'knownSpells',
@@ -138,6 +145,7 @@ class CreationStateMapper extends ClassMapperBase<CreationState> {
     #storedAbilities: _f$storedAbilities,
     #storedAbilityPoints: _f$storedAbilityPoints,
     #proficiencies: _f$proficiencies,
+    #thiefSkills: _f$thiefSkills,
     #knownSpells: _f$knownSpells,
     #memorisedSpells: _f$memorisedSpells,
     #name: _f$name,
@@ -158,6 +166,7 @@ class CreationStateMapper extends ClassMapperBase<CreationState> {
       storedAbilities: data.dec(_f$storedAbilities),
       storedAbilityPoints: data.dec(_f$storedAbilityPoints),
       proficiencies: data.dec(_f$proficiencies),
+      thiefSkills: data.dec(_f$thiefSkills),
       knownSpells: data.dec(_f$knownSpells),
       memorisedSpells: data.dec(_f$memorisedSpells),
       name: data.dec(_f$name),
@@ -238,6 +247,7 @@ abstract class CreationStateCopyWith<$R, $In extends CreationState, $Out>
   MapCopyWith<$R, CreationAbility, int, ObjectCopyWith<$R, int, int>>?
   get storedAbilities;
   MapCopyWith<$R, int, int, ObjectCopyWith<$R, int, int>> get proficiencies;
+  MapCopyWith<$R, String, int, ObjectCopyWith<$R, int, int>> get thiefSkills;
   ListCopyWith<$R, String, ObjectCopyWith<$R, String, String>> get knownSpells;
   ListCopyWith<$R, String, ObjectCopyWith<$R, String, String>>
   get memorisedSpells;
@@ -255,6 +265,7 @@ abstract class CreationStateCopyWith<$R, $In extends CreationState, $Out>
     Map<CreationAbility, int>? storedAbilities,
     int? storedAbilityPoints,
     Map<int, int>? proficiencies,
+    Map<String, int>? thiefSkills,
     List<String>? knownSpells,
     List<String>? memorisedSpells,
     String? name,
@@ -308,6 +319,13 @@ class _CreationStateCopyWithImpl<$R, $Out>
         (v) => call(proficiencies: v),
       );
   @override
+  MapCopyWith<$R, String, int, ObjectCopyWith<$R, int, int>> get thiefSkills =>
+      MapCopyWith(
+        $value.thiefSkills,
+        (v, t) => ObjectCopyWith(v, $identity, t),
+        (v) => call(thiefSkills: v),
+      );
+  @override
   ListCopyWith<$R, String, ObjectCopyWith<$R, String, String>>
   get knownSpells => ListCopyWith(
     $value.knownSpells,
@@ -336,6 +354,7 @@ class _CreationStateCopyWithImpl<$R, $Out>
     Object? storedAbilities = $none,
     Object? storedAbilityPoints = $none,
     Map<int, int>? proficiencies,
+    Map<String, int>? thiefSkills,
     List<String>? knownSpells,
     List<String>? memorisedSpells,
     String? name,
@@ -355,6 +374,7 @@ class _CreationStateCopyWithImpl<$R, $Out>
       if (storedAbilityPoints != $none)
         #storedAbilityPoints: storedAbilityPoints,
       if (proficiencies != null) #proficiencies: proficiencies,
+      if (thiefSkills != null) #thiefSkills: thiefSkills,
       if (knownSpells != null) #knownSpells: knownSpells,
       if (memorisedSpells != null) #memorisedSpells: memorisedSpells,
       if (name != null) #name: name,
@@ -378,6 +398,7 @@ class _CreationStateCopyWithImpl<$R, $Out>
       or: $value.storedAbilityPoints,
     ),
     proficiencies: data.get(#proficiencies, or: $value.proficiencies),
+    thiefSkills: data.get(#thiefSkills, or: $value.thiefSkills),
     knownSpells: data.get(#knownSpells, or: $value.knownSpells),
     memorisedSpells: data.get(#memorisedSpells, or: $value.memorisedSpells),
     name: data.get(#name, or: $value.name),
