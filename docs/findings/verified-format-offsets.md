@@ -1737,3 +1737,112 @@ and the third is why any hit-point figure this app computes is wrong unless it k
 
 Overwriting the `.chr` and re-entering the Import screen is not enough; the old one comes back. The
 game has to be restarted.
+
+---
+
+## Two characters made to order, and three rules separated — 2026-08-11
+
+`000000102-Gnome Start` — a **Gnome Cleric/Illusionist** — and `000000103-Halfling Start` — a
+**Halfling Thief** — created in BG:EE's own flow and saved before a step was taken. They were asked
+for because no fixture could separate three rules. All three separated, and **every predicted number
+was exact.**
+
+### ✅ Best of each column, now measured on a multi-class with no fighter in it
+
+Gnome, Constitution 16. `saveprs` level 1 is 10/14/13/16/15 and `savewiz` 14/11/13/15/12; the best of
+each is 10/11/13/15/12, and `savecng` at 16 takes 4 off wands and spells.
+
+| | best of each | if the mage table won | if the priest table won | **stored** |
+|---|---|---|---|---|
+| Death | 10 | 14 | 10 | **10** |
+| Wands | 7 | 7 | 10 | **7** |
+| Polymorph | 13 | 13 | 13 | **13** |
+| Breath | 15 | 15 | 16 | **15** |
+| Spells | 8 | 8 | 11 | **8** |
+
+Death rules out the mage reading; wands, breath and spells rule out the priest reading. QUAYLE and
+TIAX had already implied this from hand-authored files; this record was written by the engine.
+
+### ✅ `savecndh` and `savecng` are not swapped
+
+Halfling, Constitution 15, `saverog` level 1 of 13/14/12/16/15 less `savecndh`'s 4 on death, wands
+and spells: predicted **9/10/12/16/11**, stored **9/10/12/16/11**. Under `savecng` — whose death row
+is all zeros — death would have been **13**. The race-to-table map is right.
+
+### ✅ Multi-class Lore is the HIGHEST, not the sum — and this closes it
+
+`lore.2da` gives `CLERIC` 1 and `MAGE` 3. The gnome stores **3**; a sum gives 4. The shipped NPCs
+read like sums and **cannot referee it** — the same files hold a Fighter 1 with Lore 4 — but this one
+was written by the engine at creation. Code already followed the engine; the disagreement is now
+resolved rather than merely recorded.
+
+THAC0 is **20** for both, from `thac0.2da`'s own `CLERIC_MAGE` and `THIEF` rows — nothing composed.
+Class levels are `(1, 1, 0)` and `(1, 0, 0)`.
+
+### ⚠️ A multi-class gets NO kit screen, and the engine writes a kit anyway
+
+Choosing `CLERIC/ILLUSIONIST` goes straight to alignment — no specialisation step, matching
+`kitsFor` returning empty for every multi-class. The record nevertheless holds
+**`kit = 0x04000000`**, whose high word is 1024 — `MAGESCHOOL_ILLUSIONIST` in `KIT.IDS`. The halfling
+correctly holds `0x40000000`, `TRUECLASS`.
+
+Nothing was asked, so the engine decided. `clsrcreq.2da`'s `GNOME` column allows **exactly one** mage
+school, `ILLUSIONIST`, so the choice is a lookup and the *forcing* is the rule.
+
+### ⚠️ The proficiency pip cap is per class, and `profsmax` alone is WRONG
+
+`profsmax.2da` gives `FIRST_LEVEL 2` to **every row in the file**. The cap the engine applies is the
+**lower** of that and the `weapprof.2da` class column:
+
+| `weapprof` | War Hammer | Short Sword | Two-Weapon |
+|---|---|---|---|
+| `FIGHTER` | 5 | 5 | 3 |
+| `CLERIC`, `CLERIC_MAGE`, `THIEF`, `BARD` | 1 | 1 | 1 |
+| `SWASHBUCKLER` | — | **2** | — |
+
+**Engine-confirmed**: the thief was refused a second pip in Short Sword with a slot still unspent.
+Aurel is consistent with both readings — a Fighter/Mage is `min(2, 3) = 2` either way — which is why
+this survived the golden.
+
+⚠️ **And the column is not simply the kit's.** `SWASHBUCKLER` is 2 where `THIEF` is 1, so a
+single-class kit's column governs. But `ILLUSIONIST` is **0** for War Hammer where `CLERIC_MAGE` is
+1, and the gnome holds a War Hammer and a Flail. **The kit's column when the kit is the whole class;
+the class's column when the character is multi-class.** Both halves measured.
+
+### A thief's starting skills are DISPLAY, and storage starts at zero
+
+The skills screen opened at 20/20/10/20/20/0/0 with all 40 points unspent. `skillrac.2da`'s
+`HALFLING` row is 20/15/10/20/20/0/0 and the single residual — Open Locks +5 — is `skilldex.2da` row
+**16**, a row that moves nothing else. Predicted Dexterity 16 from that alone; the record stores 16.
+
+All 40 points then went into Find Traps, and the record holds `findTraps 40` with **every other skill
+0**. So the displayed number is `stored + skillrac + skilldex`, and nothing is stored until it is
+spent.
+
+⚠️ **The "base scores" in the class description are the HUMAN racial row.** It claims a Thief *"starts
+with base scores of 15% Pick Pockets, 10% Open Locks, 5% Find Traps, 10% Move Silently, 5% Hide in
+Shadows"* — which is `skillrac.2da`'s `HUMAN` row exactly. The prose is written for a human; the
+mechanism is the table. `clasiskl.2da`, whose name promises this, gives `THIEF` a flat **0** and
+holds a bard's 25 Pick Pockets and a ranger's 15/15 instead.
+
+### The walkthrough as a cross-check: nothing to import, one claim no table holds
+
+Haeravon §7.1 is `profs.2da` in full — `FIRST_LEVEL` 4/1/2/2 and `RATE` 3/6/4/4 are its "+1/3
+levels", "+1/6", "+1/4". §13.1 is `lore.2da` verbatim. §7.2 and §7.3 are `wspecial.2da` and
+`stylbonu.2da`. **No walkthrough table is worth typing.**
+
+It earned its place by independently confirming the pip cap *including the exception* — "only the
+Swashbuckler can become Specialized" among non-warriors, and the table says 2. ⚠️ **One claim it
+makes that no table holds: a Blade gets half Lore per level.** `lore.2da` has nine rows and not one
+is a kit. **Open, and not written into code.**
+
+### ⚠️ `clastext.2da`'s `DESCSTR` is a rules source, and it is already on our own screen
+
+Strref 9561, the Thief's description, states the pip cap, the 40 points at level 1, the base scores
+and the backstab progression. The Cleric's states **"May Turn Undead"** — which is the standing
+answer to a question recorded above as having no table. It is per-installation, it is the engine's
+own words, and `creation_view.dart` already draws it.
+
+It is **prose**: display it and cross-check against it; never parse it into a lookup. And note what
+that means — our creation screen has been printing *"May only become Proficient (one slot) in any
+weapon class"* directly above a control that offers two.

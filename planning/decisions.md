@@ -754,3 +754,21 @@ Two values inside their documented range produced a character that imported clea
 be played at all: `moraleBreak` at or above `morale` panics them permanently, and any
 `intoxication` above zero disables EXPORT. Whatever the model does about derivation, it also has to
 say which *combinations* are refusable — which is a different question from what a byte can hold.
+
+### ✅ Closed 2026-08-11 — a multi-class's Lore is the HIGHEST, not the sum
+
+This was the one rule the project carried with its two readings openly disagreeing. `lore.2da` gives
+a `RATE` per single class and says nothing about composing them; the shipped NPCs read like **sums**
+(Coran 12, Tiax 8, Quayle 8), while the engine's own recomputation on import gave the **highest** —
+and the code followed the engine with the disagreement written down rather than smoothed over.
+
+**A Gnome Cleric/Illusionist created in BG:EE's own flow stores Lore 3.** Cleric 1 + Mage 3 is 4
+under a sum; the highest is 3. Unlike the NPC records — which hold a Fighter 1 with Lore 4, so they
+are hand-authored and cannot referee anything — this one was written by the engine at creation.
+
+**Order of authority held: engine > table > shipped file.** Following the engine over three NPC
+records was right, and the residual disagreement was real rather than a mistake in reading the files.
+
+⚠️ **What is still open is smaller and is not in code**: Haeravon's walkthrough states that a Blade
+gets *half* the normal Lore per level. `lore.2da` has nine rows and not one of them is a kit, so no
+table carries it. Recorded, not implemented.
