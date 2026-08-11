@@ -179,7 +179,10 @@ class _Controls extends ConsumerWidget {
             raceId: state.race?.value,
             classId: state.characterClass?.value,
             alignmentId: state.alignmentId,
-            kitValue: state.specialisation?.value,
+            // ⚠️ **The forced school is written here or nowhere.** A
+            // multi-class never sees a kit screen, and the engine still
+            // gives a gnome's mage half its Illusionist kit.
+            kitValue: state.specialisationToWrite?.value,
             abilities: {
               for (final MapEntry(key: ability, value: score)
                   in state.abilities.entries)
@@ -778,8 +781,8 @@ class _Proficiencies extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '${state.proficiencySlots} pips at first level, at most '
-          '${state.proficiencyRankCap} in any one.',
+          '${state.proficiencySlots} pips at first level. Each weapon '
+          'shows its own ceiling.',
           style: text.bodySmall,
         ),
         const SizedBox(height: 12),
@@ -794,7 +797,13 @@ class _Proficiencies extends StatelessWidget {
                       state.catalogue.textFor(entry.nameStrref) ??
                       entry.identifier,
                   pips: state.proficiencies[entry.id] ?? 0,
-                  cap: state.proficiencyRankCap,
+                  // ⚠️ **Per proficiency, not one number for the screen.**
+                  // The ceiling is the lower of profsmax's level cap
+                  // and this weapon's own class column, so a cleric
+                  // sees `max 1` on a war hammer where a fighter sees
+                  // more. Showing a single figure would promise pips
+                  // the engine then refuses.
+                  cap: state.rankCapFor(entry.id),
                   canRaise: state.proficiencyPipsRemaining > 0,
                   onRaise: () => model.raiseProficiency(entry.id),
                   onLower: () => model.lowerProficiency(entry.id),

@@ -293,7 +293,7 @@ void main() {
           raceId: state.race?.value,
           classId: state.characterClass?.value,
           alignmentId: state.alignmentId,
-          kitValue: state.specialisation?.value,
+          kitValue: state.specialisationToWrite?.value,
           abilities: {
             for (final MapEntry(key: ability, value: score)
                 in state.abilities.entries)

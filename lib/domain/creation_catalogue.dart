@@ -207,6 +207,7 @@ class CreationCatalogue with CreationCatalogueMappable {
     this.skills = SkillCatalogue.empty,
     this.thiefSkillPointsByClass = const {},
     this.schoolByKit = const {},
+    this.kitsAllowedByRace = const {},
     this.textByStrref = const {},
   });
 
@@ -331,6 +332,16 @@ class CreationCatalogue with CreationCatalogueMappable {
   /// spell's `SPL` header stores the same numbers in its own school field and
   /// in its exclusion bits.
   final Map<String, int> schoolByKit;
+
+  /// Which kits each race may take, by `RACE.IDS` id, as `kitlist` row names.
+  ///
+  /// ⚠️ **`clsrcreq.2da` lists 40 kit rows beside its class rows**, and this
+  /// projection used to drop every one of them. They answer two questions the
+  /// app was getting wrong: which schools to *offer* a single-class mage, and
+  /// which school to *force* on a multi-class that never sees a kit screen. A
+  /// gnome is allowed exactly one, `ILLUSIONIST`, which is why BG:EE writes
+  /// that kit into a Gnome Cleric/Mage without asking.
+  final Map<int, Set<String>> kitsAllowedByRace;
 
   /// Text from the talk table, by strref. Empty until it has been resolved.
   ///
@@ -692,15 +703,24 @@ CreationCatalogue creationCatalogueFrom({
   }
 
   final classesByRace = <int, List<CreationChoice>>{};
+  final kitsAllowedByRace = <int, Set<String>>{};
   for (final MapEntry(key: column, value: raceId) in raceIdByColumn.entries) {
     final available = <CreationChoice>[];
     for (final MapEntry(key: row, value: _)
         in classRaceRequirements.rows.entries) {
       // A row that is not in CLASS.IDS is a kit — `clsrcreq` lists 40 of them
-      // alongside the classes — and drops out here without being named.
+      // alongside the classes.
+      //
+      // ⚠️ **These used to be dropped here, and they answer two questions.**
+      // Which schools a race may be offered, and — where it may be offered
+      // exactly one — which school the engine writes into a multi-class that
+      // never sees a kit screen. A gnome is allowed only `ILLUSIONIST`.
       final classId = rules.classIdFor(row);
-      if (classId == null) continue;
       if (classRaceRequirements.number(row, column) != 1) continue;
+      if (classId == null) {
+        (kitsAllowedByRace[raceId] ??= <String>{}).add(row.toUpperCase());
+        continue;
+      }
       available.add(
         CreationChoice(
           value: classId,
@@ -806,6 +826,7 @@ CreationCatalogue creationCatalogueFrom({
       for (final (index, row) in magicSchools.rows.keys.indexed)
         if (index > 0) row.toUpperCase(): index,
     },
+    kitsAllowedByRace: kitsAllowedByRace,
     // ⚠️ `START_POINTS`, not `LEVEL_POINTS`. The second column is what each
     // level after the first grants, and creation never reaches it.
     thiefSkillPointsByClass: {
