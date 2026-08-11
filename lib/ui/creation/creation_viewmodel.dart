@@ -21,6 +21,7 @@ import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/creation_derivation.dart';
+import 'package:wand_of_saves/ui/creation/pronouns.dart';
 
 part 'creation_viewmodel.mapper.dart';
 
@@ -362,6 +363,25 @@ class CreationState with CreationStateMappable {
   int get spellsMemorisable => characterClass == null
       ? 0
       : catalogue.spellsMemorisableFor(characterClass!.identifier);
+
+  /// What the game says about [resref], ready to draw, or `null`.
+  ///
+  /// **One string is the whole panel.** The `SPL`'s description strref holds
+  /// the name, the school in brackets, the six stat lines and the prose —
+  /// exactly what the engine's own spell screen shows, so nothing here
+  /// composes or reformats it.
+  ///
+  /// ⚠️ **It carries pronoun tokens**, which is why this lives beside the
+  /// gender that resolves them rather than in the widget: Burning Hands reads
+  /// *"a jet of searing flame shoots from `<PRO_HISHER>` fingertips"*, and
+  /// drawing it unsubstituted prints markup at the player.
+  String? spellDescription(String resref) {
+    final spell = catalogue.wizardSpells
+        .where((spell) => spell.resref == resref)
+        .firstOrNull;
+    final text = catalogue.textFor(spell?.descriptionStrref);
+    return text == null ? null : substituteTokens(text, genderId: genderId);
+  }
 
   /// Whether this character puts spells in a book at all.
   bool get castsSpells =>
