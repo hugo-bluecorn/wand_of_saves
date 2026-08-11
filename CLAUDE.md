@@ -182,56 +182,50 @@ character's numbers the ones the engine would have written).
 Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
 four workflows they serve.
 
-> ### 🔶 Where the last session stopped, 2026-08-11
+> ### 🔶 Where the last session stopped, 2026-08-11 (evening)
 >
-> **`~/.claude/plans/authored-and-derived.md` is implemented — all six slices**, committed and
-> merged as PR #4. `main` is clean and synced. 661 app tests, 282 format tests, `analyze` clean,
-> no suppressions.
+> **`main` is clean, synced and green** — **697 app tests, 287 format tests**, `analyze` clean,
+> zero suppressions. Three PRs merged plus one direct fix.
 >
-> The plan closes what **D14** exposed: the engine overwrites six fields of seventy-three and
-> maintains none of the rest, so a character this app creates keeps whatever it was given for the
-> whole game. **Creation now writes** saving throws, THAC0, Lore, hit points, class levels, morale
-> break and the skills a bard or ranger gets without asking; there is a **thief-skills step**
-> (40 points from `thiefskl.2da`); the **sheet shows what the game will draw** beside what the file
-> holds; and a **specialist** must take a spell of their own school and is barred from the opposed
-> one.
+> ✅ **The two golden characters were made in BG:EE and closed three rules.** Every predicted number
+> was exact. `000000102-Gnome Start` and `000000103-Halfling Start`:
 >
-> ⚠️ **The golden test is the proof**: our Aurel's saving throws, THAC0, Lore and class levels equal
-> the ones **BG:EE itself wrote**.
+> - **Best of each saving-throw column**, measured at last on a multi-class with no fighter in it.
+> - **`savecndh` and `savecng` are not swapped** — the halfling's death save is 9 where the gnome
+>   table would give 13.
+> - ⚠️ **Multi-class Lore is the HIGHEST, not the sum** — the last rule this project carried with
+>   its two readings openly disagreeing. The gnome stores **3** where a sum gives 4.
 >
-> **Four rules were measured against an oracle this project had never used — the game's own shipped
-> NPC records.** BioWare's characters are in the archives and `ResourceRepository.creature()` reads
-> them, so no trip into the game was needed:
+> ⚠️ **Those two saves now exist ONLY as gitignored fixtures.** The user deleted every save through
+> the app, emptied the bin, and asked that they never be restored. `sync_fixtures.dart` cannot
+> regenerate them — its source is empty. Lose that directory and both characters must be remade.
 >
-> - **A multi-class takes the BEST of each saving-throw column.** ⚠️ Aurel could not separate that
->   from "the caster's table wins"; **QUAYLE**, a Cleric/Mage, stores a row *neither* table holds.
-> - ⚠️ **A racial Constitution bonus nobody had asked about** — `savecndh.2da` (dwarf, halfling) and
->   `savecng.2da` (gnome, **no death bonus**). Without them three of seven races are wrong by up to
->   five points on three saves.
-> - **A specialist's forbidden school is in each `SPL`**, not in any table — exclusion flags at
->   `0x1E`, bit = school + 5. Exact across all 22 first-level spells.
-> - ⚠️ ~~**Lore's multi-class rule does NOT settle**~~ — **settled 2026-08-11**: the *highest*. A
->   Gnome Cleric/Illusionist made in the game's own flow stores **3** where a sum gives 4. The
->   shipped NPCs read like sums and cannot referee it; this record was written by the engine.
+> **The rules tables have a typed vocabulary**: `GameTable` (38 tables) and `TableColumn` (13
+> columns) replace bare strings, and `values` turns the invariants into tests — including one that
+> confirms every resref really is in the archives. **D11 is now a checkable property**, not a
+> paragraph: a table may be generated from IESDP or carry strrefs, never both.
 >
-> **Two defects shipped and were found the moment the app was opened**, both invisible to 655
-> passing tests because no fixture has the shape the real data has:
+> **Six defects were found by using the app**, none reachable by the suite as written:
 >
-> - ⚠️ **`clastext.2da`'s class names are TEMPLATES.** `FIGHTER` resolves to `<FIGHTERTYPE>` and
->   `CLERIC_MAGE` to `Cleric / <MAGESCHOOL>`; the class list drew the tokens. Substituted in place —
->   **never wholesale**, because the half-tokened row carries the game's own separator.
-> - ⚠️ **`FALLEN_CLERIC` shares `CLASSID` and `KITID` with `CLERIC`** and sits later in the file, so
->   last-wins put **"Fallen Cleric"** on screen. **Third displaced-row bug** after `IdsMap` and
->   `Table2da`; the `FALLEN` column is the discriminator.
+> - ⚠️ **The app could delete its way into losing its own data.** A save root was recognised by
+>   counting slots inside it, so emptying it made the app forget the folder existed — taking the
+>   character folder, the portraits, the language and the recycle bin's address with it. The failure
+>   sealed itself: "Empty deleted items" greyed out over a full bin.
+> - A blank home screen with no way to create a character.
+> - Alignments in the wrong order (the legal axis, where the engine groups by the moral one) and the
+>   wrong words ("Neutral" for **True Neutral**), and with no descriptions at all.
+> - Proficiencies shown as **`FLAILMORNINGSTAR`** — the row label, not the name.
+> - Spells that said nothing about themselves.
 >
-> **New tool: `tool/dev/dump_table.dart`** — any 2DA from the player's installation, `--list` to
-> search, `--text <strref>` to resolve a string. Every table fact above came from it.
+> ⚠️ **Three of those were one defect**: `loadCreationCatalogue` keeps a hand-maintained set of
+> strrefs, and anything added to the catalogue must remember to join it. When it does not, nothing
+> fails — the fallback quietly wins. There is now a test that walks the whole catalogue.
 >
-> ✅ **Both golden-test characters were made on 2026-08-11** and are fixtures:
->    `000000102-Gnome Start` and `000000103-Halfling Start`. Every predicted number was exact; they
->    closed multi-class Lore, confirmed best-of-each-column on a fighterless multi-class, and proved
->    `savecndh`/`savecng` are not swapped. **They also exposed two defects the app still has** — the
->    proficiency pip cap and the forced specialisation, both in the questions table below.
+> **The pip cap and the forced specialisation are implemented**, not merely recorded — see the
+> questions table. A kit replaces its class column only where it **is** the whole class.
+>
+> **The panel's hints were swept**: arithmetic onto the always-visible helper line, caveats behind a
+> short ⓘ, and no `2DA` file names anywhere a player can see them.
 >
 > ⚠️ **Still owed, and it needs a human:** nobody has looked at the **"What the game shows"** group
 > on the Skills tab. Tiles have been too narrow twice. A `FontLoader` capture harness hung under
@@ -244,7 +238,7 @@ four workflows they serve.
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 282 tests.
+  one table serves reader and writer and they cannot disagree. 287 tests.
   - **`Cre` resizes**: `withEntryInserted` (insert at an entry index, not only append),
     `withEntryField`, `withEffectVersion` and `readField`. The three spell sections have their own
     field tables and readers; `SplCodec` reads enough of an `SPL` header to list a spellbook.
@@ -257,7 +251,7 @@ four workflows they serve.
 - **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. **The whole
   character sheet is editable** and writes back: sealed `EditCommand`s over a curated
   `CharacterStat` table of 49 fields, plus `SetProficiency` for the pips that live in effects;
-  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 543 tests.
+  undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 697 tests.
   - **Only what the class can actually have is offered.** The seven thief skills are greyed out
     when the player's `thiefscl.2da` gives that class or kit 0% of them — a Fighter/Mage has none
     — and proficiency tiles show their ceiling (`max 3`) rather than only refusing a bad value.
@@ -269,7 +263,11 @@ four workflows they serve.
     **repositories must never be aware of each other**. It reads `weapprof.2da` and
     `thiefscl.2da`, which share a column vocabulary — one kit-then-class resolver serves both.
 - **A rules layer** — `lib/domain/rules/`, part generated from IESDP and part read from the
-  player's own installation. Turns stored numbers into what the game displays, **and says what a
+  player's own installation. ⚠️ **Every table is named through `GameTable` and every column through
+  `TableColumn`, never a bare string** — 38 and 13 enhanced-enum values, named for *what they
+  answer* rather than what the file is called, because `profs`/`profsmax` and
+  `thiefskl`/`thiefscl` have each cost this project a shipped bug. `values` makes the invariants
+  testable, including one that checks every resref really is in the archives. Turns stored numbers into what the game displays, **and says what a
   character's stored numbers should be in the first place**: `SavingThrowTables` (five class tables
   plus the two racial Constitution ones), `RulesTables` (THAC0, Lore, thief-skill points, the bard
   and ranger progressions, and the display modifiers), and `creation_derivation.dart`, which is the
@@ -364,8 +362,8 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | Who may Turn Undead, and who may Track | **Half-closed 2026-08-10.** Stored 25 and 100 on a Fighter/Mage/Thief both **survived** the record and the Skills tab showed **neither** — so the display is class-gated and a stored value alone grants nothing. *Which* classes qualify is still in no table that has been found, so both stay editable rather than take an invented rule. |
 | Multi-class saving throws | **Closed 2026-08-10 — best of each column, each class at its own level.** QUAYLE, a Cleric/Mage, stores a row neither table holds. ⚠️ Plus a racial Constitution bonus: `savecndh` for dwarves and halflings, `savecng` for gnomes, whose death row is all zeros. |
 | Multi-class **Lore** | **Closed 2026-08-11 — the HIGHEST, not the sum.** A Gnome Cleric/Illusionist made in BG:EE's own flow stores **3** where a sum gives 4. The shipped NPCs read like sums and cannot referee it (they hold a Fighter 1 with Lore 4); this record was written by the engine at creation. Code already followed the engine. ⚠️ Still open and *not* in code: the walkthrough says a **Blade** gets half Lore per level, and `lore.2da` has no kit rows. |
-| The proficiency pip cap | **Closed 2026-08-11 — `min(profsmax.FIRST_LEVEL, weapprof[column])`.** `profsmax` gives every row 2; `weapprof` gives `CLERIC`/`THIEF`/`CLERIC_MAGE` **1** and `FIGHTER` 5. Engine-confirmed: a thief was refused a second pip with a slot unspent. ⚠️ **The column is not simply the kit's** — `SWASHBUCKLER` is 2 where `THIEF` is 1, but `ILLUSIONIST` is 0 for War Hammer where `CLERIC_MAGE` is 1 and the engine gave the gnome one. Kit's column when the kit is the whole class; class's column when multi-class. **The app does not yet do this.** |
-| A forced specialisation | **Closed 2026-08-11.** A multi-class gets **no kit screen**, yet a Gnome Cleric/Illusionist stores `kit = 0x04000000` → `MAGESCHOOL_ILLUSIONIST`. `clsrcreq.2da`'s `GNOME` column allows exactly one school, so the choice is a lookup and only the forcing is a rule. **The app writes `TRUECLASS` instead.** |
+| The proficiency pip cap | **Closed 2026-08-11 — `min(profsmax.FIRST_LEVEL, weapprof[column])`.** `profsmax` gives every row 2; `weapprof` gives `CLERIC`/`THIEF`/`CLERIC_MAGE` **1** and `FIGHTER` 5. Engine-confirmed: a thief was refused a second pip with a slot unspent. ⚠️ **The column is not simply the kit's** — `SWASHBUCKLER` is 2 where `THIEF` is 1, but `ILLUSIONIST` is 0 for War Hammer where `CLERIC_MAGE` is 1 and the engine gave the gnome one. Kit's column when the kit is the whole class; class's column when multi-class. **Implemented 2026-08-11**, in creation and on the character sheet alike. |
+| A forced specialisation | **Closed 2026-08-11.** A multi-class gets **no kit screen**, yet a Gnome Cleric/Illusionist stores `kit = 0x04000000` → `MAGESCHOOL_ILLUSIONIST`. `clsrcreq.2da`'s `GNOME` column allows exactly one school, so the choice is a lookup and only the forcing is a rule. **Implemented 2026-08-11**; `clsrcreq.2da`'s forty kit rows were being dropped by the catalogue, which also meant a gnome mage was offered all eight schools. |
 | A specialist's forbidden school | **Closed 2026-08-10 — it is in each `SPL`,** exclusion flags at `0x1E`, bit = `mschool.2da` row + 5. Exact across all 22 first-level spells. No 2DA pairs the schools. |
 | Which fields the engine owns | **Closed 2026-08-10 — D14.** A probe character with every field at an underivable value was imported, played and saved: the engine overwrote **six** fields and left **sixty-seven** alone. Hit points and Lore store the class-and-level part only, with the ability bonus added at display. |
 
