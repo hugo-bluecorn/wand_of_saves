@@ -415,6 +415,79 @@ void main() {
       );
     });
 
+    test('are listed in the order the game lists them', () {
+      // ⚠️ **The engine groups by the MORAL axis, and we grouped by the legal
+      // one.** Its own screen — `docs/findings/screens/char-create/
+      // 11-alignment-list.png` — reads Lawful Good, Neutral Good, Chaotic
+      // Good, then the neutrals, then the evils. Ours read Lawful Good, Lawful
+      // Neutral, Lawful Evil… because the list was built in `alignmnt.2da`'s
+      // column order, which is a data layout and not a presentation.
+      //
+      // ⚠️ **Not an invented ordering.** `ALIGNMEN.IDS` names both axes
+      // itself: `MASK_GOOD`/`MASK_GENEUTRAL`/`MASK_EVIL` are the low nibble
+      // and `MASK_LAWFUL`/`MASK_LCNEUTRAL`/`MASK_CHAOTIC` the high one, so
+      // sorting by moral-then-legal is the game's own decomposition.
+      final fighterChoice = buildCatalogue()
+          .classesFor(human)
+          .singleWhere((c) => c.identifier == 'FIGHTER');
+
+      expect(buildCatalogue().alignmentsFor(characterClass: fighterChoice), [
+        0x11, // Lawful Good
+        0x21, // Neutral Good
+        0x31, // Chaotic Good
+        0x12, // Lawful Neutral
+        0x22, // True Neutral
+        0x32, // Chaotic Neutral
+        0x13, // Lawful Evil
+        0x23, // Neutral Evil
+        0x33, // Chaotic Evil
+      ]);
+    });
+
+    test('names them with the game’s own words, including True Neutral', () {
+      // ⚠️ **`ALIGNMEN.IDS` calls it `NEUTRAL`; the game calls it "True
+      // Neutral".** Prettifying the identifier produced our own wording rather
+      // than the engine's — and only in English. All nine are real strings in
+      // the talk table, so they are read rather than derived.
+      final catalogue = buildCatalogue().withText({
+        1102: 'Lawful Good',
+        1106: 'True Neutral',
+        1110: 'Chaotic Evil',
+      });
+
+      expect(catalogue.alignmentName(0x11), 'Lawful Good');
+      expect(catalogue.alignmentName(0x22), 'True Neutral');
+      expect(catalogue.alignmentName(0x33), 'Chaotic Evil');
+    });
+
+    test('offers each one as a choice, with the game’s own description', () {
+      // ⚠️ **The alignment step was the only one with no description panel**,
+      // where race, class and specialisation all have one. The game shows a
+      // paragraph per alignment — see
+      // `docs/findings/screens/char-create/12-alignment-neutral-good.png` —
+      // and a step behaving unlike its neighbours is either a principle or an
+      // oversight. This one was an oversight.
+      final catalogue = buildCatalogue().withText({
+        1105: 'Neutral Good',
+        9606: 'NEUTRAL GOOD: These characters believe that a balance…',
+      });
+      final choice = catalogue.alignmentChoice(0x21);
+
+      expect(choice.value, 0x21);
+      expect(choice.identifier, 'NEUTRAL_GOOD');
+      expect(catalogue.textFor(choice.nameStrref), 'Neutral Good');
+      expect(
+        catalogue.textFor(choice.descriptionStrref),
+        startsWith('NEUTRAL GOOD:'),
+      );
+    });
+
+    test('has no name to give when there is no talk table', () {
+      // An ordinary state, not a failure: the app opens documents on a machine
+      // with no game installed. The caller falls back to the derived name.
+      expect(buildCatalogue().alignmentName(0x22), isNull);
+    });
+
     test('a kensai may not be chaotic, where a plain fighter may', () {
       // ⚠️ This is why the specialisation step comes *before* alignment: the
       // kit's row governs, not the class's.

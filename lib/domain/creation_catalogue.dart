@@ -18,6 +18,8 @@ import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/rules/identifiers.g.dart';
+import 'package:wand_of_saves/domain/rules/table_columns.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 part 'creation_catalogue.mapper.dart';
@@ -344,6 +346,33 @@ class CreationCatalogue with CreationCatalogueMappable {
   /// screen that will not draw.
   String? textFor(int? strref) => strref == null ? null : textByStrref[strref];
 
+  /// What the game calls alignment [id], or `null` with no talk table.
+  ///
+  /// ⚠️ **Read, never derived.** `ALIGNMEN.IDS` calls true neutral `NEUTRAL`
+  /// and the game calls it **"True Neutral"**, so prettifying the identifier
+  /// gives our wording rather than the engine's — and only in English. See
+  /// [alignmentNameStrrefs] for why the pairing is written out.
+  ///
+  /// `null` is an ordinary answer on a machine with no game installed, and the
+  /// caller falls back to the derived name.
+  String? alignmentName(int id) => textFor(alignmentNameStrrefs[id]);
+
+  /// Alignment [id] as a choice, so the step can be drawn like its neighbours.
+  ///
+  /// ⚠️ **The alignment step was the only one with no description**, where
+  /// race, class and specialisation all show the game's own paragraph beside
+  /// the list. Expressing an alignment as a [CreationChoice] is what lets it
+  /// use the same widget rather than a second, thinner one.
+  ///
+  /// The identifier comes from `ALIGNMEN.IDS` and is a join key, never shown —
+  /// it calls true neutral `NEUTRAL` where the game says "True Neutral".
+  CreationChoice alignmentChoice(int id) => CreationChoice(
+    value: id,
+    identifier: alignmentIdentifiers[id] ?? '$id',
+    nameStrref: alignmentNameStrrefs[id],
+    descriptionStrref: alignmentDescriptionStrrefs[id],
+  );
+
   /// This catalogue with [text] resolved against it.
   CreationCatalogue withText(Map<int, String> text) =>
       copyWith(textByStrref: text);
@@ -522,6 +551,77 @@ const Map<String, int> alignmentByColumn = {
   'C_E': 0x33,
 };
 
+/// Each alignment's name in the player's talk table, by `ALIGNMEN.IDS` number.
+///
+/// ⚠️ **D13 — no table pairs these, and every candidate was opened.** There is
+/// exactly one file matching `align` in the installation and it is
+/// `alignmnt.2da`, which says which alignments a class may take and carries no
+/// names at all. The strings are real and the game ships each of them twice —
+/// 1102–1110 and 7183–7191 — so the pairing is written out here rather than
+/// looked up.
+///
+/// ⚠️ **Why not derive the names from the identifiers.** `ALIGNMEN.IDS` calls
+/// true neutral simply `NEUTRAL`, and the game calls it **"True Neutral"** —
+/// so prettifying an identifier produces our wording rather than the engine's.
+/// It is also English-only, where these follow whatever language the player
+/// installed.
+const Map<int, int> alignmentNameStrrefs = {
+  0x11: 1102,
+  0x12: 1104,
+  0x13: 1103,
+  0x21: 1105,
+  0x22: 1106,
+  0x23: 1107,
+  0x31: 1108,
+  0x32: 1109,
+  0x33: 1110,
+};
+
+/// Each alignment's description in the talk table, by `ALIGNMEN.IDS` number.
+///
+/// The paragraph the game shows beside the list once one is picked — *"NEUTRAL
+/// GOOD: These characters believe that a balance of forces is important…"*. See
+/// `docs/findings/screens/char-create/12-alignment-neutral-good.png`.
+///
+/// ⚠️ **Same D13 position as [alignmentNameStrrefs]**: `alignmnt.2da` is the
+/// only alignment file in the installation and carries no text at all, so the
+/// pairing is written out. Found by scanning the player's own talk table for
+/// the nine paragraphs; 9606 matches the engine's screen word for word.
+const Map<int, int> alignmentDescriptionStrrefs = {
+  0x11: 9603,
+  0x12: 9604,
+  0x13: 9605,
+  0x21: 9606,
+  0x22: 9608,
+  0x23: 9607,
+  0x31: 9609,
+  0x32: 9610,
+  0x33: 9611,
+};
+
+/// Orders alignments the way the game's own screen does.
+///
+/// **Grouped by the moral axis, then the legal one**: Lawful Good, Neutral
+/// Good, Chaotic Good, then the three neutrals, then the three evils. See
+/// `docs/findings/screens/char-create/11-alignment-list.png`.
+///
+/// ⚠️ **D13 — the order is in no table, and this is not an invented one.**
+/// `alignmnt.2da`'s columns run `L_G, L_N, L_E, N_G…`, which is the legal axis
+/// first and is a data layout rather than a presentation; building the list in
+/// that order is what put the wrong sequence on screen. Neither strref block
+/// is in display order either — 1102–1110 runs Lawful Good, Lawful *Evil*,
+/// Lawful *Neutral*.
+///
+/// What justifies the decomposition is `ALIGNMEN.IDS` itself, which names both
+/// axes: `MASK_GOOD` 0x01, `MASK_GENEUTRAL` 0x02 and `MASK_EVIL` 0x03 are the
+/// low nibble, and `MASK_LAWFUL` 0x10, `MASK_LCNEUTRAL` 0x20 and
+/// `MASK_CHAOTIC` 0x30 the high one. Sorting by moral-then-legal is the game's
+/// own division of its own numbering.
+int compareAlignmentsForDisplay(int a, int b) {
+  final moral = (a & 0x0F).compareTo(b & 0x0F);
+  return moral != 0 ? moral : (a & 0xF0).compareTo(b & 0xF0);
+}
+
 /// The `clastext.2da` `KITID` of a row describing a plain class.
 ///
 /// `0x4000`, which is `KIT.IDS`'s `TRUECLASS`. It is the only thing telling a
@@ -630,10 +730,13 @@ CreationCatalogue creationCatalogueFrom({
 
   final alignmentsByRow = <String, List<int>>{};
   for (final row in alignmentRequirements.rows.keys) {
+    // ⚠️ Sorted, because `alignmentByColumn` follows the table's own column
+    // order and that is the legal axis first -- a data layout, not the order
+    // the game puts on screen. See [compareAlignmentsForDisplay].
     final allowed = [
       for (final MapEntry(key: column, value: id) in alignmentByColumn.entries)
         if (alignmentRequirements.number(row, column) == 1) id,
-    ];
+    ]..sort(compareAlignmentsForDisplay);
     if (allowed.isNotEmpty) alignmentsByRow[row] = allowed;
   }
 
@@ -707,7 +810,7 @@ CreationCatalogue creationCatalogueFrom({
     // level after the first grants, and creation never reaches it.
     thiefSkillPointsByClass: {
       for (final row in thiefSkillPoints.rows.keys)
-        if (thiefSkillPoints.number(row, thiefSkillStartColumn)
+        if (thiefSkillPoints.number(row, TableColumn.startPoints.header)
             case final int points)
           if (points > 0) row: points,
     },
@@ -728,7 +831,8 @@ const String _bard = 'BARD';
 /// different questions with it — slots in one, a rank cap in the other.
 Map<String, int> _firstLevelColumn(Table2da table) => {
   for (final row in table.rows.keys)
-    if (table.number(row, firstLevelColumn) case final int value) row: value,
+    if (table.number(row, TableColumn.firstLevel.header) case final int value)
+      row: value,
 };
 
 /// One column family of [row], keyed by [CreationAbility.key].
@@ -746,9 +850,6 @@ Map<String, int> _abilityColumn(
       ability.key: value,
 };
 
-/// The column both proficiency tables answer a new character's question with.
-const String firstLevelColumn = 'FIRST_LEVEL';
-
 /// Description strrefs by `RACE.IDS` id.
 ///
 /// ⚠️ **Keyed on the table's own `ID` column, never on its row label.**
@@ -763,14 +864,11 @@ Map<int, int> _raceDescriptions(Table2da raceText) => {
         if (strref >= 0) id: strref,
 };
 
-/// `thiefskl.2da`'s first-level column — the points a new character spends.
-const String thiefSkillStartColumn = 'START_POINTS';
-
 /// Description strrefs by `CLASS.IDS` id, taking only the plain-class rows.
 Map<int, int> _classDescriptions(Table2da classText) => {
   for (final row in classText.rows.keys)
     // The same FALLEN filter the names need — see `nameStrrefs`.
-    if (classText.number(row, fallenColumn) != fallenClass)
+    if (classText.number(row, TableColumn.fallen.header) != fallenClass)
       if (classText.number(row, 'KITID') == trueClassKitId)
         if (classText.number(row, 'CLASSID') case final int id)
           if (classText.number(row, 'DESCSTR') case final int strref)
