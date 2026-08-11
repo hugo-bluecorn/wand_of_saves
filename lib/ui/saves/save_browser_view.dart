@@ -80,13 +80,18 @@ class SaveBrowserView extends ConsumerWidget {
               ],
             ),
       body: browser.when(
-        data: (found) => found.isEmpty
-            ? const _NothingFound()
-            : _Sections(
-                state: found,
-                selection: selection,
-                notifier: notifier,
-              ),
+        // ⚠️ **No "nothing found" branch, deliberately.** There used to be one
+        // for `found.isEmpty`, and it replaced the whole screen — including
+        // the ＋ card, which lives *inside* the characters section. So an app
+        // emptied of saves and characters offered no way to make one, which is
+        // the state this app can put itself in. Each section already says its
+        // own piece when it is empty, and the saves one already carries the
+        // only advice the replaced message had.
+        data: (found) => _Sections(
+          state: found,
+          selection: selection,
+          notifier: notifier,
+        ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _LoadFailed(error: error),
       ),
@@ -841,24 +846,6 @@ class _SaveSlotSummary extends StatelessWidget {
 }
 
 /// Shown only when there is neither a save nor a character anywhere.
-class _NothingFound extends StatelessWidget {
-  const _NothingFound();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(32),
-        child: Text(
-          'No Baldur’s Gate saves or characters found.\n'
-          'Set BGEE_SAVE_DIR if the game lives somewhere unusual.',
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}
-
 class _LoadFailed extends StatelessWidget {
   const _LoadFailed({required this.error});
 

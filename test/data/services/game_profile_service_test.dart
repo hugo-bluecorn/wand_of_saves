@@ -108,6 +108,37 @@ void main() {
 
       expect(service.findSaveRoot(), isNull);
     });
+
+    test('an empty save folder is still the root when Baldur.lua is beside '
+        'it', () {
+      // ⚠️ **The defect, stated.** Recognising the root by counting slots
+      // meant the folder stopped being the save root the moment it was empty
+      // -- so deleting every save through the app made it forget where its own
+      // data lives. `findSaveRoot` returning null cascades into the character
+      // folder, the portrait folder, the language and the recycle bin, which
+      // is how "Empty deleted items" came to be greyed out over a full one.
+      final separator = Platform.pathSeparator;
+      final userData = makeDir('userdata');
+      final root = makeDir('userdata${separator}save');
+      touch(userData, GameProfileService.settingsMarker);
+      final service = GameProfileService(saveCandidates: [root]);
+
+      expect(service.findSaveRoot(), root);
+    });
+
+    test('a folder that does not exist is not the root, marker or not', () {
+      // ⚠️ The edge the marker introduces. Counting slots refused a missing
+      // directory for free; asking about the parent does not, so existence has
+      // to be checked rather than assumed.
+      final separator = Platform.pathSeparator;
+      final userData = makeDir('userdata');
+      touch(userData, GameProfileService.settingsMarker);
+      final service = GameProfileService(
+        saveCandidates: ['$userData${separator}save'],
+      );
+
+      expect(service.findSaveRoot(), isNull);
+    });
   });
 
   /// Creates `<tmp>/userdata/save/000000022-last/BALDUR.gam` and returns the
@@ -270,8 +301,26 @@ void _realMachine() {
     test(
       'the default candidates find a real save directory',
       () {
+        // ⚠️ **This used to assert the folder held at least one slot, and that
+        // was the same mistake the code made.** An empty save folder is an
+        // ordinary state -- this application can produce one, by deleting
+        // every save -- so the count says something about the player's data
+        // rather than about discovery.
+        //
+        // Worse, the assertion hid itself: the test skips on a null root, and
+        // before the fix an empty folder *was* a null root. The one test
+        // guarding discovery disappeared at exactly the moment discovery
+        // broke. What is asserted now is stronger, not weaker: the folder is
+        // really there, and the game's own settings file sits beside it.
         expect(saveRoot, isNotNull);
-        expect(service.slotsIn(saveRoot!), isNotEmpty);
+        expect(Directory(saveRoot!).existsSync(), isTrue);
+        expect(
+          File(
+            '${Directory(saveRoot).parent.path}${Platform.pathSeparator}'
+            '${GameProfileService.settingsMarker}',
+          ).existsSync(),
+          isTrue,
+        );
       },
       skip: saveRoot == null ? 'no BG:EE save directory on this machine' : null,
     );
