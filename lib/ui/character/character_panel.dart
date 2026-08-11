@@ -321,10 +321,7 @@ class _CharacterFacts extends StatelessWidget {
               value: character.currentHitPoints,
               label: 'Current hit points',
               onCommitted: onCommitted,
-              hint:
-                  'What the savegame stores, and what you edit. The game adds '
-                  'the Constitution bonus before showing it, and clamps to '
-                  'the maximum — the "in game" tile does the same arithmetic.',
+              helper: 'clamped to the maximum on load',
             ),
             _StatField(
               character: character,
@@ -340,11 +337,9 @@ class _CharacterFacts extends StatelessWidget {
                 value:
                     '${sheet.currentHitPointsInGame} / '
                     '${sheet.maximumHitPointsInGame}',
-                hint:
-                    'Stored hit points plus '
-                    '${sheet.hitPointBonusPerLevel} per level from '
-                    'Constitution ${character.abilities.constitution}, which '
-                    'is what the game shows on the character sheet.',
+                helper:
+                    'stored ${character.maximumHitPoints}, '
+                    '+${sheet.hitPointBonusPerLevel}/level from Constitution',
               ),
             _StatField(
               character: character,
@@ -362,8 +357,8 @@ class _CharacterFacts extends StatelessWidget {
               label: 'Gold (carried)',
               onCommitted: onCommitted,
               hint:
-                  'Gold on this character. The shared party purse is stored '
-                  'separately and is not this number.$_importWarning',
+                  'This character’s own, not the shared party purse.'
+                  '$_importWarning',
             ),
             // Absent rather than blank when there is no party: an exported
             // character has no reputation the game would print.
@@ -371,14 +366,13 @@ class _CharacterFacts extends StatelessWidget {
               _ReadOnlyStat(
                 label: 'Reputation (party)',
                 value: party.toStringAsFixed(1),
+                helper:
+                    'this character stores '
+                    '${character.reputation.toStringAsFixed(1)}',
                 hint:
-                    'Reputation belongs to the party, not to one character, '
-                    'and this is the party’s — the number the game shows. Each '
-                    'creature record carries a copy of its own, and on '
-                    'everyone but the protagonist it goes stale: this '
-                    'character '
-                    'stores ${character.reputation.toStringAsFixed(1)}, and '
-                    'the engine ignores it. Measured in game.',
+                    'The party’s, which is what the game reads. Each record '
+                    'keeps its own copy and every one but the protagonist’s '
+                    'goes stale.',
               ),
           ],
         ),
@@ -564,10 +558,9 @@ class _Skills extends StatelessWidget {
               _ReadOnlyStat(
                 label: 'Lore',
                 value: sheet.loreInGame.toString(),
-                hint:
-                    'Stored ${character.thiefSkills.lore}, plus what '
-                    'Intelligence and Wisdom each add. The engine consults '
-                    'lorebon.2da twice, once per ability.',
+                helper:
+                    'stored ${character.thiefSkills.lore}, '
+                    '+ Intelligence + Wisdom',
               ),
             // ⚠️ **Only the skills this class actually has.** The bonuses are
             // real for anyone — an elf gets +20 Pick Pockets from their race
@@ -581,18 +574,15 @@ class _Skills extends StatelessWidget {
                   _ReadOnlyStat(
                     label: stat.label,
                     value: shown.toString(),
-                    hint:
-                        'The allocated value plus what Dexterity and this '
-                        'character’s race add — skilldex.2da and skillrac.2da.',
+                    helper: 'allocated, + Dexterity + race',
                   ),
             if (sheet.chanceToLearnSpell case final int chance)
               _ReadOnlyStat(
                 label: 'Chance to learn a spell',
                 value: '$chance%',
-                hint:
-                    'From Intelligence '
-                    '${character.abilities.intelligence}, by intmod.2da. The '
-                    'game prints this on the spellbook screen.',
+                helper:
+                    'from Intelligence '
+                    '${character.abilities.intelligence}',
               ),
           ],
         ),
@@ -688,20 +678,15 @@ class _Combat extends StatelessWidget {
               value: character.thac0,
               label: 'THAC0 (base)',
               onCommitted: onCommitted,
-              hint:
-                  'The game calls this "Base THAC0" and shows a second, lower '
-                  'number beside it — Strength is applied before display, and '
-                  'weapon proficiencies move it further still.',
+              helper: 'what the game calls "Base THAC0"',
             ),
             if (sheet.thac0InGame != null)
               _ReadOnlyStat(
                 label: 'THAC0 (in game)',
                 value: sheet.thac0InGame.toString(),
-                hint:
-                    'Base THAC0 less ${sheet.strengthToHit} from Strength. '
-                    'The engine prints this as "Strength Modification". A '
-                    'weapon this character is proficient with moves it '
-                    'further, and that needs the item records.',
+                helper:
+                    '${character.thac0} − ${sheet.strengthToHit} '
+                    'from Strength',
               ),
             _StatField(
               character: character,
@@ -711,9 +696,8 @@ class _Combat extends StatelessWidget {
               label: 'Armour class (natural)',
               onCommitted: onCommitted,
               hint:
-                  'Measured twice: changing this alone does not move what the '
-                  'game shows. The effective field beside it is the one the '
-                  'engine reads. Kept editable because the field is real.',
+                  'Editing this alone does not move what the game shows — the '
+                  'effective field is the one the engine reads. Measured.',
             ),
             _StatField(
               character: character,
@@ -722,19 +706,15 @@ class _Combat extends StatelessWidget {
               value: character.armorClass,
               label: 'Armour class (effective)',
               onCommitted: onCommitted,
-              hint:
-                  'What the character defends at before Dexterity is applied, '
-                  'and the field the game actually reads — confirmed in game '
-                  'by writing a value that could not arise unarmoured.',
+              hint: 'The field the engine actually reads. Confirmed in game.',
             ),
             if (sheet.armourClassInGame != null)
               _ReadOnlyStat(
                 label: 'Armour class (in game)',
                 value: sheet.armourClassInGame.toString(),
-                hint:
-                    'Armour class plus ${sheet.armourClassModifier} from '
-                    'Dexterity ${character.abilities.dexterity}. Equipment '
-                    'moves it further, and that needs the item records.',
+                helper:
+                    '${character.armorClass} '
+                    '${sheet.armourClassModifier} from Dexterity',
               ),
             // ⚠️ **Attacks per round is not a count**, so the stored byte and
             // what the game draws are different numbers: 6 to 10 are halves.
@@ -742,10 +722,8 @@ class _Combat extends StatelessWidget {
             _ReadOnlyStat(
               label: 'Attacks per round (in game)',
               value: sheet.attacksPerRound,
-              hint:
-                  'The record stores ${character.numberOfAttacks}. Values 0 '
-                  'to 5 are whole attacks and 6 to 10 are halves, so the game '
-                  'draws this as ${sheet.attacksPerRound}.',
+              helper:
+                  'stored ${character.numberOfAttacks} — 6 to 10 are halves',
             ),
             for (final (stat, value) in _fighting(character))
               _StatField(
@@ -946,10 +924,31 @@ const double _tileWidth = 222;
 /// [hint] says *why* it is not editable. A stored value the player cannot
 /// reconcile with their game reads as a bug unless the screen explains itself.
 class _ReadOnlyStat extends StatelessWidget {
-  const _ReadOnlyStat({required this.label, required this.value, this.hint});
+  const _ReadOnlyStat({
+    required this.label,
+    required this.value,
+    this.helper,
+    this.hint,
+  });
 
   final String label;
   final String value;
+
+  /// The arithmetic behind [value], shown **under** the field and always.
+  ///
+  /// ⚠️ **Where a hover used to hold a paragraph.** These tiles show a derived
+  /// number and used to explain the sum in a tooltip four lines long, which
+  /// meant the one thing a reader wanted -- what this number is made of -- was
+  /// the one thing they had to go looking for. The helper line is already
+  /// reserved by [_statDecoration] so this costs no layout, and a short sum
+  /// beside the result is worth more than an essay behind an ⓘ.
+  final String? helper;
+
+  /// Something the number cannot say for itself. Kept behind an ⓘ.
+  ///
+  /// **Only for caveats**, never for arithmetic: that a field is not the one
+  /// the engine reads, that a value belongs to the party rather than the
+  /// character. Those are worth interrupting for; a sum is not.
   final String? hint;
 
   @override
@@ -965,6 +964,7 @@ class _ReadOnlyStat extends StatelessWidget {
           context,
           label: label,
           hasHint: hint != null,
+          helper: helper,
         ),
       ),
     );
@@ -1200,48 +1200,49 @@ class _PipField extends StatelessWidget {
     final canAdd = enabled && (maximum == null || pips < maximum);
     final canRemove = enabled && pips > 0;
 
-    final hint = maximum == null
-        ? 'Pips in this weapon or style. The game caps them per class, but '
-              'that table lives in the game files and none were found on this '
-              'machine — so no ceiling is enforced here.'
-        : 'Pips in this weapon or style. The game allows this character at '
-              'most $maximum, which is what their own weapprof.2da says for '
-              'their class. Only a proficiency they already have can be '
-              'changed — granting a new one resizes the record, which this '
-              'build does not do yet.';
-
-    return Tooltip(
-      message: hint,
-      child: Semantics(
-        // The dots carry the value visually and reach nobody otherwise, so
-        // the count is spoken too. `explicitChildNodes` keeps the two buttons
-        // as nodes of their own — without it their labels are folded into
-        // this one and the tile announces itself three times over.
-        container: true,
-        explicitChildNodes: true,
-        label: maximum == null ? '$label, $pips' : '$label, $pips of $maximum',
-        child: _FieldShell(
-          label: label,
-          hasHint: true,
-          child: InputDecorator(
-            decoration: _statDecoration(context, label: label, hasHint: true),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _Pips(pips: pips, maximum: maximum, enabled: enabled),
+    // ⚠️ **No hint icon here, and no tooltip.** This used to carry four
+    // sentences that wrapped across the window and named `weapprof.2da` at the
+    // player. The ceiling is a number, so it is *shown* -- `2/3` beside the
+    // dots -- and once it is shown there is nothing left for an ⓘ to add. A
+    // control that explains what it already displays is noise.
+    return Semantics(
+      // The dots carry the value visually and reach nobody otherwise, so
+      // the count is spoken too. `explicitChildNodes` keeps the two buttons
+      // as nodes of their own — without it their labels are folded into
+      // this one and the tile announces itself three times over.
+      container: true,
+      explicitChildNodes: true,
+      label: maximum == null ? '$label, $pips' : '$label, $pips of $maximum',
+      child: _FieldShell(
+        label: label,
+        hasHint: false,
+        child: InputDecorator(
+          decoration: _statDecoration(context, label: label, hasHint: false),
+          child: Row(
+            children: [
+              Expanded(
+                child: _Pips(pips: pips, maximum: maximum, enabled: enabled),
+              ),
+              if (maximum != null) ...[
+                Text(
+                  '$pips/$maximum',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-                _PipButton(
-                  icon: Icons.remove,
-                  tooltip: 'One less pip in $label',
-                  onPressed: canRemove ? () => onCommitted(pips - 1) : null,
-                ),
-                _PipButton(
-                  icon: Icons.add,
-                  tooltip: 'One more pip in $label',
-                  onPressed: canAdd ? () => onCommitted(pips + 1) : null,
-                ),
+                const SizedBox(width: 8),
               ],
-            ),
+              _PipButton(
+                icon: Icons.remove,
+                tooltip: 'One less pip in $label',
+                onPressed: canRemove ? () => onCommitted(pips - 1) : null,
+              ),
+              _PipButton(
+                icon: Icons.add,
+                tooltip: 'One more pip in $label',
+                onPressed: canAdd ? () => onCommitted(pips + 1) : null,
+              ),
+            ],
           ),
         ),
       ),

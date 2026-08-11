@@ -201,10 +201,60 @@ class CreationState with CreationStateMappable {
   /// makes [steps] drop the step entirely.
   List<CreationChoice> get specialisationsAvailable {
     if (characterClass == null) return const [];
-    final kits = catalogue.kitsFor(characterClass!.value);
+    // ⚠️ **Narrowed by race.** `clsrcreq.2da` lists kits beside classes, and a
+    // gnome may take exactly one mage school. Offering all eight would let a
+    // player build a character the game will not.
+    final allowed = catalogue.kitsAllowedByRace[race?.value];
+    final kits = [
+      for (final kit in catalogue.kitsFor(characterClass!.value))
+        if (allowed == null || allowed.contains(kit.identifier.toUpperCase()))
+          kit,
+    ];
     if (kits.isEmpty) return const [];
     return [CreationChoice.noSpecialisation, ...kits];
   }
+
+  /// The school this character is given without being asked, or `null`.
+  ///
+  /// ⚠️ **Measured: a multi-class gets no kit screen and the engine writes a
+  /// kit anyway.** A Gnome Cleric/Illusionist made in BG:EE's own flow stores
+  /// `0x04000000` — `MAGESCHOOL_ILLUSIONIST` — though the game never asked.
+  ///
+  /// **The choice is a lookup; only the forcing is a rule.** `clsrcreq.2da`
+  /// says a gnome may take exactly one school, so where a multi-class contains
+  /// a mage and the race is allowed precisely one, there is nothing to ask and
+  /// one answer to write. An elf may take several, so an elf Fighter/Mage is
+  /// forced into nothing — which is what BG:EE's own Aurel stores.
+  ///
+  /// ⚠️ **Only for a multi-class.** A single-class mage *has* a kit screen, and
+  /// forcing there would take away a choice the game offers; the race narrows
+  /// that list instead — see [specialisationsAvailable].
+  CreationChoice? get forcedSpecialisation {
+    final identifier = characterClass?.identifier;
+    if (identifier == null || !identifier.contains('_')) return null;
+    if (!identifier.split('_').contains('MAGE')) return null;
+
+    final allowed = catalogue.kitsAllowedByRace[race?.value];
+    if (allowed == null) return null;
+
+    final schools = [
+      for (final kit in catalogue.kitsByClass.values.expand((kits) => kits))
+        if (catalogue.schoolByKit.containsKey(kit.identifier.toUpperCase()))
+          if (allowed.contains(kit.identifier.toUpperCase())) kit,
+    ];
+    return schools.length == 1 ? schools.single : null;
+  }
+
+  /// The specialisation the record should carry: the chosen one, or the forced.
+  ///
+  /// Kept apart from [specialisation] because the two are different facts —
+  /// one is an answer the player gave, the other is one the game gives on their
+  /// behalf, and a flow that conflated them could not tell "not specialised"
+  /// from "never asked".
+  CreationChoice? get specialisationToWrite =>
+      specialisation == CreationChoice.noSpecialisation
+      ? specialisation
+      : specialisation ?? forcedSpecialisation;
 
   /// The alignments the chosen class — or its specialisation — allows.
   List<int> get alignmentsAvailable => characterClass == null
@@ -226,11 +276,42 @@ class CreationState with CreationStateMappable {
   /// this: there the column has to be recovered from a stored kit dword, and
   /// here the choice already carries `kitlist.2da`'s own row label, which *is*
   /// the column.
-  String? get proficiencyColumn =>
-      specialisation != null &&
-          specialisation != CreationChoice.noSpecialisation
-      ? specialisation!.identifier
-      : characterClass?.identifier;
+  /// ⚠️ **Except for a multi-class, whose class column governs.** Both halves
+  /// are measured. `SWASHBUCKLER` allows 2 pips in Short Sword where `THIEF`
+  /// allows 1, so a single-class kit's column is the right one. But
+  /// `ILLUSIONIST` allows **0** in War Hammer where `CLERIC_MAGE` allows 1, and
+  /// BG:EE gave a Gnome Cleric/Illusionist a hammer and a flail — so for a
+  /// multi-class the school is a property of one half and cannot speak for the
+  /// character. A kit *replaces* its class only when it is the whole class.
+  String? get proficiencyColumn {
+    final classIdentifier = characterClass?.identifier;
+    final kit = specialisation;
+    final hasKit = kit != null && kit != CreationChoice.noSpecialisation;
+    if (!hasKit || classIdentifier == null) return classIdentifier;
+    return classIdentifier.contains('_') ? classIdentifier : kit.identifier;
+  }
+
+  /// The most pips [proficiencyId] may hold at first level.
+  ///
+  /// ⚠️ **The LOWER of two tables, and neither alone is right.**
+  /// `profsmax.2da`'s `FIRST_LEVEL` is the *level* ceiling and is `2` for every
+  /// row in the file; `weapprof.2da`'s class column is the *class* ceiling and
+  /// gives a cleric or a thief `1`, a fighter `5`. Reading only the first let
+  /// this flow offer a thief a second pip that **BG:EE refuses** — measured in
+  /// game, with a slot still unspent.
+  ///
+  /// A fighter's 5 is Grand Mastery, reached over many levels, which is exactly
+  /// why the level ceiling has to bound it here.
+  int rankCapFor(int proficiencyId) {
+    final byLevel = proficiencyRankCap;
+    final byClass = catalogue.proficiencies[proficiencyId]?.maximumFor(
+      proficiencyColumn,
+    );
+    // ⚠️ `null` is "the table cannot say", not "zero" — a machine with no
+    // installation must not have every proficiency silently capped at nothing.
+    if (byClass == null) return byLevel;
+    return byClass < byLevel ? byClass : byLevel;
+  }
 
   /// The level in each of this character's classes — all `1`, one per class.
   ///
@@ -716,12 +797,14 @@ class CreationViewModel extends Notifier<CreationState> {
 
   /// Puts one more pip into [proficiencyId], if there is one to spend.
   ///
-  /// Two ceilings, from two tables one letter apart: `profs.2da` says how many
-  /// pips exist and `profsmax.2da` how many may go into any one.
+  /// Three ceilings, from three tables: `profs.2da` says how many pips exist,
+  /// and `profsmax.2da` and `weapprof.2da` between them say how many may go
+  /// into any one — see [CreationState.rankCapFor], which is where the two
+  /// meet and why neither alone is the answer.
   void raiseProficiency(int proficiencyId) {
     if (state.proficiencyPipsRemaining <= 0) return;
     final current = state.proficiencies[proficiencyId] ?? 0;
-    if (current >= state.proficiencyRankCap) return;
+    if (current >= state.rankCapFor(proficiencyId)) return;
     state = state.copyWith(
       proficiencies: {...state.proficiencies, proficiencyId: current + 1},
     );

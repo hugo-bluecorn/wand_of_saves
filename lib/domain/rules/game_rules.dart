@@ -87,6 +87,10 @@ abstract interface class GameRules {
   /// `CLASS.IDS` and kit identifiers — so one resolver serves both. This is a
   /// **lookup key, not a rendering**: `Fighter / Mage` finds nothing where
   /// `FIGHTER_MAGE` finds the column. `null` when the class cannot be named.
+  ///
+  /// ⚠️ **A kit governs only where it stands in for the whole class.** A
+  /// multi-class keeps its own column even when it carries a school — measured,
+  /// and the creation flow's `proficiencyColumn` follows the same rule.
   String? classColumn({required int classId, required int kitId});
 
   /// Whether class [id] uses the warrior column of the hit-point table.
@@ -356,8 +360,18 @@ class GeneratedGameRules implements GameRules {
   /// cannot set traps and a Blade picks pockets at half a bard's rate, and
   /// neither is derivable from the base class.
   @override
-  String? classColumn({required int classId, required int kitId}) =>
-      _kitColumn(kitId) ?? classIdentifier(classId);
+  String? classColumn({required int classId, required int kitId}) {
+    final identifier = classIdentifier(classId);
+    // ⚠️ **A kit replaces its class only when it IS the class.** Measured
+    // 2026-08-11: `ILLUSIONIST` gives War Hammer 0 where `CLERIC_MAGE` gives 1,
+    // and BG:EE gave a Gnome Cleric/Illusionist a hammer and a flail. A school
+    // is a property of one half of a multi-class and cannot speak for the whole
+    // character, so reading it here capped a proficiency they legitimately hold
+    // at nothing. `SWASHBUCKLER` is the other half of the measurement: it
+    // allows 2 where `THIEF` allows 1, so a single-class kit's column is right.
+    if (identifier != null && identifier.contains('_')) return identifier;
+    return _kitColumn(kitId) ?? identifier;
+  }
 
   @override
   int? classCount(int id) {

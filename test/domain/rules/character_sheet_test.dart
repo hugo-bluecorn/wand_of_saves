@@ -320,11 +320,26 @@ void main() {
       expect(sheetOf(classId: 4).classColumn, 'THIEF');
     });
 
-    test('a kit replaces the class column, as it replaces the name', () {
+    test('a kit replaces the class column when it IS the class', () {
       // The same rule the record screen follows: a Necromancer is a
       // Necromancer, not a Mage who is also a Necromancer. Kits exist in this
       // table precisely because their ceilings differ from the base class's.
-      expect(sheetOf(kitId: 0x10000000).classColumn, 'NECROMANCER');
+      //
+      // ⚠️ **This used to be asserted on the default class, which is
+      // `FIGHTER_MAGE`** -- so it read as "a kit always wins" when what it
+      // describes, and what is true, is a kit standing in for a single class.
+      expect(sheetOf(classId: 1, kitId: 0x10000000).classColumn, 'NECROMANCER');
+    });
+
+    test('a multi-class keeps its own column, school or no school', () {
+      // ⚠️ **Measured 2026-08-11.** `ILLUSIONIST` gives War Hammer 0 where
+      // `CLERIC_MAGE` gives 1, and BG:EE handed a Gnome Cleric/Illusionist a
+      // hammer and a flail. A school belongs to one half of a multi-class and
+      // cannot speak for the character -- reading it here capped a proficiency
+      // they legitimately hold at nothing.
+      // The default class here IS `FIGHTER_MAGE`, which is what made the old
+      // assertion read as a general rule when it was not.
+      expect(sheetOf(kitId: 0x10000000).classColumn, 'FIGHTER_MAGE');
     });
 
     test('both spellings of "no kit" fall back to the class', () {
