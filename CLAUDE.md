@@ -182,10 +182,11 @@ character's numbers the ones the engine would have written).
 Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
 four workflows they serve.
 
-> ### 🔶 Where the last session stopped, 2026-08-10 (evening)
+> ### 🔶 Where the last session stopped, 2026-08-11
 >
-> **`~/.claude/plans/authored-and-derived.md` is implemented — all six slices.** 661 app tests,
-> 282 format tests, `analyze` clean, no suppressions. ⚠️ **42 files uncommitted, 19 of them new.**
+> **`~/.claude/plans/authored-and-derived.md` is implemented — all six slices**, committed and
+> merged as PR #4. `main` is clean and synced. 661 app tests, 282 format tests, `analyze` clean,
+> no suppressions.
 >
 > The plan closes what **D14** exposed: the engine overwrites six fields of seventy-three and
 > maintains none of the rest, so a character this app creates keeps whatever it was given for the
@@ -209,9 +210,9 @@ four workflows they serve.
 >   five points on three saves.
 > - **A specialist's forbidden school is in each `SPL`**, not in any table — exclusion flags at
 >   `0x1E`, bit = school + 5. Exact across all 22 first-level spells.
-> - ⚠️ **Lore's multi-class rule does NOT settle and is recorded as such.** The shipped NPCs read
->   like *sums*; the engine's own import gave the *highest*. Those files also hold a Fighter 1 with
->   Lore 4, so they are hand-written and cannot referee it. Code follows the engine.
+> - ⚠️ ~~**Lore's multi-class rule does NOT settle**~~ — **settled 2026-08-11**: the *highest*. A
+>   Gnome Cleric/Illusionist made in the game's own flow stores **3** where a sum gives 4. The
+>   shipped NPCs read like sums and cannot referee it; this record was written by the engine.
 >
 > **Two defects shipped and were found the moment the app was opened**, both invisible to 655
 > passing tests because no fixture has the shape the real data has:
@@ -226,15 +227,15 @@ four workflows they serve.
 > **New tool: `tool/dev/dump_table.dart`** — any 2DA from the player's installation, `--list` to
 > search, `--text <strref>` to resolve a string. Every table fact above came from it.
 >
-> ⚠️ **Owed, and both need a human:**
+> ✅ **Both golden-test characters were made on 2026-08-11** and are fixtures:
+>    `000000102-Gnome Start` and `000000103-Halfling Start`. Every predicted number was exact; they
+>    closed multi-class Lore, confirmed best-of-each-column on a fighterless multi-class, and proved
+>    `savecndh`/`savecng` are not swapped. **They also exposed two defects the app still has** — the
+>    proficiency pip cap and the forced specialisation, both in the questions table below.
 >
-> 1. **Two golden-test characters, made in BG:EE** — a **Gnome Cleric/Illusionist** and a **Halfling
->    Thief**, Constitution 11+, exported. The gnome is the only case that separates best-of saves
->    from one-table-wins *and* settles Lore; the halfling proves the two racial tables are not
->    swapped.
-> 2. **Nobody has looked at the new "What the game shows" group** on the Skills tab. Tiles have been
->    too narrow twice. A `FontLoader` capture harness hung under `flutter test` twice and was
->    deleted rather than left half-working.
+> ⚠️ **Still owed, and it needs a human:** nobody has looked at the **"What the game shows"** group
+> on the Skills tab. Tiles have been too narrow twice. A `FontLoader` capture harness hung under
+> `flutter test` twice and was deleted rather than left half-working.
 >
 > **Still parked by the user, do not propose:** the stored-hit-point rule, a Gnome Mage's
 > Intelligence minimum, a Barbarian's bytes at `0x244`, and the export half of the Phase 2 gate.
@@ -362,7 +363,9 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | THAC0 after a level-up | **Closed 2026-08-10 — the engine never recomputes it.** The separating experiment was run: a stored **25** against a computed 20, *worse* either way, survived import and play. The screen printed `Base THAC0: 25`, `THAC0: 22`, `Strength Modification: -3`. The same run closed the percentile question — a stored `strengthBonus` of 100 prints **`18/00`**. |
 | Who may Turn Undead, and who may Track | **Half-closed 2026-08-10.** Stored 25 and 100 on a Fighter/Mage/Thief both **survived** the record and the Skills tab showed **neither** — so the display is class-gated and a stored value alone grants nothing. *Which* classes qualify is still in no table that has been found, so both stay editable rather than take an invented rule. |
 | Multi-class saving throws | **Closed 2026-08-10 — best of each column, each class at its own level.** QUAYLE, a Cleric/Mage, stores a row neither table holds. ⚠️ Plus a racial Constitution bonus: `savecndh` for dwarves and halflings, `savecng` for gnomes, whose death row is all zeros. |
-| Multi-class **Lore** | ⚠️ **OPEN, and the two readings disagree.** Shipped NPCs read like *sums* (Coran 12, Tiax 8); the engine's own import gave the *highest* (a Fighter/Mage/Thief 1/1/1 stored 3 where a sum gives 7). The files hold hand-written Lore, so they cannot referee it. Code follows the engine. **A Gnome Cleric/Mage settles it: 3 against 4.** |
+| Multi-class **Lore** | **Closed 2026-08-11 — the HIGHEST, not the sum.** A Gnome Cleric/Illusionist made in BG:EE's own flow stores **3** where a sum gives 4. The shipped NPCs read like sums and cannot referee it (they hold a Fighter 1 with Lore 4); this record was written by the engine at creation. Code already followed the engine. ⚠️ Still open and *not* in code: the walkthrough says a **Blade** gets half Lore per level, and `lore.2da` has no kit rows. |
+| The proficiency pip cap | **Closed 2026-08-11 — `min(profsmax.FIRST_LEVEL, weapprof[column])`.** `profsmax` gives every row 2; `weapprof` gives `CLERIC`/`THIEF`/`CLERIC_MAGE` **1** and `FIGHTER` 5. Engine-confirmed: a thief was refused a second pip with a slot unspent. ⚠️ **The column is not simply the kit's** — `SWASHBUCKLER` is 2 where `THIEF` is 1, but `ILLUSIONIST` is 0 for War Hammer where `CLERIC_MAGE` is 1 and the engine gave the gnome one. Kit's column when the kit is the whole class; class's column when multi-class. **The app does not yet do this.** |
+| A forced specialisation | **Closed 2026-08-11.** A multi-class gets **no kit screen**, yet a Gnome Cleric/Illusionist stores `kit = 0x04000000` → `MAGESCHOOL_ILLUSIONIST`. `clsrcreq.2da`'s `GNOME` column allows exactly one school, so the choice is a lookup and only the forcing is a rule. **The app writes `TRUECLASS` instead.** |
 | A specialist's forbidden school | **Closed 2026-08-10 — it is in each `SPL`,** exclusion flags at `0x1E`, bit = `mschool.2da` row + 5. Exact across all 22 first-level spells. No 2DA pairs the schools. |
 | Which fields the engine owns | **Closed 2026-08-10 — D14.** A probe character with every field at an underivable value was imported, played and saved: the engine overwrote **six** fields and left **sixty-seven** alone. Hit points and Lore store the class-and-level part only, with the ability bonus added at display. |
 

@@ -19,6 +19,7 @@ import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/creation_catalogue_loading.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
+import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 
 import '../support/fakes.dart';
@@ -62,6 +63,14 @@ void main() {
         'RANGER  12       16384  9557\n',
     'RACETEXT': '2DA V1.0\n-1\n     ID  DESCSTR\nELF  2   9552\n',
     'ABRACEAD': '2DA V1.0\n0\n     MOD_DEX\nELF  1\n',
+    // ⚠️ **Carries a name strref, which is the point.** The row label
+    // `FLAILMORNINGSTAR` is not a name — the game writes "Flail/Morning Star"
+    // — so a fixture without this table cannot notice the loader failing to
+    // resolve it.
+    'WEAPPROF':
+        '2DA V1.0\n0\n'
+        '                  ID   NAME_REF  DESC_REF  FIGHTER\n'
+        'FLAILMORNINGSTAR  100  25012     25036     5\n',
   };
 
   group('resolving the text', () {
@@ -85,6 +94,36 @@ void main() {
       );
     });
 
+    test('asks the talk table for the alignment names too', () async {
+      // ⚠️ **The gap that would have shipped the fix invisibly.** The
+      // alignment names became a talk-table lookup so the screen could say
+      // "True Neutral" the way the engine does — but this loader only ever
+      // asked for the strrefs carried by races, classes, kits and spells, so
+      // the nine alignment strings were never fetched and every name fell back
+      // to the derived one. The unit test passed because it handed the text
+      // over itself; nothing asked the loader to go and get it.
+      final catalogue = await loadCreationCatalogue(
+        resources: installWith(tables),
+        strings: FakeStringRepository(const {
+          1102: 'Lawful Good',
+          1106: 'True Neutral',
+          1110: 'Chaotic Evil',
+          9606: 'NEUTRAL GOOD: These characters believe…',
+        }),
+        rules: rules,
+      );
+
+      expect(catalogue.alignmentName(0x11), 'Lawful Good');
+      expect(catalogue.alignmentName(0x22), 'True Neutral');
+      expect(catalogue.alignmentName(0x33), 'Chaotic Evil');
+      // The descriptions are the same trap twice: a strref no row carries, so
+      // nothing asks for it unless this loader is told to.
+      expect(
+        catalogue.textFor(catalogue.alignmentChoice(0x21).descriptionStrref),
+        startsWith('NEUTRAL GOOD:'),
+      );
+    });
+
     test('carries the race and class descriptions the game prints', () async {
       final catalogue = await loadCreationCatalogue(
         resources: installWith(tables),
@@ -104,6 +143,52 @@ void main() {
       expect(
         catalogue.textFor(fighter.descriptionStrref),
         contains('champion'),
+      );
+    });
+
+    test('asks for every strref the catalogue carries', () async {
+      // ⚠️ **The same defect three times in one afternoon**, so it is worth a
+      // test that catches the fourth. This `wanted` set is hand-maintained,
+      // and every strref-bearing thing added to the catalogue has to remember
+      // to join it. When one does not, nothing fails: `textFor` answers null
+      // and the caller quietly falls back — to a derived name, or to the
+      // table's row label.
+      //
+      // It shipped as `NEUTRAL` where the game says "True Neutral", as no
+      // alignment description at all, and as **FLAILMORNINGSTAR** where the
+      // game writes "Flail/Morning Star" — a row label has no spaces or
+      // punctuation, which is what makes the fallback so recognisable on
+      // screen.
+      final strings = FakeStringRepository();
+      final catalogue = await loadCreationCatalogue(
+        resources: installWith(tables),
+        strings: strings,
+        rules: rules,
+      );
+
+      final carried = <int>{
+        for (final choice in [
+          ...catalogue.races,
+          ...catalogue.classesByRace.values.expand((c) => c),
+          ...catalogue.kitsByClass.values.expand((k) => k),
+        ]) ...[
+          if (choice.nameStrref case final int s) s,
+          if (choice.descriptionStrref case final int s) s,
+        ],
+        for (final spell in catalogue.wizardSpells) ...[
+          if (spell.nameStrref case final int s) s,
+          if (spell.descriptionStrref case final int s) s,
+        ],
+        for (final entry in catalogue.proficiencies.entries.values)
+          if (entry.nameStrref case final int s) s,
+        ...alignmentNameStrrefs.values,
+        ...alignmentDescriptionStrrefs.values,
+      };
+
+      expect(
+        carried.difference(strings.lookups.toSet()),
+        isEmpty,
+        reason: 'these strrefs are on the catalogue and were never resolved',
       );
     });
 

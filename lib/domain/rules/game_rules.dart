@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'package:wand_of_saves/domain/rules/game_tables.dart';
 import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/rules/identifiers.g.dart';
 import 'package:wand_of_saves/domain/rules/modifiers.g.dart';
 import 'package:wand_of_saves/domain/rules/name_tables.dart';
 import 'package:wand_of_saves/domain/rules/rules_tables.dart';
 import 'package:wand_of_saves/domain/rules/saving_throw_tables.dart';
+import 'package:wand_of_saves/domain/rules/table_columns.dart';
 import 'package:wand_of_saves/domain/saving_throws.dart';
 
 /// What the game's own tables say.
@@ -123,11 +125,11 @@ abstract interface class GameRules {
     required List<int> levels,
   });
 
-  /// Which saving-throw table one class uses, e.g. `SAVEWIZ` for a `MAGE`.
+  /// Which saving-throw table one class uses, e.g. `savewiz` for a `MAGE`.
   ///
   /// [classIdentifier] is a single `CLASS.IDS` name. `null` when nothing names
   /// it.
-  String? savingThrowTableFor(String classIdentifier);
+  GameTable? savingThrowTableFor(String classIdentifier);
 
   /// The saving throws [classIdentifier] at [levels] should have.
   ///
@@ -147,10 +149,10 @@ abstract interface class GameRules {
     int constitution = 0,
   });
 
-  /// Which Constitution-bonus table a race uses, e.g. `SAVECNG` for a gnome.
+  /// Which Constitution-bonus table a race uses, e.g. `savecng` for a gnome.
   ///
   /// `null` for the four races that take no such bonus.
-  String? racialSavingThrowTableFor(String raceIdentifier);
+  GameTable? racialSavingThrowTableFor(String raceIdentifier);
 
   /// The THAC0 [classIdentifier] at [levels] should have, or `null`.
   ///
@@ -573,21 +575,21 @@ class GeneratedGameRules implements GameRules {
   /// states it is IESDP's prose on `savexxx.2da`, which lists the five tables
   /// and the classes each serves. Confirmed at level 1 against BG:EE's own
   /// Aurel, a `FIGHTER_MAGE`, whose five are `savewiz` verbatim.
-  static const Map<String, String> savingThrowTables = {
-    'FIGHTER': 'SAVEWAR',
-    'PALADIN': 'SAVEWAR',
-    'RANGER': 'SAVEWAR',
-    'MAGE': 'SAVEWIZ',
-    'SORCERER': 'SAVEWIZ',
-    'CLERIC': 'SAVEPRS',
-    'DRUID': 'SAVEPRS',
-    'THIEF': 'SAVEROG',
-    'BARD': 'SAVEROG',
-    'MONK': 'SAVEMONK',
+  static const Map<String, GameTable> savingThrowTables = {
+    'FIGHTER': GameTable.savesWarrior,
+    'PALADIN': GameTable.savesWarrior,
+    'RANGER': GameTable.savesWarrior,
+    'MAGE': GameTable.savesWizard,
+    'SORCERER': GameTable.savesWizard,
+    'CLERIC': GameTable.savesPriest,
+    'DRUID': GameTable.savesPriest,
+    'THIEF': GameTable.savesRogue,
+    'BARD': GameTable.savesRogue,
+    'MONK': GameTable.savesMonk,
   };
 
   @override
-  String? savingThrowTableFor(String classIdentifier) =>
+  GameTable? savingThrowTableFor(String classIdentifier) =>
       savingThrowTables[classIdentifier];
 
   /// Which Constitution-bonus table each race uses.
@@ -603,14 +605,14 @@ class GeneratedGameRules implements GameRules {
   ///
   /// The four races with no entry take nothing, which is why an elf, a human,
   /// a half-elf and a half-orc agree with the class tables untouched.
-  static const Map<String, String> racialSavingThrowTables = {
-    'DWARF': 'SAVECNDH',
-    'HALFLING': 'SAVECNDH',
-    'GNOME': 'SAVECNG',
+  static const Map<String, GameTable> racialSavingThrowTables = {
+    'DWARF': GameTable.savesConstitutionDwarfHalfling,
+    'HALFLING': GameTable.savesConstitutionDwarfHalfling,
+    'GNOME': GameTable.savesConstitutionGnome,
   };
 
   @override
-  String? racialSavingThrowTableFor(String raceIdentifier) =>
+  GameTable? racialSavingThrowTableFor(String raceIdentifier) =>
       racialSavingThrowTables[raceIdentifier];
 
   @override
@@ -665,38 +667,11 @@ class GeneratedGameRules implements GameRules {
   /// The better of two saving throws, which is the **lower**.
   static int _better(int a, int b) => a < b ? a : b;
 
-  /// `lorebon.2da` — a bonus per Intelligence and per Wisdom.
-  static const String loreBonusTable = 'lorebon';
-
-  /// `skilldex.2da` — thief-skill bonuses by Dexterity.
-  static const String dexteritySkillTable = 'skilldex';
-
-  /// `skillrac.2da` — thief-skill bonuses by race.
-  static const String racialSkillTable = 'skillrac';
-
-  /// `strmod.2da` — what Strength is worth.
-  static const String strengthTable = 'strmod';
-
-  /// `strmodex.2da` — the percentile rows, reached only at Strength 18.
-  static const String exceptionalStrengthTable = 'strmodex';
-
-  /// `intmod.2da` — including the chance to learn a spell.
-  static const String intelligenceTable = 'intmod';
-
-  /// `lorebon.2da`'s only column.
-  static const String loreBonusColumn = 'VALUE';
-
-  /// The `strmod` column that improves THAC0.
-  static const String toHitColumn = 'TO_HIT';
-
-  /// `intmod.2da`'s chance-to-learn column.
-  static const String learnSpellColumn = 'LEARN_SPELL';
-
   @override
   int? loreBonusFor(int ability) => rulesTables.at(
-    table: loreBonusTable,
+    table: GameTable.loreBonus,
     row: '$ability',
-    column: loreBonusColumn,
+    column: TableColumn.value.header,
   );
 
   @override
@@ -706,14 +681,14 @@ class GeneratedGameRules implements GameRules {
     required String? raceIdentifier,
   }) {
     final fromDexterity = rulesTables.at(
-      table: dexteritySkillTable,
+      table: GameTable.dexteritySkillBonus,
       row: '$dexterity',
       column: row,
     );
     final fromRace = raceIdentifier == null
         ? null
         : rulesTables.at(
-            table: racialSkillTable,
+            table: GameTable.racialSkillBonus,
             row: raceIdentifier,
             column: row,
           );
@@ -730,51 +705,25 @@ class GeneratedGameRules implements GameRules {
     // 17 is a leftover rather than a modifier.
     if (strength == 18 && percentile > 0) {
       final exceptional = rulesTables.at(
-        table: exceptionalStrengthTable,
+        table: GameTable.exceptionalStrengthModifiers,
         row: '$percentile',
-        column: toHitColumn,
+        column: TableColumn.toHit.header,
       );
       if (exceptional != null) return exceptional;
     }
     return rulesTables.at(
-      table: strengthTable,
+      table: GameTable.strengthModifiers,
       row: '$strength',
-      column: toHitColumn,
+      column: TableColumn.toHit.header,
     );
   }
 
   @override
   int? chanceToLearnSpellFor(int intelligence) => rulesTables.at(
-    table: intelligenceTable,
+    table: GameTable.intelligenceModifiers,
     row: '$intelligence',
-    column: learnSpellColumn,
+    column: TableColumn.learnSpell.header,
   );
-
-  /// The resref of each table [thac0For] and its neighbours read.
-  ///
-  /// Named here rather than in the repository because these are what the
-  /// *rules* know: which file answers which question is a rule, and the
-  /// repository's job is only to hand over what it read.
-  static const String thac0Table = 'thac0';
-
-  /// `lore.2da` — a `RATE` per level, per single class.
-  static const String loreTable = 'lore';
-
-  /// `thiefskl.2da` — points to spend. ⚠️ **Not `thiefscl.2da`**, which is
-  /// which skills a class may have at all.
-  static const String thiefSkillPointTable = 'thiefskl';
-
-  /// `skillbrd.2da` — a bard's Pick Pockets by level.
-  static const String bardSkillTable = 'skillbrd';
-
-  /// `skillrng.2da` — a ranger's stealth by level.
-  static const String rangerSkillTable = 'skillrng';
-
-  /// The column `thiefskl.2da` gives a first-level character.
-  static const String startingPointsColumn = 'START_POINTS';
-
-  /// `lore.2da`'s only column.
-  static const String loreRateColumn = 'RATE';
 
   /// The value a table holds at the character's own level, with the last
   /// column governing anything past the end.
@@ -783,7 +732,7 @@ class GeneratedGameRules implements GameRules {
   /// and hit-die tables do, so out-levelling one is not a reason to answer
   /// nothing.
   int? _atLevel({
-    required String table,
+    required GameTable table,
     required String row,
     required int level,
   }) {
@@ -811,7 +760,11 @@ class GeneratedGameRules implements GameRules {
     // column 1. The highest is what a single class reduces to, and it is the
     // reading that cannot make a character worse than one of their halves.
     final level = levels.reduce((a, b) => a > b ? a : b);
-    return _atLevel(table: thac0Table, row: classIdentifier, level: level);
+    return _atLevel(
+      table: GameTable.thac0ByClass,
+      row: classIdentifier,
+      level: level,
+    );
   }
 
   @override
@@ -822,9 +775,9 @@ class GeneratedGameRules implements GameRules {
     int? best;
     for (var i = 0; i < classes.length; i++) {
       final rate = rulesTables.at(
-        table: loreTable,
+        table: GameTable.loreRate,
         row: classes[i],
-        column: loreRateColumn,
+        column: TableColumn.rate.header,
       );
       if (rate == null) continue;
       final own = rate * levels[i];
@@ -842,9 +795,9 @@ class GeneratedGameRules implements GameRules {
 
   @override
   int? thiefSkillPointsFor(String classColumn) => rulesTables.at(
-    table: thiefSkillPointTable,
+    table: GameTable.thiefSkillPoints,
     row: classColumn,
-    column: startingPointsColumn,
+    column: TableColumn.startPoints.header,
   );
 
   /// The one column `skillrng.2da` has, and the second skill it also fills.
@@ -865,7 +818,7 @@ class GeneratedGameRules implements GameRules {
   /// the skill is the column, where `thac0.2da` puts the level in the column.
   /// Reading one like the other silently answers nothing.
   int? _byLevelRow({
-    required String table,
+    required GameTable table,
     required int level,
     required String column,
   }) {
@@ -896,7 +849,7 @@ class GeneratedGameRules implements GameRules {
       switch (classes[i]) {
         case 'RANGER':
           final stealth = _byLevelRow(
-            table: rangerSkillTable,
+            table: GameTable.rangerSkills,
             level: levels[i],
             column: moveSilentlyColumn,
           );
@@ -906,7 +859,7 @@ class GeneratedGameRules implements GameRules {
           }
         case 'BARD':
           final pockets = _byLevelRow(
-            table: bardSkillTable,
+            table: GameTable.bardSkills,
             level: levels[i],
             column: pickPocketsColumn,
           );

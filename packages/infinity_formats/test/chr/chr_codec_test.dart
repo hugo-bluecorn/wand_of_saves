@@ -184,16 +184,51 @@ void main() {
           });
 
           test('the name lives in the header, not in the record', () {
-            // A .chr carries no identity key inside the creature: dialogFile is
-            // eight zero bytes and longNameStrref is -1 on every file measured.
-            // The 32-byte header name is the only name there is.
+            // A .chr carries no identity key inside the creature: the 32-byte
+            // header name is the only name there is.
+            //
+            // ⚠️ **`dialogFile` was asserted empty here and is NOT universal.**
+            // It is empty on every character BG:EE exported, and `WANDMAX` --
+            // the D14 probe, written by this project's own tool from CHARBASE
+            // and never passed through the engine -- carries `None`, which is
+            // the template's own value. The engine clears it on export and our
+            // writer does not. See the test below, which states that
+            // difference rather than letting this loop hide it.
             final cre = CreCodec.decode(chr.creBytes);
             expect(chr.name, isNotEmpty);
-            expect(cre.dialogFile, isEmpty);
             expect(cre.longNameStrref, -1);
           });
         });
       }
+
+      test('the engine clears dialogFile on export; our writer does not', () {
+        // ⚠️ **Measured 2026-08-11, and it matters more than it looks.** This
+        // project uses `dialogFile` as a character's identity key, precisely
+        // because the CRE resref is not one -- the engine overwrites its first
+        // byte, so `CHARBASE` arrives as `*HARBASE`. If everything this app
+        // writes carries CHARBASE's own `None`, then every character it makes
+        // shares one identity key.
+        //
+        // Stated as a test rather than a note so it cannot quietly change: if
+        // creation is taught to clear the field, this fails and names itself.
+        final byName = {
+          for (final name in names)
+            name: CreCodec.decode(
+              ChrCodec.decode(
+                File(fixtureChr(name)!).readAsBytesSync(),
+                source: name,
+              ).creBytes,
+            ).dialogFile,
+        };
+
+        for (final entry in byName.entries) {
+          expect(
+            entry.value,
+            entry.key.toUpperCase().startsWith('WANDMAX') ? 'None' : isEmpty,
+            reason: entry.key,
+          );
+        }
+      });
     },
     skip: names.isEmpty ? 'run tool/dev/sync_fixtures.dart' : null,
   );

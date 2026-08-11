@@ -457,6 +457,12 @@ class _Choices extends StatelessWidget {
 }
 
 /// The alignments the class — or its specialisation — allows.
+///
+/// ⚠️ **Drawn with [_Choices], like every other step.** It used to be a bare
+/// radio list with no description panel, which made it the one step that
+/// behaved unlike its neighbours — and the game shows a paragraph per
+/// alignment. Expressing an alignment as a `CreationChoice` is what lets the
+/// same widget serve it.
 class _Alignment extends ConsumerWidget {
   const _Alignment({required this.state, required this.rules});
 
@@ -466,30 +472,25 @@ class _Alignment extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final model = ref.read(creationProvider.notifier);
+    final choices = [
+      for (final id in state.alignmentsAvailable)
+        state.catalogue.alignmentChoice(id),
+    ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Alignment', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 16),
-        Expanded(
-          child: RadioGroup<int>(
-            groupValue: state.alignmentId,
-            onChanged: (id) {
-              if (id != null) model.chooseAlignment(id);
-            },
-            child: ListView(
-              children: [
-                for (final id in state.alignmentsAvailable)
-                  RadioListTile<int>(
-                    value: id,
-                    title: Text(rules.alignmentName(id) ?? '$id'),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    return _Choices(
+      title: 'Alignment',
+      choices: choices,
+      chosen: choices
+          .where((choice) => choice.value == state.alignmentId)
+          .firstOrNull,
+      // The game's own word, with the derived one as the fallback for a
+      // machine that has no talk table to ask.
+      nameOf: (choice) =>
+          state.catalogue.textFor(choice.nameStrref) ??
+          rules.alignmentName(choice.value) ??
+          '${choice.value}',
+      state: state,
+      onChoose: (choice) => model.chooseAlignment(choice.value),
     );
   }
 }
@@ -864,15 +865,32 @@ class _PipRow extends StatelessWidget {
 /// Two lists, because the engine asks two questions: *Mage Book: Level 1* picks
 /// what the character knows, and *Memorize Mage Spells* picks which of those
 /// are ready to cast. The second only ever lists the first's answers.
-class _Spells extends StatelessWidget {
+///
+/// ⚠️ **Stateful for one reason: which spell is being read.** The engine gives
+/// each of its two spell screens a detail panel and highlights the row you are
+/// looking at, and that highlight is *not* the same thing as having learned the
+/// spell — its own screen shows a dot beside the learned ones and a red bar on
+/// the focused one. So focus is view state and belongs here, never in
+/// `CreationState`, which describes the character rather than the screen.
+class _Spells extends StatefulWidget {
   const _Spells({required this.state, required this.model});
 
   final CreationState state;
   final CreationViewModel model;
 
   @override
+  State<_Spells> createState() => _SpellsState();
+}
+
+class _SpellsState extends State<_Spells> {
+  /// The spell whose description is being shown, or `null` before any tap.
+  String? _focused;
+
+  @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final state = widget.state;
+    final model = widget.model;
     final catalogue = state.catalogue;
 
     String nameOf(String resref) {
@@ -881,6 +899,38 @@ class _Spells extends StatelessWidget {
           .firstOrNull;
       return catalogue.textFor(spell?.nameStrref) ?? resref;
     }
+
+    /// A row that both ticks and focuses.
+    ///
+    /// ⚠️ **The tick and the tap do different things**, exactly as the game
+    /// separates them: the box learns or prepares the spell, and touching the
+    /// name asks what it does. Folding the two together would mean a player
+    /// could not read a spell without also choosing it.
+    Widget spellTile({
+      required String resref,
+      required bool ticked,
+      required VoidCallback? onTick,
+    }) => CheckboxListTile(
+      value: ticked,
+      // ⚠️ **Leading, not the default trailing.** A capture showed the box
+      // sitting seven hundred pixels from the name it belongs to, because a
+      // `CheckboxListTile` puts its control at the far edge of whatever width
+      // it is given.
+      controlAffinity: ListTileControlAffinity.leading,
+      selected: resref == _focused,
+      onChanged: onTick == null ? null : (_) => onTick(),
+      title: InkWell(
+        onTap: () => setState(() => _focused = resref),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(nameOf(resref)),
+        ),
+      ),
+    );
+
+    final description = _focused == null
+        ? null
+        : state.spellDescription(_focused!);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -896,60 +946,44 @@ class _Spells extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         Text(
-          '${state.spellsLearnable} for the book, of which '
-          '${state.spellsMemorisable} prepared.',
-          style: text.bodySmall,
+          'Tap a spell’s name to read what it does.',
+          style: text.bodyMedium,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
+              SizedBox(
+                width: 300,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // The engine's own heading for this list.
                     Text('Mage Book: Level 1', style: text.titleMedium),
                     const SizedBox(height: 8),
                     Expanded(
                       child: ListView(
                         children: [
                           for (final spell in state.spellsAvailable)
-                            CheckboxListTile(
-                              value: state.knownSpells.contains(spell.resref),
-                              // ⚠️ **Leading, not the default trailing.** A
-                              // capture showed the box sitting seven hundred
-                              // pixels from the name it belongs to, because a
-                              // `CheckboxListTile` puts its control at the far
-                              // edge of whatever width it is given.
-                              controlAffinity: ListTileControlAffinity.leading,
+                            spellTile(
+                              resref: spell.resref,
+                              ticked: state.knownSpells.contains(spell.resref),
                               // Unticking is always allowed; ticking stops at
                               // the limit, so a full book refuses rather than
                               // swapping out a spell chosen deliberately.
-                              onChanged:
+                              onTick:
                                   state.knownSpells.contains(spell.resref) ||
                                       state.knownSpells.length <
                                           state.spellsLearnable
-                                  ? (_) => model.learnSpell(spell.resref)
+                                  ? () => model.learnSpell(spell.resref)
                                   : null,
-                              title: Text(nameOf(spell.resref)),
                             ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 24),
-              const VerticalDivider(width: 1),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                    const SizedBox(height: 16),
                     Text(
                       'Memorise ${state.spellsMemorisable}',
                       style: text.titleMedium,
@@ -964,21 +998,36 @@ class _Spells extends StatelessWidget {
                       child: ListView(
                         children: [
                           for (final resref in state.knownSpells)
-                            CheckboxListTile(
-                              value: state.memorisedSpells.contains(resref),
-                              controlAffinity: ListTileControlAffinity.leading,
-                              onChanged:
+                            spellTile(
+                              resref: resref,
+                              ticked: state.memorisedSpells.contains(resref),
+                              onTick:
                                   state.memorisedSpells.contains(resref) ||
                                       state.memorisedSpells.length <
                                           state.spellsMemorisable
-                                  ? (_) => model.memoriseSpell(resref)
+                                  ? () => model.memoriseSpell(resref)
                                   : null,
-                              title: Text(nameOf(resref)),
                             ),
                         ],
                       ),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(width: 24),
+              const VerticalDivider(width: 1),
+              const SizedBox(width: 24),
+              // ⚠️ **One string, drawn as it arrives.** The `SPL`'s description
+              // strref already holds the name, the school in brackets, the six
+              // stat lines and the prose -- the engine's whole panel -- so
+              // reformatting it here would be inventing a layout the game
+              // already has.
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Text(
+                    description ?? 'Tap a spell to see what it does.',
+                    style: text.bodyMedium,
+                  ),
                 ),
               ),
             ],

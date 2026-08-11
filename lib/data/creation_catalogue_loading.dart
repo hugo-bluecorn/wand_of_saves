@@ -61,6 +61,22 @@ Future<CreationCatalogue> loadCreationCatalogue({
       if (spell.nameStrref case final int strref) strref,
       if (spell.descriptionStrref case final int strref) strref,
     ],
+    // ⚠️ **Not carried by any choice, so easily missed.** The other strrefs
+    // here come off a row this catalogue already holds; the alignments have no
+    // row of their own -- `alignmnt.2da` says who may take which and carries no
+    // names at all -- so the pairing lives in `alignmentNameStrrefs` and has to
+    // be asked for explicitly. Without this the screen quietly falls back to
+    // names derived from `ALIGNMEN.IDS`, which calls true neutral `NEUTRAL`.
+    ...alignmentNameStrrefs.values,
+    ...alignmentDescriptionStrrefs.values,
+    // ⚠️ **`FLAILMORNINGSTAR` is not a name.** Without this the proficiency
+    // step falls back to `weapprof.2da`'s row label, which is a join key with
+    // the punctuation stripped out — the game writes "Flail/Morning Star".
+    // The character sheet resolved these all along, through
+    // `loadRulesCatalogues`; the creation flow reads its own catalogue and had
+    // to ask for itself.
+    for (final entry in catalogue.proficiencies.entries.values)
+      if (entry.nameStrref case final int strref) strref,
   };
 
   return catalogue.withText({

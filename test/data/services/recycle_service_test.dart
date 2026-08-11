@@ -51,6 +51,25 @@ void main() {
       expect(recycler.recycleRoot(), at([temp.path, 'deleted']));
       expect(recycler.recycleRoot(), isNot(contains(saveRoot.path)));
     });
+
+    test('is still found once the last save has been deleted', () async {
+      // ⚠️ **The end of the cascade that greyed out "Empty deleted items".**
+      // Recycling the only slot leaves the save folder empty, which used to
+      // stop it being recognised as the save root at all -- so the bin's own
+      // address, derived from that root, went null and the one command that
+      // could clear it was disabled over a bin that was full.
+      //
+      // The settings file beside the folder is what keeps the address. This is
+      // the state the app puts itself in, reached the way it reaches it.
+      File(
+        at([temp.path, GameProfileService.settingsMarker]),
+      ).writeAsStringSync('x');
+      await recycler.recycleSaveAt(at([saveRoot.path, '000000001-keep']));
+
+      expect(saveRoot.listSync(), isEmpty);
+      expect(recycler.recycleRoot(), at([temp.path, 'deleted']));
+      expect(recycler.hasRecycled, isTrue);
+    });
   });
 
   group('recycling a save', () {

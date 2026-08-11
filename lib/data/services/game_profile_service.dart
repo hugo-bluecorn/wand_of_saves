@@ -261,9 +261,34 @@ class GameProfileService {
   bool _isGameDirectory(String path) =>
       File('$path${Platform.pathSeparator}$gameMarker').existsSync();
 
-  /// A save root has no marker of its own — it is recognised by containing at
-  /// least one slot.
-  bool _isSaveRoot(String path) => slotsIn(path).isNotEmpty;
+  /// Whether [path] is the folder the player's savegames live in.
+  ///
+  /// **A slot inside it, or the game's own settings file beside it.** The save
+  /// folder carries no marker of its own, so this used to count slots — and
+  /// that made the folder stop being the save root the moment it was empty.
+  ///
+  /// ⚠️ **Which is a state this application can create.** Deleting every save
+  /// through it made it forget where its own data lives: `findSaveRoot` went
+  /// `null`, and with it the character folder, the portrait folder, the
+  /// language and the recycle bin. The failure sealed itself — "Empty deleted
+  /// items" greyed out over a full bin, because the bin's address is derived
+  /// from the save root.
+  ///
+  /// **A union rather than a replacement**, so nothing that resolved before
+  /// stops: a save folder copied to a machine that has never run the game has
+  /// slots and no `Baldur.lua`, and is still recognised by the first branch.
+  ///
+  /// ⚠️ **Existence is checked rather than assumed.** Counting slots refused a
+  /// missing directory for free; asking about the *parent* does not, and a
+  /// folder that is not there is not a save root however its neighbours look.
+  bool _isSaveRoot(String path) {
+    final dir = Directory(path);
+    if (!dir.existsSync()) return false;
+    if (slotsIn(path).isNotEmpty) return true;
+    return File(
+      '${dir.parent.path}${Platform.pathSeparator}$settingsMarker',
+    ).existsSync();
+  }
 
   bool _isSaveSlot(Directory dir) =>
       File('${dir.path}${Platform.pathSeparator}$saveMarker').existsSync();

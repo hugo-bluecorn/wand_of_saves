@@ -24,6 +24,7 @@ import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/rules/rules_tables.dart';
 import 'package:wand_of_saves/domain/rules/saving_throw_tables.dart';
+import 'package:wand_of_saves/domain/rules/table_columns.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 /// Source of truth for the rules tables that live inside the game's archives.
@@ -119,7 +120,8 @@ class ResourceRepository {
 
     final tableByClass = <String, String>{
       for (final row in classes.rows.keys)
-        if (classes.cell(row, hitDieTableColumn) case final String table)
+        if (classes.cell(row, TableColumn.hitDieTable.header)
+            case final String table)
           if (table != tableAbsent) row: table,
     };
 
@@ -205,7 +207,8 @@ class ResourceRepository {
       races: {
         for (final row in raceText.rows.keys)
           if (raceText.number(row, 'ID') case final int id)
-            if (raceText.number(row, raceNameColumn) case final int strref)
+            if (raceText.number(row, TableColumn.raceName.header)
+                case final int strref)
               if (strref >= 0) id: strref,
       },
       // Only the plain-class rows — a kit row shares its `CLASSID`.
@@ -219,16 +222,17 @@ class ResourceRepository {
       classes: {
         for (final row in classText.rows.keys)
           if (classText.number(row, 'KITID') == trueClassKitId)
-            if (classText.number(row, fallenColumn) != fallenClass)
+            if (classText.number(row, TableColumn.fallen.header) != fallenClass)
               if (classText.number(row, 'CLASSID') case final int id)
-                if (classText.number(row, classNameColumn)
+                if (classText.number(row, TableColumn.mixedCaseName.header)
                     case final int strref)
                   if (strref >= 0) id: strref,
       },
       kits: {
         for (final row in kits.rows.keys)
           if (kits.cell(row, 'ROWNAME') case final String identifier)
-            if (kits.number(row, kitNameColumn) case final int strref)
+            if (kits.number(row, TableColumn.mixedCaseName.header)
+                case final int strref)
               if (strref >= 0) identifier: strref,
       },
     );
@@ -710,32 +714,12 @@ const List<String> numericRulesTables = [
 /// `DWARVEN_DEFENDER` uses `HPBARB` where its Fighter base uses `HPWAR`.
 const String hitDieClassTable = 'hpclass';
 
-/// `hpclass.2da`'s only column, naming the table to read.
-const String hitDieTableColumn = 'TABLE';
-
 /// What a `2DA` cell holds when the row has no value at all.
 const String tableAbsent = '*';
 
-/// `racetext.2da`'s capitalised name column — `Half-Orc`, not `half-orc`.
-const String raceNameColumn = 'UPPERCASE';
-
-/// `clastext.2da`'s column marking a class that has fallen from grace.
-///
-/// ⚠️ **A fallen row is a duplicate of its class in every other column**, so
-/// nothing but this tells them apart.
-const String fallenColumn = 'FALLEN';
-
-/// What [fallenColumn] holds for a row that is not a real class choice.
+/// What the `FALLEN` column holds for a row that is not a real class
+/// choice.
 const int fallenClass = 1;
-
-/// `clastext.2da`'s display-name column — `Cleric / Ranger`, separator and all.
-///
-/// ⚠️ Carries `<FIGHTERTYPE>` and `<MAGESCHOOL>` substitution tokens, which are
-/// what makes a kit *replace* the class name on screen.
-const String classNameColumn = 'MIXED';
-
-/// `kitlist.2da`'s display-name column — where `FERALAN` reads *Archer*.
-const String kitNameColumn = 'MIXED';
 
 /// The resref of the table saying which classes have which thief skills.
 ///
@@ -743,18 +727,6 @@ const String kitNameColumn = 'MIXED';
 /// thief gets per level, or with `tracking.2da`, which despite the name is a
 /// list of per-area strings and says nothing about who may track.
 const String thiefSkillTable = 'thiefscl';
-
-/// The `weapprof.2da` column holding the number opcode 233 stores.
-const String proficiencyIdColumn = 'ID';
-
-/// The `weapprof.2da` column holding the strref of the displayed name.
-const String proficiencyNameColumn = 'NAME_REF';
-
-/// The `weapprof.2da` column holding the strref of the description.
-///
-/// Named only so [proficienciesFrom] can tell it apart from a class column;
-/// nothing reads the descriptions yet.
-const String proficiencyDescriptionColumn = 'DESC_REF';
 
 /// The highest strref a talk table could hold.
 ///
@@ -892,16 +864,16 @@ SkillCatalogue thiefSkillsFrom(Table2da table) {
 /// each pair is real data.
 ProficiencyCatalogue proficienciesFrom(Table2da table) {
   final columns = table.columns;
-  final idAt = columns.indexOf(proficiencyIdColumn);
-  final nameAt = columns.indexOf(proficiencyNameColumn);
+  final idAt = columns.indexOf(TableColumn.proficiencyId.header);
+  final nameAt = columns.indexOf(TableColumn.proficiencyName.header);
   if (idAt < 0) return ProficiencyCatalogue.empty;
 
   final classColumns = _classColumns(
     table,
-    except: const {
-      proficiencyIdColumn,
-      proficiencyNameColumn,
-      proficiencyDescriptionColumn,
+    except: {
+      TableColumn.proficiencyId.header,
+      TableColumn.proficiencyName.header,
+      TableColumn.proficiencyDescription.header,
     },
   );
 

@@ -113,13 +113,24 @@ void main() {
       expect(find.text('New character'), findsNothing);
     });
 
-    testWidgets('says nothing was found only when both are empty', (
+    testWidgets('with nothing at all, still offers to make a character', (
       tester,
     ) async {
+      // ⚠️ **This test used to assert the opposite**, and what it pinned was a
+      // defect: with both lists empty the whole screen was replaced by a
+      // "nothing found" message, and the ＋ card is *inside* the characters
+      // section — so emptying the app removed the only way to fill it again.
+      // Reported from the running app after deleting every save and character.
+      //
+      // The good empty state was already written and was being shadowed: each
+      // section says its own piece, and the saves one already carries the only
+      // advice the replaced message had.
       await showBrowser(tester, withSaves: false, withCharacters: false);
 
+      expect(find.text('New character'), findsOneWidget);
+      expect(find.textContaining('No characters yet'), findsOneWidget);
       expect(
-        find.textContaining('No Baldur’s Gate saves or characters'),
+        find.textContaining('No Baldur’s Gate saves found'),
         findsOneWidget,
       );
     });
