@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import 'package:dart_mappable/dart_mappable.dart';
+import 'package:wand_of_saves/domain/rules/game_tables.dart';
 import 'package:wand_of_saves/domain/saving_throws.dart';
 
 part 'saving_throw_tables.mapper.dart';
@@ -74,7 +75,7 @@ class SavingThrowTables with SavingThrowTablesMappable {
   /// **The last row governs every level past the end**, which is what the
   /// tables themselves imply: their tails are a repeated constant. A level
   /// below 1 is not a level, and answers nothing.
-  SavingThrows? at({required String table, required int level}) =>
+  SavingThrows? at({required GameTable table, required int level}) =>
       _column(table: table, at: level);
 
   /// The racial bonus [table] grants at [constitution], or `null`.
@@ -85,12 +86,14 @@ class SavingThrowTables with SavingThrowTablesMappable {
   ///
   /// ⚠️ **The values are a bonus to subtract, not a saving throw.** Lower is
   /// better, so a `3` here improves a save by three.
-  SavingThrows? bonusAt({required String table, required int constitution}) =>
-      _column(table: table, at: constitution);
+  SavingThrows? bonusAt({
+    required GameTable table,
+    required int constitution,
+  }) => _column(table: table, at: constitution);
 
-  SavingThrows? _column({required String table, required int at}) {
+  SavingThrows? _column({required GameTable table, required int at}) {
     if (at < 1) return null;
-    final rows = rowsByTable[table.toUpperCase()];
+    final rows = rowsByTable[table.resref.toUpperCase()];
     if (rows == null) return null;
 
     int? value(String row) {

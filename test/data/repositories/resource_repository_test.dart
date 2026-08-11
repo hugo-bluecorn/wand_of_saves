@@ -17,6 +17,7 @@ import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
+import 'package:wand_of_saves/domain/rules/game_tables.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
 void main() {
@@ -359,8 +360,8 @@ SPELL  12     12     12
         'savewiz': Table2da.parse(savewiz),
       });
 
-      expect(tables.at(table: 'SAVEWIZ', level: 1)?.wands, 11);
-      expect(tables.at(table: 'SAVEWIZ', level: 3)?.spells, 12);
+      expect(tables.at(table: GameTable.savesWizard, level: 1)?.wands, 11);
+      expect(tables.at(table: GameTable.savesWizard, level: 3)?.spells, 12);
     });
 
     test('the table name is uppercased, whatever the resref was', () {

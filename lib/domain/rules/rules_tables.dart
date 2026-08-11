@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import 'package:dart_mappable/dart_mappable.dart';
+import 'package:wand_of_saves/domain/rules/game_tables.dart';
 
 part 'rules_tables.mapper.dart';
 
@@ -42,23 +43,29 @@ class RulesTables with RulesTablesMappable {
   static const RulesTables empty = RulesTables();
 
   /// Table name to row label to column name to value.
+  ///
+  /// ⚠️ **Keyed by resref, while the API is keyed by [GameTable].** The storage
+  /// stays stringly on purpose: it is built by reading files whose names are
+  /// strings, and a map keyed by the enum would have to *drop* anything the
+  /// enum does not name rather than carry it. The typing belongs where the
+  /// mistakes were — at the call sites — not in the container.
   final Map<String, Map<String, Map<String, int>>> byName;
 
   /// The number [table] holds where [row] meets [column], or `null`.
   ///
-  /// Row labels and table names are matched uppercased, because a resref's
-  /// case is an accident of where it was written down. Column names are not:
-  /// the tables spell them `START_POINTS` and `PICK_POCKETS` consistently, and
-  /// case-folding a column would hide a typo rather than tolerate one.
+  /// Row labels are matched uppercased, because a label's case is an accident
+  /// of where it was written down. Column names are not: the tables spell them
+  /// `START_POINTS` and `PICK_POCKETS` consistently, and case-folding a column
+  /// would hide a typo rather than tolerate one.
   int? at({
-    required String table,
+    required GameTable table,
     required String row,
     required String column,
-  }) => byName[table.toUpperCase()]?[row.toUpperCase()]?[column];
+  }) => byName[table.resref.toUpperCase()]?[row.toUpperCase()]?[column];
 
   /// Every row label [table] carries, or empty when it was not read.
-  Iterable<String> rowsOf(String table) =>
-      byName[table.toUpperCase()]?.keys ?? const [];
+  Iterable<String> rowsOf(GameTable table) =>
+      byName[table.resref.toUpperCase()]?.keys ?? const [];
 
   /// Whether anything at all was read.
   bool get isEmpty => byName.isEmpty;

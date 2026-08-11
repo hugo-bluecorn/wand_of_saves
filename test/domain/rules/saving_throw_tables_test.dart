@@ -27,6 +27,7 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
+import 'package:wand_of_saves/domain/rules/game_tables.dart';
 import 'package:wand_of_saves/domain/rules/saving_throw_tables.dart';
 
 void main() {
@@ -87,7 +88,7 @@ void main() {
 
   group('SavingThrowTables', () {
     test('reads one table at one level', () {
-      final row = tables.at(table: 'SAVEWIZ', level: 1);
+      final row = tables.at(table: GameTable.savesWizard, level: 1);
 
       expect(row?.death, 14);
       expect(row?.wands, 11);
@@ -99,30 +100,37 @@ void main() {
     test('a level past the end of the table takes the last row', () {
       // The engine's own tables run to 40 and repeat their tail; a character
       // beyond the rows is not a reason to answer nothing.
-      expect(tables.at(table: 'SAVEWAR', level: 99)?.death, 13);
+      expect(tables.at(table: GameTable.savesWarrior, level: 99)?.death, 13);
     });
 
     test('a level below one has no answer rather than a made-up one', () {
-      expect(tables.at(table: 'SAVEWAR', level: 0), isNull);
+      expect(tables.at(table: GameTable.savesWarrior, level: 0), isNull);
     });
 
-    test('an unknown table has no answer', () {
-      expect(tables.at(table: 'SAVEBARD', level: 1), isNull);
+    test('a table that was never read has no answer', () {
+      // ⚠️ **This used to say "an unknown table", spelled `SAVEBARD`.** Naming
+      // a table that does not exist stopped being possible when the lookup
+      // took a [GameTable] instead of a string — which is the whole point of
+      // the change. What is still worth asserting, and is what this always
+      // really covered, is the ordinary case behind it: a real table the
+      // installation did not supply answers `null` rather than a zero.
+      // `savemonk` is the one this fixture deliberately leaves out.
+      expect(tables.at(table: GameTable.savesMonk, level: 1), isNull);
     });
   });
 
   group('which table a class uses', () {
     test('the four groups map to their own tables', () {
-      expect(rules.savingThrowTableFor('FIGHTER'), 'SAVEWAR');
-      expect(rules.savingThrowTableFor('PALADIN'), 'SAVEWAR');
-      expect(rules.savingThrowTableFor('RANGER'), 'SAVEWAR');
-      expect(rules.savingThrowTableFor('MAGE'), 'SAVEWIZ');
-      expect(rules.savingThrowTableFor('SORCERER'), 'SAVEWIZ');
-      expect(rules.savingThrowTableFor('CLERIC'), 'SAVEPRS');
-      expect(rules.savingThrowTableFor('DRUID'), 'SAVEPRS');
-      expect(rules.savingThrowTableFor('THIEF'), 'SAVEROG');
-      expect(rules.savingThrowTableFor('BARD'), 'SAVEROG');
-      expect(rules.savingThrowTableFor('MONK'), 'SAVEMONK');
+      expect(rules.savingThrowTableFor('FIGHTER'), GameTable.savesWarrior);
+      expect(rules.savingThrowTableFor('PALADIN'), GameTable.savesWarrior);
+      expect(rules.savingThrowTableFor('RANGER'), GameTable.savesWarrior);
+      expect(rules.savingThrowTableFor('MAGE'), GameTable.savesWizard);
+      expect(rules.savingThrowTableFor('SORCERER'), GameTable.savesWizard);
+      expect(rules.savingThrowTableFor('CLERIC'), GameTable.savesPriest);
+      expect(rules.savingThrowTableFor('DRUID'), GameTable.savesPriest);
+      expect(rules.savingThrowTableFor('THIEF'), GameTable.savesRogue);
+      expect(rules.savingThrowTableFor('BARD'), GameTable.savesRogue);
+      expect(rules.savingThrowTableFor('MONK'), GameTable.savesMonk);
     });
 
     test('a class nothing names has no table', () {
