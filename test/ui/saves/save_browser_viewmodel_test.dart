@@ -283,9 +283,19 @@ void main() {
   });
 
   group('creating a character', () {
-    Uint8List template() =>
-        Uint8List(CreHeaderField.headerSize)
-          ..setRange(0, 8, latin1.encode('CRE V1.0'));
+    /// A stand-in for the game's own `CHARBASE`.
+    ///
+    /// ⚠️ **Carries `None` as its dialogue file, because the real one does.**
+    /// A zero-filled buffer would leave that field empty for the wrong reason
+    /// and quietly make every assertion about clearing it vacuous — which is
+    /// exactly what happened when this test was first written.
+    Uint8List template() => Uint8List(CreHeaderField.headerSize)
+      ..setRange(0, 8, latin1.encode('CRE V1.0'))
+      ..setRange(
+        CreHeaderField.dialogFile.offset,
+        CreHeaderField.dialogFile.offset + 4,
+        latin1.encode('None'),
+      );
 
     ProviderContainer withTemplate({
       Map<String, Uint8List>? creatures,
@@ -347,6 +357,34 @@ void main() {
       final cre = CreCodec.decode(characters.created.single.$2.creBytes);
       expect(cre.portraitMedium, 'AJANTISM');
       expect(cre.portraitLarge, 'AJANTISL');
+    });
+
+    test('clears the template’s dialogue file, as the engine does', () async {
+      // ⚠️ **Canon.** A creature record names the conversation the game loads
+      // when you talk to that creature — Imoen's says `IMOEN`. A player
+      // character has none, and BG:EE writes the field blank in every save and
+      // every export measured.
+      //
+      // `CHARBASE`, the empty character this flow copies, carries the word
+      // `None` there, and it used to survive into everything the app wrote.
+      // Nothing was observably broken by it — a character made here imports
+      // and plays — but differing from the engine in a field neither of us has
+      // a reason to differ in is the kind of thing that costs an afternoon
+      // later.
+      final characters = FakeCharacterFileRepository();
+      final container = withTemplate(characters: characters);
+      await container.read(saveBrowserProvider.future);
+
+      await container
+          .read(saveBrowserProvider.notifier)
+          .createCharacter(
+            name: 'Aurel',
+            fileName: 'aurel.chr',
+            portraitName: 'AJANTIS',
+          );
+
+      final cre = CreCodec.decode(characters.created.single.$2.creBytes);
+      expect(cre.dialogFile, isEmpty);
     });
 
     test('writes who the character is, not only what they look like', () async {

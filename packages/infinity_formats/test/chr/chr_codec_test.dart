@@ -201,7 +201,7 @@ void main() {
         });
       }
 
-      test('the engine clears dialogFile on export; our writer does not', () {
+      test('the engine clears dialogFile on export, and so do we now', () {
         // ⚠️ **Measured 2026-08-11, and it matters more than it looks.** This
         // project uses `dialogFile` as a character's identity key, precisely
         // because the CRE resref is not one -- the engine overwrites its first
@@ -209,8 +209,13 @@ void main() {
         // writes carries CHARBASE's own `None`, then every character it makes
         // shares one identity key.
         //
-        // Stated as a test rather than a note so it cannot quietly change: if
-        // creation is taught to clear the field, this fails and names itself.
+        // ⚠️ **It was taught, on 2026-08-11, and this is the record of what
+        // changed.** `WANDMAX` still holds `None` because it is a file on
+        // disk, written by the probe tool before the fix — the fixture is a
+        // snapshot of the old behaviour, not of the current writer. Anything
+        // this app writes *now* leaves the field blank, which
+        // `save_browser_viewmodel_test.dart` asserts against a template
+        // carrying `None` exactly as `CHARBASE` does.
         final byName = {
           for (final name in names)
             name: CreCodec.decode(

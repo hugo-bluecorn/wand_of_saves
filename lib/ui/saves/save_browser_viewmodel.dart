@@ -233,9 +233,24 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
     // ⚠️ **An identity left `null` keeps `CHARBASE`'s.** That is what a caller
     // asking for nothing but a portrait means, and it is how the flow behaved
     // before any of these were editable.
+    // ⚠️ **Canon: the engine leaves the dialogue file blank on a player
+    // character.** That field names the conversation loaded when you talk to a
+    // creature — Imoen's says `IMOEN` — and a character you control has none.
+    // Every BG:EE save and every BG:EE export measured has it empty; the
+    // `CHARBASE` template this is built from carries the word `None`, and it
+    // used to survive into everything written here.
+    //
+    // Not a bug anyone could see: a character made here imports and plays. It
+    // is corrected because differing from the engine in a field neither has a
+    // reason to differ in is what costs an afternoon two months from now.
+    final cleared = blank.withCreatureText(
+      creOffset: blank.creOffset,
+      field: CreHeaderField.dialogFile,
+      value: '',
+    );
     var created = applyCharacterEdit(
-      blank,
-      SetPortrait(creOffset: blank.creOffset, baseName: portraitName),
+      cleared,
+      SetPortrait(creOffset: cleared.creOffset, baseName: portraitName),
     );
     for (final (identity, value) in [
       (CharacterIdentity.gender, genderId),
