@@ -70,6 +70,24 @@ no effect for as not editable, and says why. That is honest, not a bug — but i
 
 ---
 
+## 3b The first row of the sheet looks greyed when the screen opens
+
+`Focus(autofocus: true)` in `character_screen.dart` wraps the scrolling body so `Ctrl+K` reaches the
+command palette without a click first. On Linux that hands focus to the first focusable descendant —
+the first value row's `InkWell` — and its focus highlight paints a lighter plate across that row.
+
+⚠️ **It reads as *unavailable*, which is the one thing it must not.** Starfleet's `ScreenTone` plate
+for a field the class cannot have is **darker** than the card, so the two are distinguishable side by
+side — but a reader who sees only the highlight has no way to know which of the two they are looking
+at, and this is the row they see first.
+
+**Not fixed because the obvious fix costs the shortcut:** dropping `autofocus` means `Ctrl+K` needs a
+click into the body first. The route through is probably a focus node that is not also a tap target.
+
+⚠️ Found by capture. **No test could have found it** — `flutter test` never draws a focus highlight.
+
+---
+
 ## 4 The creation flow keeps its old components
 
 `lib/ui/creation/creation_view.dart` was not ported — the spike had no creation flow — so it keeps
@@ -144,6 +162,33 @@ So the list above is read as *what is left* rather than *what is wrong*:
   1366 px display at 683, where the creation flow tore.
 - **L1/L2 and the zigzag** — the 222 px tile grid wasted 19.3 % of every row and the greedy
   two-column balance made the named panel order read as a zigzag. Single column removes both.
-- **Nothing could be selected or copied.** `SelectionArea` now wraps the whole application.
+- **Nothing could be selected or copied.** `SelectionArea` now wraps the character sheet. ⚠️ It sits
+  *inside* the screen and not at the application root: `MaterialApp.router`'s `builder` runs above the
+  router's `Navigator`, so there is no `Overlay` and `SelectableRegion` throws on the first frame.
 - **Transient scrollbars** — the theme sets `thumbVisibility`, so a panel with content below the
   fold no longer looks identical to one that ends at the fold.
+
+### From the checklist walkthrough, 2026-08-12
+
+Nine items were reported by driving the app. Six are closed:
+
+- ⚠️ **`in game` was stating a number the engine never draws.** A Fighter/Mage's `Open Locks` read
+  `stored 0` beside `in game 25` — `0 + Dexterity + race`, computed because the modifier tables answer
+  for any character, and printed without asking whether the engine shows the row. It does not.
+- ⚠️ **The party rail drew no portraits, and a second defect hid behind that.** `PORTRT<n>` is a
+  filename, not a resref; and the `selectedIcon` that makes selection visible over an opaque portrait
+  had been lost with the deleted `party_view.dart`.
+- **`weapprof.2da`'s dead generations were being offered** — `Bow` beside `Long Bow`, and fourteen rows
+  called `EXTRA*`. Settled by reading all 2,253 shipped creature records: no proficiency id below 89
+  is in use. Creation had the same bug.
+- **A ceiling of zero read as `at ceiling`**, which says the opposite of *not this class*.
+- **Cards within a group now flow across**, and the home screen stopped repeating both the app name
+  and the character's own name.
+- **A value's row is two lines**, the helper line carries the sum rather than naming its terms, and
+  `Enhanced` states both limits.
+
+⚠️ **One is closed differently than reported: `Detect Illusion` showing no in-game value is
+correct.** `skilldex.2da` has the column and it is `0` at every Dexterity, so in-game equals stored
+and the chip is rightly absent. Investigated rather than assumed.
+
+**Two remain, as entries 1 and 4 above:** the pip ceiling, and creation differing from the sheet.
