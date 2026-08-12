@@ -300,7 +300,20 @@ SheetSection _combatSection(CharacterSheet sheet) {
         CharacterStat.numberOfAttacks,
         character.numberOfAttacks,
         inGame: sheet.attacksPerRound,
-        arithmetic: 'stored ${character.numberOfAttacks} — 6 to 10 are halves',
+        // ⚠️ **Offered, not described.** The old helper line read `stored 10 —
+        // 6 to 10 are halves`, which restates the number above it and leaves
+        // the reader to work backwards from `9/2` to the byte meaning two
+        // attacks a round. Every storable value carries its meaning instead, so
+        // setting two attacks is a choice rather than a deduction.
+        valueMeanings: {
+          for (
+            var value = CharacterStat.numberOfAttacks.minimum;
+            value <= CharacterStat.numberOfAttacks.maximum;
+            value++
+          )
+            if (CharacterSheet.attacksPerRoundFor(value) case final String d)
+              value: d,
+        },
       ),
       _statField(
         sheet,
@@ -352,6 +365,7 @@ SheetField _statField(
   String? arithmetic,
   String? caveat,
   String? unit,
+  Map<int, String>? valueMeanings,
 }) {
   final available = _availableFor(sheet, stat);
   return SheetField(
@@ -383,6 +397,7 @@ SheetField _statField(
     unit: unit,
     rulesMaximum: _rulesMaximumFor(sheet, stat, available: available),
     gameMaximum: stat.maximum,
+    valueMeanings: valueMeanings,
   );
 }
 

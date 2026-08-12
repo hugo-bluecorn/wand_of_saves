@@ -56,6 +56,7 @@ class SheetField {
     this.unit,
     this.rulesMaximum,
     this.gameMaximum,
+    this.valueMeanings,
   });
 
   /// What the sheet calls it.
@@ -126,6 +127,18 @@ class SheetField {
   ///
   /// Above this the value is not a choice, it is a corruption.
   final int? gameMaximum;
+
+  /// What each storable value *means*, for a field whose bytes are a code
+  /// rather than a quantity.
+  ///
+  /// ⚠️ **Only `Attacks per round` needs this so far, and it needs it badly.**
+  /// `0`–`5` are whole attacks and `6`–`10` are halves, so a stored `10` draws
+  /// as `9/2` — which tells a reader nothing about what to type for two attacks
+  /// a round. The mapping runs one way on screen and the player needs it the
+  /// other way, so the values are offered rather than described.
+  ///
+  /// `null` for every ordinary field, where the number means itself.
+  final Map<int, String>? valueMeanings;
 
   /// The stored value as a number, when it is one.
   int? get storedNumber => int.tryParse(stored);

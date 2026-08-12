@@ -350,6 +350,74 @@ void main() {
     expect(closes, 1);
   });
 
+  group('a field whose bytes are a code', () {
+    // `Attacks per round`: 0-5 are whole attacks, 6-10 are halves, so a stored
+    // 10 draws as 9/2. The real projection fills all eleven.
+    const attacks = SheetField(
+      'Attacks per round',
+      '10',
+      stat: CharacterStat.numberOfAttacks,
+      inGame: '9/2',
+      valueMeanings: {
+        0: '0',
+        1: '1',
+        2: '2',
+        3: '3',
+        4: '4',
+        5: '5',
+        6: '1/2',
+        7: '3/2',
+        8: '5/2',
+        9: '7/2',
+        10: '9/2',
+      },
+    );
+
+    testWidgets('offers every value with what the game draws for it', (
+      tester,
+    ) async {
+      // ⚠️ **The encoding runs one way and the player needs it the other.**
+      // Reported as "can we have a side number, because I would like to set
+      // attacks to 2 or 3" — from `9/2` there is no way to reach the `2` that
+      // means two attacks a round.
+      await openField(tester, attacks);
+      await tester.pumpAndSettle();
+
+      expect(find.text('What each value means'), findsOneWidget);
+      // Where the value and its meaning are the same number, no arrow.
+      expect(find.widgetWithText(ChoiceChip, '2'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, '8 → 5/2'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, '10 → 9/2'), findsOneWidget);
+    });
+
+    testWidgets('picking two attacks a round writes the byte that means it', (
+      tester,
+    ) async {
+      await openField(tester, attacks);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ChoiceChip, '2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await tester.pumpAndSettle();
+
+      // ⚠️ **The stored byte, not the displayed value.** Nothing converts a
+      // drawn `2` back into a byte; the choice only names the number.
+      expect(appliedFields, [('Attacks per round', '2')]);
+    });
+
+    testWidgets('an ordinary field offers no such list', (tester) async {
+      await openField(
+        tester,
+        const SheetField('Luck', '7', stat: CharacterStat.luck),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('What each value means'), findsNothing);
+      expect(find.byType(ChoiceChip), findsNothing);
+    });
+  });
+
   group('proficiency pips', () {
     testWidgets('cannot be raised at the ceiling while the rules bind', (
       tester,

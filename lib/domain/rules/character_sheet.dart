@@ -411,11 +411,27 @@ class CharacterSheet {
   ///
   /// Written as the game writes it — a vulgar fraction, not `4.5` — because
   /// that is what the player will be comparing it against.
-  String get attacksPerRound {
-    final stored = character.numberOfAttacks;
-    if (stored <= wholeAttacksCeiling) return '$stored';
+  String? get attacksPerRound => attacksPerRoundFor(character.numberOfAttacks);
+
+  /// What the game draws for a stored [value] of this field.
+  ///
+  /// ⚠️ **Exposed for a value that is not the character's own**, so a screen
+  /// can say what a number *would* mean before it is written. Without it a
+  /// player reading `9/2` has no way to work out that two attacks a round is a
+  /// stored `2`: the encoding runs one way and they need it the other way.
+  static String? attacksPerRoundFor(int value) {
+    // ⚠️ **Outside the encoded range there is no meaning, and extrapolating
+    // produced nonsense.** The arithmetic is happy to run on any number: a
+    // stored 255 — which a real `.chr` was found holding — came out as `499/2`,
+    // the app calmly reporting two hundred and forty-nine and a half attacks a
+    // round. `numberOfAttacks` declares 0–10 and the code stops there.
+    if (value < CharacterStat.numberOfAttacks.minimum ||
+        value > CharacterStat.numberOfAttacks.maximum) {
+      return null;
+    }
+    if (value <= wholeAttacksCeiling) return '$value';
     // 6 is one half, 7 is three halves, and so on: `(stored - 5) * 2 - 1`.
-    return '${(stored - wholeAttacksCeiling) * 2 - 1}/2';
+    return '${(value - wholeAttacksCeiling) * 2 - 1}/2';
   }
 
   /// The highest stored value that means whole attacks rather than halves.

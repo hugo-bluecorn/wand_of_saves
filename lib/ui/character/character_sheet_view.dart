@@ -273,7 +273,22 @@ class _ValueRow extends StatelessWidget {
               ),
             ],
           ),
-          if (arithmetic != null && inGame != null) ...[
+          if (field.valueMeanings != null && inGame != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: ArithmeticLine(
+                    'the game draws this as $inGame — open it to see what '
+                    'every value means',
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Tag('$inGame$unit', caption: 'in game', tone: TagTone.inGame),
+              ],
+            ),
+          ] else if (arithmetic != null && inGame != null) ...[
             const SizedBox(height: 6),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,

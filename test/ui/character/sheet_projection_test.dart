@@ -119,6 +119,7 @@ void main() {
     int lockpicking = 0,
     int thac0 = 20,
     int maximumHitPoints = 7,
+    int numberOfAttacks = 1,
     SkillCatalogue skills = _skills,
     ProficiencyCatalogue proficiencies = ProficiencyCatalogue.empty,
     GameRules rules = _rules,
@@ -132,6 +133,7 @@ void main() {
     final character = base.copyWith(
       thac0: thac0,
       maximumHitPoints: maximumHitPoints,
+      numberOfAttacks: numberOfAttacks,
       thiefSkills: base.thiefSkills.copyWith(lockpicking: lockpicking),
     );
 
@@ -290,12 +292,51 @@ void main() {
       expect(fieldNamed(projected(), 'Strength').inGame, '18/00');
     });
 
-    test('attacks per round says nothing new when the byte is a count', () {
+    test('attacks per round offers every value, the byte being a code', () {
+      // ⚠️ **The encoding runs one way and the player needs it the other.** A
+      // stored `10` draws as `9/2`, and someone who wants two attacks a round
+      // has no way to get from that to the `2` they should type. Reported as
+      // "can we have a side number, because I would like to set attacks to 2 or
+      // 3". So every storable value carries its meaning and the field offers
+      // them, rather than a helper line describing the rule.
       final field = fieldNamed(projected(), 'Attacks per round');
 
       expect(field.stored, '1');
       expect(field.differsInGame, isFalse);
-      expect(field.arithmetic, contains('6 to 10 are halves'));
+
+      final meanings = field.valueMeanings;
+      expect(meanings, isNotNull);
+      // 0-5 mean themselves; 6-10 are halves, ending at four and a half.
+      expect(meanings![2], '2', reason: 'two attacks a round is a stored 2');
+      expect(meanings[5], '5');
+      expect(meanings[6], '1/2');
+      expect(meanings[8], '5/2');
+      expect(meanings[10], '9/2');
+      expect(meanings.keys, hasLength(11));
+    });
+
+    test('a stored value outside the code says nothing at all', () {
+      // ⚠️ **Found in a real `.chr`, which held 255.** The arithmetic is happy
+      // to run on any number, so the sheet reported `in game 499/2` — two
+      // hundred and forty-nine and a half attacks a round, stated as what the
+      // engine draws. `numberOfAttacks` declares 0-10; outside that there is no
+      // meaning to report, and an absent value beats an invented one.
+      final field = fieldNamed(
+        projected(numberOfAttacks: 255),
+        'Attacks '
+        'per round',
+      );
+
+      expect(field.stored, '255');
+      expect(field.inGame, isNull);
+      expect(field.differsInGame, isFalse);
+      // The offered values are still the eleven the field can hold.
+      expect(field.valueMeanings!.keys, hasLength(11));
+    });
+
+    test('and no ordinary field pretends its number is a code', () {
+      expect(fieldNamed(projected(), 'Strength').valueMeanings, isNull);
+      expect(fieldNamed(projected(), 'Lore').valueMeanings, isNull);
     });
 
     test('Lore takes both abilities, and the stored value is the base', () {

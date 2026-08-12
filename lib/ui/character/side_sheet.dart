@@ -384,6 +384,14 @@ class _FieldBody extends StatelessWidget {
           )
         else
           _ReadOnlyValue(field: field),
+        if (field.valueMeanings case final Map<int, String> meanings) ...[
+          const SizedBox(height: 16),
+          _ValueChoices(
+            meanings: meanings,
+            selected: int.tryParse(controller.text),
+            onPicked: editable ? onChanged : null,
+          ),
+        ],
         if (explanation != null) ...[
           const SizedBox(height: 16),
           Text(explanation, style: text.bodyLarge),
@@ -601,6 +609,75 @@ class _Stepper extends StatelessWidget {
           onPressed: value < maximum ? () => onChanged(value + 1) : null,
           tooltip: 'One more',
           icon: const Icon(Icons.add),
+        ),
+      ],
+    );
+  }
+}
+
+/// Every value a coded field can hold, with what the game draws for it.
+///
+/// ⚠️ **For a field whose bytes are a code rather than a quantity.** `Attacks
+/// per round` stores `0`–`5` as whole attacks and `6`–`10` as halves, so a
+/// stored `10` draws as `9/2` — and a player who wants two attacks a round has
+/// to run that encoding backwards to find out they should type `2`. Reported as
+/// exactly that: *"can we have a side number, because I would like to set
+/// attacks to 2 or 3"*.
+///
+/// So the values are **offered**. Picking one writes the byte; the label says
+/// what the game will draw. Nothing here converts a displayed value back into a
+/// stored one — the editor still edits the record's own number, and the choice
+/// is only a way of naming it.
+class _ValueChoices extends StatelessWidget {
+  const _ValueChoices({
+    required this.meanings,
+    required this.selected,
+    required this.onPicked,
+  });
+
+  /// Stored value to what the game draws for it.
+  final Map<int, String> meanings;
+
+  /// The value in the input, when it is one of these.
+  final int? selected;
+
+  /// Called with the picked value as text, or `null` when the field is inert.
+  final ValueChanged<String>? onPicked;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
+    final entries = meanings.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'What each value means',
+          style: text.labelLarge?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final entry in entries)
+              ChoiceChip(
+                label: Text(
+                  // `2 → 2` says nothing, so the arrow is dropped where the
+                  // value and its meaning are the same number.
+                  entry.value == '${entry.key}'
+                      ? '${entry.key}'
+                      : '${entry.key} → ${entry.value}',
+                ),
+                selected: entry.key == selected,
+                onSelected: onPicked == null
+                    ? null
+                    : (_) => onPicked!('${entry.key}'),
+              ),
+          ],
         ),
       ],
     );
