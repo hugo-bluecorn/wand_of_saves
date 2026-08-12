@@ -22,13 +22,13 @@ library;
 
 import 'package:go_router/go_router.dart';
 import 'package:wand_of_saves/ui/character/character_file_view.dart';
+import 'package:wand_of_saves/ui/character/character_screen.dart';
 import 'package:wand_of_saves/ui/creation/creation_view.dart';
-import 'package:wand_of_saves/ui/party/party_view.dart';
-import 'package:wand_of_saves/ui/saves/save_browser_view.dart';
+import 'package:wand_of_saves/ui/saves/home_screen.dart';
 
 /// Route names, so no screen builds a path out of string fragments.
 abstract final class Routes {
-  /// The save browser, and the app's start.
+  /// The lineup, and the app's start.
   static const String browser = '/';
 
   /// The party shell for one savegame, relative to [browser].
@@ -83,11 +83,11 @@ GoRouter buildRouter() => GoRouter(
   routes: [
     GoRoute(
       path: Routes.browser,
-      builder: (context, state) => const SaveBrowserView(),
+      builder: (context, state) => const HomeScreen(),
       routes: [
         GoRoute(
           path: Routes.party,
-          builder: (context, state) => PartyView(
+          builder: (context, state) => CharacterScreen(
             slotDirectoryName: state.pathParameters[Routes.slotParameter] ?? '',
           ),
         ),

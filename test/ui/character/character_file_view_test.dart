@@ -73,29 +73,50 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> openTab(WidgetTester tester, String heading) async {
-    await tester.tap(find.widgetWithText(Tab, heading));
+  /// Opens the side sheet on the row labelled [label] and types [value].
+  ///
+  /// ⚠️ **The sheet's rows are read-only summaries.** Editing goes through the
+  /// side sheet, which is what makes a value carry its own verdict where it is
+  /// typed rather than in a snackbar somewhere else.
+  Future<void> editField(
+    WidgetTester tester,
+    String label,
+    String value,
+  ) async {
+    await tester.tap(find.text(label));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, value);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('names the file in the bar and the character in the panel', (
+  testWidgets('names the file in the bar and the character on the sheet', (
     tester,
   ) async {
     // ⚠️ Two names, and they really do differ on disk: Aard1.chr holds Aard.
-    // The bar names the document, as the party shell's does; the panel names
-    // the person. Saying the same name twice would lose the other fact.
+    // The bar names the document; the sheet names the person. Saying the same
+    // name twice would lose the other fact — and for one revision the sheet
+    // named nobody at all, which is why this asserts both.
     await showCharacter(tester);
 
     expect(find.text(fileName), findsOneWidget);
     expect(find.text('Aurel'), findsOneWidget);
   });
 
-  testWidgets('has the same four tabs the party shell does', (tester) async {
+  testWidgets('shows every group at once, with no tabs to open', (
+    tester,
+  ) async {
+    // ⚠️ **The point of the single column.** The four headings used to be tabs,
+    // so three quarters of the record was always one click away — and a finding
+    // marked on a hidden field is a mark nobody can see.
     await showCharacter(tester);
 
     for (final heading in ['Character', 'Abilities', 'Skills', 'Combat']) {
-      expect(find.widgetWithText(Tab, heading), findsOneWidget);
+      expect(find.text(heading), findsWidgets, reason: heading);
     }
+    expect(find.byType(Tab), findsNothing);
+    expect(find.byType(TabBar), findsNothing);
   });
 
   testWidgets('has no portrait rail — there is nothing to rail between', (
@@ -133,10 +154,7 @@ void main() {
       reason: 'nothing is unsaved yet',
     );
 
-    await openTab(tester, 'Abilities');
-    await tester.enterText(find.widgetWithText(TextField, '12'), '18');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
+    await editField(tester, 'Strength', '18');
 
     expect(find.text('$fileName •'), findsOneWidget);
     expect(
@@ -153,10 +171,7 @@ void main() {
       character: const SyntheticCharacter(strength: 12),
     );
 
-    await openTab(tester, 'Abilities');
-    await tester.enterText(find.widgetWithText(TextField, '12'), '18');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
+    await editField(tester, 'Strength', '18');
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
 

@@ -66,6 +66,15 @@ class _WandOfSavesAppState extends State<WandOfSavesApp> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       routerConfig: _router,
+      // ⚠️ **Selection is NOT wrapped here, and the reason cost a red screen.**
+      // `MaterialApp.router`'s `builder` runs *above* the router's `Navigator`,
+      // so there is no `Overlay` in scope — and `SelectableRegion` requires one
+      // for its handles and its context menu. A `SelectionArea` here throws on
+      // the first frame: "No Overlay widget found." The analyzer and all 726
+      // tests passed; only launching the app showed it.
+      //
+      // So selection lives *inside* the screens, below the Navigator, where an
+      // Overlay exists — see `CharacterSheetView`.
     );
   }
 }
