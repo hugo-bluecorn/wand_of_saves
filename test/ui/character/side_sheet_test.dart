@@ -332,8 +332,10 @@ void main() {
     const luck = SheetField('Luck', '7', stat: CharacterStat.luck);
     await openField(tester, luck);
 
-    expect(tester.widget<TextField>(find.byType(TextField)).controller?.text,
-        '7');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      '7',
+    );
     expect(appliedFields, isEmpty);
   });
 

@@ -16,9 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:wand_of_saves/ui/character/findings.dart';
 import 'package:wand_of_saves/ui/character/pip_meter.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
-import 'package:wand_of_saves/ui/character/value_readout.dart';
 import 'package:wand_of_saves/ui/core/arithmetic_line.dart';
-import 'package:wand_of_saves/ui/core/palette_finish.dart';
 import 'package:wand_of_saves/ui/core/panel_card.dart';
 import 'package:wand_of_saves/ui/core/screen_tone.dart';
 import 'package:wand_of_saves/ui/core/tag.dart';
@@ -62,6 +60,7 @@ class CharacterSheetView extends StatelessWidget {
           character: character,
           rulesBind: rulesBind,
           onOpen: onOpen,
+          flagged: flagged,
         );
         continue;
       }
@@ -211,6 +210,20 @@ class _ValueRow extends StatelessWidget {
     );
     if (mark != null) spoken.write('. ${mark.sentence}');
 
+    final field = entry.field;
+    final unit = field.unit ?? '';
+    final inGame = field.inGame;
+    final state = stateTagFor(field, rulesBind: rulesBind);
+    final limits = rulesBind ? null : _limits(field);
+
+    // ⚠️ **Two lines, and the second one carries the sum.** The label and the
+    // number the file holds; then, underneath, the modification *with its
+    // amount* and the number the engine draws. The single-line arrangement this
+    // replaces put `stored 3` beside `in game 23` with a helper line reading
+    // `stored 3, + Intelligence + Wisdom` — which names the terms and never
+    // says `+20`, so the one line that answers *why* raised the question
+    // instead. A row with no modification stays one line, which makes the
+    // taller row the interesting one.
     final body = Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
@@ -219,23 +232,60 @@ class _ValueRow extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                flex: 4,
-                child: Text(entry.field.label, style: text.bodyLarge),
-              ),
+              Expanded(child: Text(field.label, style: text.bodyLarge)),
               const SizedBox(width: 12),
-              Expanded(
-                flex: 5,
-                child: ValueReadout(
-                  field: entry.field,
-                  rulesBind: rulesBind,
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    '${field.stored}$unit',
+                    style: text.titleMedium,
+                    textAlign: TextAlign.end,
+                  ),
+                  // ⚠️ **What the rules say, when the file disagrees.** Stored
+                  // and base are not always the same number: a stored maximum
+                  // of 45 arrived in a new game as 12, recomputed. Saying so
+                  // here is the distinction made per row rather than left to a
+                  // sentence underneath.
+                  if (field.divergesFromRules)
+                    Tag(
+                      '${field.derived}',
+                      caption: 'rules say',
+                      tone: TagTone.enhanced,
+                    ),
+                  ?state,
+                  if (field.caveat case final String note) _Caveat(note),
+                ],
               ),
             ],
           ),
-          if (arithmetic != null) ...[
-            const SizedBox(height: 8),
+          if (arithmetic != null && inGame != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: ArithmeticLine(arithmetic)),
+                const SizedBox(width: 12),
+                Tag('$inGame$unit', caption: 'in game', tone: TagTone.inGame),
+              ],
+            ),
+          ] else if (arithmetic != null) ...[
+            const SizedBox(height: 6),
             ArithmeticLine(arithmetic),
+          ],
+          // ⚠️ **The range, and only with the check off.** On, the app refuses
+          // what the rules refuse and the bound is implicit. Off, the player is
+          // deliberately going past it and needs to know where the two limits
+          // are — the rules' and the engine's, which D16 keeps apart because
+          // one is a choice and the other is a corrupt byte.
+          if (limits != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              limits,
+              style: text.bodySmall?.copyWith(color: colors.secondary),
+            ),
           ],
           // The sentence sits under the value it is about. It used to live in
           // a column on the right, which said the field's name a second time
@@ -274,108 +324,112 @@ class _ValueRow extends StatelessWidget {
   }
 }
 
-/// The seven ability scores, each carrying its arithmetic in full.
+/// What the two limits are, or `null` when neither is known.
 ///
-/// ⚠️ **Abilities are where a save editor is actually used**, so the verdict
-/// has to reach these tiles and not only the rows. A rule wired to one surface
-/// and not the other is a rule that goes quiet on exactly the field someone
-/// opened the application to change.
+/// ⚠️ **Two numbers, never one range, and that is D16 rather than pedantry.**
+/// `18` and `25` answer different questions — *the rules stop here* and *the
+/// engine stops here* — and a THAC0 of 25 at level 2 was written, imported,
+/// played and kept, so the gap between them is a real place a save editor lets
+/// you stand. Collapsing them to `1–25` throws that away.
+///
+/// ⚠️ **A `null` rules ceiling is "nobody looked it up", not "anything goes".**
+/// Strength has no rules ceiling here because `CharacterSheet` does not expose
+/// the 18 that creation enforces from `abracerq.2da`, so this says only what
+/// the engine will take rather than implying the rules permit it. See
+/// `docs/findings/known-defects.md`.
+String? _limits(SheetField field) {
+  final rules = field.rulesMaximum;
+  final game = field.gameMaximum;
+  return switch ((rules, game)) {
+    (final int r, final int g) =>
+      'the rules reach ${_grouped(r)} · '
+          'the game takes up to ${_grouped(g)}',
+    (final int r, null) => 'the rules reach ${_grouped(r)}',
+    (null, final int g) => 'the game takes up to ${_grouped(g)}',
+    (null, null) => null,
+  };
+}
+
+/// `4294967295` as `4,294,967,295`.
+///
+/// ⚠️ **Hand-rolled because `intl` is not a dependency**, and a field's own
+/// width is where this earns its place: experience is a dword, so its engine
+/// limit really is ten digits, and ten ungrouped digits read as noise rather
+/// than as a number. Not localised — a separator that varied by locale would be
+/// a reason to take the dependency, and nothing else here needs one.
+String _grouped(int value) {
+  final digits = value.abs().toString();
+  final out = StringBuffer(value < 0 ? '-' : '');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) out.write(',');
+    out.write(digits[i]);
+  }
+  return out.toString();
+}
+
+/// The ⓘ: one short line, on hover, never a paragraph on the surface.
+class _Caveat extends StatelessWidget {
+  const _Caveat(this.note);
+
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: note,
+      waitDuration: const Duration(milliseconds: 500),
+      child: Icon(
+        Icons.info_outline,
+        size: 16,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
+/// The seven ability scores, in the same rows as everything else.
+///
+/// ⚠️ **They used to be bordered tiles with their own value readout, and that
+/// was a second rendering of one thing.** It cost twice: the sheet showed
+/// `stored 18` on Strength and a bare `7` on the row above it, and every rule
+/// added to the sheet had to be wired to two widgets — which is exactly how the
+/// rules check came to reach the value rows and go silent on the ability tiles,
+/// the field people most often open a save editor to change. One row widget
+/// makes that class of bug unavailable rather than merely fixed.
 class _Abilities extends StatelessWidget {
   const _Abilities({
     required this.character,
     required this.rulesBind,
     required this.onOpen,
+    required this.flagged,
   });
 
   final SheetCharacter character;
   final bool rulesBind;
   final ValueChanged<Subject> onOpen;
 
+  /// What this application noticed, by field key.
+  final Map<String, Finding> flagged;
+
   @override
   Widget build(BuildContext context) {
-    final tiles = [
+    final rows = [
       for (final entry in indexOf(character))
         if (entry.section.title == 'Abilities') entry,
     ];
     return PanelCard(
       title: 'Abilities',
       children: [
-        for (final entry in tiles) ...[
-          _AbilityTile(entry: entry, rulesBind: rulesBind, onOpen: onOpen),
-          if (entry != tiles.last) const SizedBox(height: 12),
+        for (final entry in rows) ...[
+          if (entry != rows.first) const Divider(),
+          _ValueRow(
+            entry: entry,
+            finding: flagged[entry.key],
+            rulesBind: rulesBind,
+            onTap: () => onOpen(FieldSubject(entry)),
+          ),
         ],
       ],
-    );
-  }
-}
-
-class _AbilityTile extends StatelessWidget {
-  const _AbilityTile({
-    required this.entry,
-    required this.onOpen,
-    this.rulesBind = true,
-  });
-
-  final FieldEntry entry;
-  final ValueChanged<Subject> onOpen;
-  final bool rulesBind;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final colors = Theme.of(context).colorScheme;
-    final field = entry.field;
-    final arithmetic = field.arithmetic;
-    final live = field.enabledUnder(rulesBind: rulesBind);
-
-    // ⚠️ No fill. An inset region inside a card is separated by a hairline,
-    // never by a fifth surface tone — that collision is what made the previous
-    // application's placeholders invisible inside the cards holding them.
-    final tile = Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            flex: 4,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(field.label, style: text.bodyLarge),
-                if (arithmetic != null) ...[
-                  const SizedBox(height: 8),
-                  ArithmeticLine(arithmetic),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 5,
-            child: ValueReadout(field: field, rulesBind: rulesBind),
-          ),
-        ],
-      ),
-    );
-
-    // Asked for, not stated — the palette decides how hard an edge is. See
-    // [PaletteFinish].
-    final corner = PaletteFinish.of(context).radiusOf(12);
-
-    return Semantics(
-      button: live,
-      label: '${field.label}, stored ${field.stored}',
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: corner,
-          border: Border.all(color: colors.outline),
-        ),
-        child: InkWell(
-          onTap: live ? () => onOpen(FieldSubject(entry)) : null,
-          borderRadius: corner,
-          child: live ? tile : ScreenTone(child: tile),
-        ),
-      ),
     );
   }
 }

@@ -117,6 +117,8 @@ void main() {
     int strengthBonus = 100,
     int constitution = 16,
     int lockpicking = 0,
+    int thac0 = 20,
+    int maximumHitPoints = 7,
     SkillCatalogue skills = _skills,
     ProficiencyCatalogue proficiencies = ProficiencyCatalogue.empty,
     GameRules rules = _rules,
@@ -128,6 +130,8 @@ void main() {
       constitution: constitution,
     );
     final character = base.copyWith(
+      thac0: thac0,
+      maximumHitPoints: maximumHitPoints,
       thiefSkills: base.thiefSkills.copyWith(lockpicking: lockpicking),
     );
 
@@ -248,7 +252,7 @@ void main() {
         expect(field.stored, '7');
         expect(field.inGame, '9');
         expect(field.differsInGame, isTrue);
-        expect(field.arithmetic, 'stored 7, +2/level from Constitution 16');
+        expect(field.arithmetic, '+2 from Constitution 16');
       },
     );
 
@@ -270,7 +274,7 @@ void main() {
 
       expect(field.stored, '20');
       expect(field.inGame, '17');
-      expect(field.arithmetic, 'stored 20, −3 from Strength 18');
+      expect(field.arithmetic, '−3 from Strength 18');
     });
 
     test('armour class reads the effective field, which is the one the engine '
@@ -279,7 +283,7 @@ void main() {
 
       expect(field.stored, '10');
       expect(field.inGame, '7');
-      expect(field.arithmetic, 'stored 10, −3 from Dexterity 17');
+      expect(field.arithmetic, '−3 from Dexterity 17');
     });
 
     test('percentile strength is read out as the game writes it', () {
@@ -299,7 +303,12 @@ void main() {
 
       expect(field.stored, '3');
       expect(field.inGame, '6');
-      expect(field.arithmetic, 'stored 3, + Intelligence + Wisdom');
+      // ⚠️ **The amount, not the names of the terms.** This asserted
+      // `stored 3, + Intelligence + Wisdom` — the arithmetic named rather than
+      // done, so Lore going 3 → 23 showed no `+20` anywhere on the sheet. The
+      // stored value moved to the row's first line, so the helper carries the
+      // modification alone.
+      expect(field.arithmetic, '+3 from Intelligence and Wisdom');
     });
 
     test('the chance to learn a spell sits beside the score it comes from', () {
@@ -381,6 +390,64 @@ void main() {
 
       expect(field.editable, isTrue);
       expect(field.source, FieldSource.authored);
+    });
+  });
+
+  group('base is not stored, and a row can say which', () {
+    test('a value the tables agree with does not diverge', () {
+      // Aard stores 7 maximum hit points and a Fighter/Mage 1/1 rolls exactly
+      // 7, so the file and the rules agree.
+      final field = fieldNamed(projected(), 'Maximum hit points');
+
+      expect(field.storedNumber, 7);
+      expect(field.derived, 7);
+      expect(field.divergesFromRules, isFalse);
+    });
+
+    test('a value the engine would not produce does diverge', () {
+      // ⚠️ **The case that falsifies "a savegame stores base values."**
+      // Measured
+      // 2026-08-09: a character exported with a stored maximum of 45 arrived
+      // in a new game with **12**, recomputed from class and level. So a stored
+      // 40 is a number the rules never produce, and the sheet has to say that
+      // rather than presenting it as the character's base.
+      final field = fieldNamed(
+        projected(maximumHitPoints: 40),
+        'Maximum hit points',
+      );
+
+      expect(field.storedNumber, 40);
+      expect(field.derived, 7);
+      expect(field.divergesFromRules, isTrue);
+    });
+
+    test('a rule nobody can read is not a disagreement', () {
+      // ⚠️ `null` must not read as "the rules say zero". A stat absent from the
+      // derivation is unanswered, and an unanswered rule agrees with nothing.
+      final field = fieldNamed(projected(thac0: 25), 'THAC0 (base)');
+
+      expect(
+        field.derived,
+        isNull,
+        reason: 'THAC0.2da comes from the installation, not from these tables',
+      );
+      expect(field.divergesFromRules, isFalse);
+    });
+
+    test('and it reuses creation’s own arithmetic, not a second copy', () {
+      // The hit-point roll comes from `derivedStatsFor`, which is what the
+      // creation flow writes with — so the sheet and creation cannot disagree
+      // about what a Fighter/Mage rolls. ⚠️ Saving throws, THAC0 and Lore join
+      // this list only with the player's own tables loaded; with the cut-down
+      // fixture they are correctly absent rather than zero.
+      final derived = [
+        for (final field in projected().fields)
+          if (field.derived != null) field.label,
+      ];
+
+      expect(derived, contains('Maximum hit points'));
+      expect(derived, contains('Current hit points'));
+      expect(derived, isNot(contains('Strength')));
     });
   });
 

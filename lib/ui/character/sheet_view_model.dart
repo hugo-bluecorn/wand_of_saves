@@ -45,6 +45,7 @@ class SheetField {
     this.label,
     this.stored, {
     this.stat,
+    this.derived,
     this.inGame,
     this.arithmetic,
     this.caveat,
@@ -99,6 +100,18 @@ class SheetField {
   /// A trailing unit, where one reads better than putting it in the label.
   final String? unit;
 
+  /// What the game's own tables say this value **should** be, or `null` when
+  /// they cannot say.
+  ///
+  /// ⚠️ **Not the same as [stored], and not the same as [inGame].** Three
+  /// numbers, and each answers a different question: the file holds [stored],
+  /// the rules produce this, and the engine draws [inGame]. Most of the time
+  /// the first two agree — but a THAC0 of 25 at level 2 was written, imported,
+  /// played and kept against a computed 20, because the engine never recomputes
+  /// that field. So "a savegame stores base values" is a rule with exceptions,
+  /// and this is how a row can say which it is.
+  final int? derived;
+
   /// The largest value the game's own tables would ever produce here.
   ///
   /// ⚠️ **Not the same as [gameMaximum], and the gap is the whole point.** A
@@ -116,6 +129,16 @@ class SheetField {
 
   /// The stored value as a number, when it is one.
   int? get storedNumber => int.tryParse(stored);
+
+  /// Whether the file holds something other than what the rules produce.
+  ///
+  /// `false` when the tables cannot say — an unanswered rule is not a
+  /// disagreement.
+  bool get divergesFromRules {
+    final rules = derived;
+    final held = storedNumber;
+    return rules != null && held != null && rules != held;
+  }
 
   /// Whether [value] is beyond what the rules produce but still playable —
   /// the state a save editor exists to make possible.

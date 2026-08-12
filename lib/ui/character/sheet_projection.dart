@@ -78,7 +78,6 @@ SheetCharacter sheetCharacterFrom({
 /// The Character section — the numbers that belong to the person.
 SheetSection _characterSection(CharacterSheet sheet) {
   final character = sheet.character;
-  final perLevel = sheet.hitPointBonusPerLevel;
 
   return SheetSection('Character', Icons.person_outline, [
     SheetGroup('Character', [
@@ -94,10 +93,12 @@ SheetSection _characterSection(CharacterSheet sheet) {
         CharacterStat.maximumHitPoints,
         character.maximumHitPoints,
         inGame: sheet.maximumHitPointsInGame?.toString(),
-        arithmetic: perLevel == null
+        // ⚠️ **The amount, not the name of the term.** This used to read
+        // `stored 7, +4/level from Constitution 18` — which is the arithmetic
+        // named rather than done. The reader wants the number that was added.
+        arithmetic: sheet.hitPointBonus == null
             ? null
-            : 'stored ${character.maximumHitPoints}, '
-                  '${_signed(perLevel)}/level from Constitution '
+            : '${_signed(sheet.hitPointBonus!)} from Constitution '
                   '${character.abilities.constitution}',
       ),
       _statField(sheet, CharacterStat.experience, character.experience),
@@ -221,9 +222,12 @@ SheetSection _skillsSection(CharacterSheet sheet) {
           inGame: lore?.toString(),
           // ⚠️ Both abilities, and the stored value is the class-and-level
           // part alone. An editor that recomputed it would double-count.
+          // ⚠️ The amount, not the names of the terms. `+ Intelligence +
+          // Wisdom` never said what was added — Lore going 3 → 23 showed no
+          // `+20` anywhere on the sheet.
           arithmetic: lore == null
               ? null
-              : 'stored ${skills.lore}, + Intelligence + Wisdom',
+              : '${_signed(lore - skills.lore)} from Intelligence and Wisdom',
         ),
         for (final (stat, value) in _thiefSkillsOf(character))
           _thiefSkillField(sheet, stat, value),
@@ -266,7 +270,7 @@ SheetSection _combatSection(CharacterSheet sheet) {
         // negative — where the panel's `20 − -1` reads as a typo.
         arithmetic: toHit == null
             ? null
-            : 'stored ${character.thac0}, ${_signed(-toHit)} from Strength '
+            : '${_signed(-toHit)} from Strength '
                   '${character.abilities.strength}',
         caveat:
             'The engine never recomputes this: a stored value survives a '
@@ -287,8 +291,8 @@ SheetSection _combatSection(CharacterSheet sheet) {
         inGame: sheet.armourClassInGame?.toString(),
         arithmetic: dexterity == null
             ? null
-            : 'stored ${character.armorClass}, ${_signed(dexterity)} from '
-                  'Dexterity ${character.abilities.dexterity}',
+            : '${_signed(dexterity)} from Dexterity '
+                  '${character.abilities.dexterity}',
         caveat: 'The field the engine actually reads. Confirmed in game.',
       ),
       _statField(
@@ -354,6 +358,13 @@ SheetField _statField(
     label ?? stat.label,
     '$value',
     stat: stat,
+    // ⚠️ **What the tables say it SHOULD be, which is not always what is
+    // stored.** `CharacterSheet.derivedStats` reuses the creation flow's own
+    // function, so the sheet and creation cannot disagree about what a
+    // Fighter/Mage's THAC0 is; a stat the tables cannot answer is absent from
+    // that map and stays `null` here rather than defaulting to the stored
+    // value, which would make every row agree with itself by construction.
+    derived: sheet.derivedStats[stat],
     inGame: inGame,
     arithmetic: arithmetic,
     caveat: caveat,
@@ -405,7 +416,12 @@ SheetField _thiefSkillField(
     stat,
     value,
     inGame: shown?.toString(),
-    arithmetic: shown == null ? null : 'allocated, + Dexterity + race',
+    // ⚠️ **The amount, not the names of the terms.** `allocated, + Dexterity +
+    // race` never said what was added — a skill going 0 → 25 showed no `+25`
+    // anywhere. `show the arithmetic` means the sum, not its ingredients.
+    arithmetic: shown == null
+        ? null
+        : '${_signed(shown - value)} from Dexterity and race',
   );
 }
 

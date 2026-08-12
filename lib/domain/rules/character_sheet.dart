@@ -15,6 +15,7 @@
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
+import 'package:wand_of_saves/domain/rules/creation_derivation.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
@@ -447,5 +448,47 @@ class CharacterSheet {
   int? get maximumHitPointsInGame {
     final bonus = hitPointBonus;
     return bonus == null ? null : character.maximumHitPoints + bonus;
+  }
+
+  /// What the tables say this character's stored numbers **should** be.
+  ///
+  /// ⚠️ **Stored is not always base, and this project's own findings say so.**
+  /// `verified-format-offsets.md` states flatly that "a savegame stores base
+  /// values". That holds for most fields and fails for the interesting ones:
+  ///
+  /// - **THAC0** — a stored `25` at level 2, against a computed 20, survived
+  ///   import and play. The engine never recomputes it, so stored is whatever
+  ///   was written.
+  /// - **Current hit points** — a stored value above the maximum is clamped
+  ///   away on load, so stored is neither base nor effective.
+  /// - **Percentile strength** — a stored `19/100` arrived in a new game as
+  ///   `19/0`.
+  /// - **Any anomaly** — a class-gated skill holding a non-zero value is stored
+  ///   by definition and base necessarily zero.
+  ///
+  /// So there are three numbers per field, not two: what the file holds
+  /// ([Character]), what the rules say it should hold (this), and what the
+  /// engine draws (the `…InGame` getters). ⚠️ **A field where the first two
+  /// disagree is exactly D16's *beyond the rules*** — not a fourth concept, the
+  /// one the findings already rest on, available per row rather than only in a
+  /// sentence underneath.
+  ///
+  /// **Reuses the creation flow's own function** rather than a second copy of
+  /// the arithmetic: `derivedStatsFor` takes the levels, so it answers for a
+  /// character at any level and not only a new one. A stat the tables cannot
+  /// answer is **absent**, never defaulted.
+  Map<CharacterStat, int> get derivedStats {
+    final classIdentifier = rules.classIdentifier(character.classId);
+    final levels = classLevels;
+    if (classIdentifier == null || levels.isEmpty) {
+      return const <CharacterStat, int>{};
+    }
+    return derivedStatsFor(
+      rules: rules,
+      classIdentifier: classIdentifier,
+      raceIdentifier: rules.raceIdentifier(character.raceId),
+      levels: levels,
+      constitution: character.abilities.constitution,
+    );
   }
 }
