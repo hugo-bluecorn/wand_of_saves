@@ -69,7 +69,11 @@ class HomeScreen extends ConsumerWidget {
               notifier: notifier,
             )
           : AppBar(
-              title: const Text('Wand of Saves'),
+              // ⚠️ **No title, because the window already carries one.** The
+              // desktop's own title bar says *Wand of Saves* directly above
+              // this, so naming the app again cost a line and said nothing. The
+              // other screens name the *document* — `Arduin Start`,
+              // `Arduin.chr` — which the window bar cannot.
               actions: [
                 IconButton(
                   onPressed: notifier.refresh,
@@ -319,6 +323,14 @@ class _Sections extends StatelessWidget {
   /// this a card only gets emptier, and a line of prose gets harder to read.
   static const double _measure = 1180;
 
+  /// ⚠️ **Two widths, because the two pictures are different sizes.** A
+  /// character card carries an 84 × 132 portrait and a save card a 239 × 180
+  /// screenshot, so one shared width would either crush the save or strand the
+  /// character in whitespace. Each is picked to fit a whole number of cards
+  /// across [_measure] with the 12-point gaps: three characters, two saves.
+  static const double _characterCardWidth = 380;
+  static const double _saveCardWidth = 578;
+
   @override
   Widget build(BuildContext context) {
     final selecting = selection.isSelecting;
@@ -343,23 +355,31 @@ class _Sections extends StatelessWidget {
                     'No characters yet. The game writes these from the Record '
                     'screen’s EXPORT button — or make one with the ＋ card.',
                   ),
-                for (final file in state.characters) ...[
-                  _CharacterCard(
-                    file: file,
-                    selecting: selecting,
-                    selected: selection.selected.contains(
-                      CharacterRef(file.fileName),
-                    ),
-                    onToggle: () =>
-                        notifier.toggle(CharacterRef(file.fileName)),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                // ⚠️ **Last, and absent during selection.** Creating a
-                // character *is* filling an empty slot, which is how the game
-                // presents it too — and there is nothing to tick on a card
-                // that is not a document.
-                if (!selecting) const _NewCharacterCard(),
+                // ⚠️ **Horizontal within the group, vertical between groups.**
+                // The sheet is one column because a record reads top to bottom;
+                // a *lineup* does not. `Wrap` rather than a scrolling shelf so
+                // nothing is hidden off the right edge — a document you cannot
+                // see is one you cannot open.
+                _CardRow(
+                  width: _characterCardWidth,
+                  children: [
+                    for (final file in state.characters)
+                      _CharacterCard(
+                        file: file,
+                        selecting: selecting,
+                        selected: selection.selected.contains(
+                          CharacterRef(file.fileName),
+                        ),
+                        onToggle: () =>
+                            notifier.toggle(CharacterRef(file.fileName)),
+                      ),
+                    // ⚠️ **Last, and absent during selection.** Creating a
+                    // character *is* filling an empty slot, which is how the
+                    // game presents it too — and there is nothing to tick on a
+                    // card that is not a document.
+                    if (!selecting) const _NewCharacterCard(),
+                  ],
+                ),
                 const SizedBox(height: 36),
                 const _SectionHeading(
                   title: 'Saves',
@@ -372,22 +392,58 @@ class _Sections extends StatelessWidget {
                     'No Baldur’s Gate saves found. Set BGEE_SAVE_DIR if the '
                     'game lives somewhere unusual.',
                   ),
-                for (final slot in state.saves) ...[
-                  _SaveCard(
-                    slot: slot,
-                    selecting: selecting,
-                    selected: selection.selected.contains(
-                      SaveRef(slot.directoryName),
-                    ),
-                    onToggle: () =>
-                        notifier.toggle(SaveRef(slot.directoryName)),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                _CardRow(
+                  width: _saveCardWidth,
+                  children: [
+                    for (final slot in state.saves)
+                      _SaveCard(
+                        slot: slot,
+                        selecting: selecting,
+                        selected: selection.selected.contains(
+                          SaveRef(slot.directoryName),
+                        ),
+                        onToggle: () =>
+                            notifier.toggle(SaveRef(slot.directoryName)),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// One group's cards, flowing across and wrapping rather than stacking.
+///
+/// ⚠️ **A fixed card width is a deliberate choice and it has a cost.** `Wrap`
+/// neither justifies nor stretches, so a row that does not divide evenly leaves
+/// its remainder as slack on the right — the same effect the UI review measured
+/// at 19.3 % on the old stat grid. It is acceptable here and was not there,
+/// because these are a handful of large cards rather than fifty small ones, and
+/// because the alternative is a card whose picture resizes with the window.
+class _CardRow extends StatelessWidget {
+  const _CardRow({required this.width, required this.children});
+
+  /// How wide each card is.
+  final double width;
+
+  /// The cards, in the order they should be read.
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (final child in children) SizedBox(width: width, child: child),
+        ],
       ),
     );
   }
@@ -593,16 +649,21 @@ class _CharacterCard extends ConsumerWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
-          // ⚠️ The file's name, which is *not* the character's: `Aard1.chr`
-          // holds a character called `Aard`, and a player with two exports of
-          // one character has only this to tell them apart.
-          Text(
-            file.label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          // ⚠️ **Only when it differs from the character's own name.** The
+          // file's name is *not* the character's — `Aard1.chr` holds a
+          // character called `Aard`, and a player with two exports of one
+          // character has only this to tell them apart — but the common case is
+          // that they match, and then this card spent its last line repeating
+          // its first.
+          if (file.label != file.character.name) ...[
+            const SizedBox(height: 12),
+            Text(
+              file.label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

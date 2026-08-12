@@ -124,15 +124,34 @@ void main() {
       );
     });
 
-    testWidgets('every card shares one left edge and one width', (
+    testWidgets('cards within a group sit side by side', (tester) async {
+      // ⚠️ **Horizontal within a group, vertical between groups**, and this
+      // asserted the opposite until 2026-08-12. The character sheet is one
+      // column because a record reads top to bottom; a *lineup* does not, and
+      // full-width cards put the second save most of the way down the viewport.
+      await showHome(tester);
+
+      final first = tester.getTopLeft(find.text('last'));
+      final second = tester.getTopLeft(find.text('start'));
+
+      expect(
+        second.dx,
+        greaterThan(first.dx),
+        reason: 'the second save sits to the right of the first',
+      );
+      expect(
+        second.dy,
+        first.dy,
+        reason: 'and on the same line, not below it',
+      );
+    });
+
+    testWidgets('a group sizes its own cards, and the groups differ', (
       tester,
     ) async {
-      // ⚠️ **The single-column directive, asserted rather than assumed.** The
-      // screen this came from laid both sections out as grids, so a card's left
-      // edge and its width both moved with the window and with the card's index
-      // in its row — and the two sections deliberately sized their cards
-      // differently. One column means one x and one width for every card in
-      // both sections, which is a property a set can state in one line.
+      // ⚠️ **Two widths on purpose.** A character card carries an 84 × 132
+      // portrait and a save card a 239 × 180 screenshot, so one shared width
+      // would either crush the save or strand the character in whitespace.
       await showHome(tester);
 
       final cards = find.byType(Card);
@@ -142,25 +161,15 @@ void main() {
         reason: 'one character, the ＋ card, and two saves',
       );
 
-      final edges = <double>{};
-      final widths = <double>{};
-      for (var i = 0; i < 4; i++) {
-        edges.add(tester.getTopLeft(cards.at(i)).dx);
-        widths.add(tester.getSize(cards.at(i)).width);
-      }
+      final widths = [
+        for (var i = 0; i < 4; i++) tester.getSize(cards.at(i)).width,
+      ];
 
-      expect(edges, hasLength(1));
-      expect(widths, hasLength(1));
-    });
-
-    testWidgets('cards are stacked, not placed side by side', (tester) async {
-      await showHome(tester);
-
-      expect(
-        tester.getTopLeft(find.text('start')).dy,
-        greaterThan(tester.getTopLeft(find.text('last')).dy),
-        reason: 'the second save sits below the first, not beside it',
-      );
+      // The two characters-section cards match each other, the two saves match
+      // each other, and the two groups do not match.
+      expect(widths[0], widths[1]);
+      expect(widths[2], widths[3]);
+      expect(widths[0], lessThan(widths[2]));
     });
 
     testWidgets('a heading stays when its section is empty', (tester) async {
