@@ -1,0 +1,7 @@
+# very_good_analysis, applied whole, exactly as the app applies it (D8).
+# NO suppressions: no exclude entries, no rule carve-outs, no // ignore comments.
+#
+# public_member_api_docs costs almost nothing here because every widget in
+# every spike is library-private, the same shape lib/ui/character/character_panel.dart
+# already uses — so only each entry point's main() is public.
+include: package:very_good_analysis/analysis_options.yaml

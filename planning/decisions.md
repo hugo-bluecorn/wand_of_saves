@@ -772,3 +772,107 @@ records was right, and the residual disagreement was real rather than a mistake 
 ⚠️ **What is still open is smaller and is not in code**: Haeravon's walkthrough states that a Blade
 gets *half* the normal Lore per level. `lore.2da` has nine rows and not one of them is a kit, so no
 table carries it. Recorded, not implemented.
+
+---
+
+## D15 — The UI direction is **Workbench**, in the **Starfleet** palette · CLOSED (2026-08-11)
+
+**Chosen by the project owner after looking at three built alternatives**, not argued from a
+description. All three were runnable, photographed, and are still on the branch.
+
+### What was decided
+
+- **Structure: Workbench.** The character is not a wall of fields. Thirteen of fifty-three values
+  are on screen; the rest are reachable by name through a `SearchAnchor` palette; editing happens
+  in a focused side sheet; and the app's own findings — the anomalies it noticed — are a
+  first-class column rather than tooltip text.
+- **Palette: Starfleet.** An explicit `ColorScheme`, not a seed. Dark ground is the source and
+  light is a designed invention.
+
+### Why the palette is not decoration
+
+Starfleet's department triad was **already semantic before it arrived**, and it lands on roles this
+application had already given meaning:
+
+| Starfleet | Role | What it means here |
+|---|---|---|
+| Command gold | `primary` | What you can act on |
+| Science blue | `tertiaryContainer` | The `in game` chips — what the sensors report, which *is* a derived value |
+| Operations red | `error` | Conflicts. Red alert |
+| Lit pewter | `outline` | Structure, at 3.24:1 rather than the framework's 1.0:1 default |
+
+### What the alternatives established, and must not be lost
+
+The two rejected spikes each produced something that outlives them:
+
+- ⚠️ **Ben-Day screening beats opacity, provably.** "Unavailable" drawn at 38 % opacity cannot
+  reach 3:1 — black on white composites to 2.68:1. Starfleet's own answer, an unlit plate, hits
+  the same wall from both directions (1.27:1 darkening, 1.32:1 lightening). **A halftone escapes
+  only because coverage is not level**: 26 % of full-strength ink averages 3:1 darker while leaving
+  three quarters of the tile clear for text. This is the one device in the set that gets past a
+  limit colour cannot, and it should be carried into the real application.
+- **De Stijl's finding about the ground**: BG:EE portraits vary widely in temperature — Aard's is
+  cool blue-grey, not the warm brown-gold that was assumed — so **chrome committing to a
+  temperature disagrees with roughly half of them.** Starfleet commits. That is an accepted cost,
+  not an oversight, and a neutral mount remains the alternative if it proves wrong in use.
+
+### What this costs, already measured
+
+**25 widget tests break**, 23 of them through a single helper (`openTab`, `test/ui/party/party_view_test.dart:283-286`).
+**All 180 ViewModel tests survive** — they contain no widget lookups. That asymmetry is D12's rule
+about holding a public command API still while rewiring what sits behind it, and it means the cost
+of this decision is bounded and known.
+
+### Not yet decided
+
+Whether the real application adopts Starfleet's palette or only the Workbench structure. The
+palette was chosen against a spike with two characters and three saves; it has never framed a full
+party, an inventory of eighty slots, or a light desktop in daily use.
+
+---
+
+## D16 — A **rules check** the user can switch off, and three kinds of wrong · CLOSED (2026-08-12)
+
+Proposed by the project owner and spiked in `spikes/ui_spikes/lib/workbench/`. A visible toggle in
+the app bar: **on by default**, and when off the same edits are allowed and *marked*.
+
+### The three kinds of wrong, which this project has already measured apart
+
+| | Question | Evidence |
+|---|---|---|
+| **Impossible** | The engine will not take it | above the field's own byte range |
+| **Beyond the rules** | The tables would never produce it | **a stored THAC0 of 25 at level 2 was imported, played and kept** — the engine never recomputes it |
+| **The engine owns it** | It will be overwritten on load | D14's six fields |
+
+"Cheat mode" is exactly the middle row: **the game accepts it, the rules do not produce it.** That
+distinction is not hypothetical here — it was measured in-game, and it is why a field carries two
+limits (`rulesMaximum`, `gameMaximum`) rather than one range.
+
+### Four rules the check follows
+
+1. ⚠️ **It never blocks a keystroke — only the commit.** An anomaly you cannot touch is one you
+   cannot correct, so the field always accepts input; the check governs Save and Apply.
+2. ⚠️ **It flags what it inherited and blocks only what you introduced.** Aard already stores
+   `Tracking 25`. Blocking on every violation would make a record that arrived broken permanently
+   unsaveable — you would come to change gold and be held by a fault you did not cause.
+3. ⚠️ **Above `gameMaximum` it refuses in both modes.** Turning the check off buys *beyond the
+   rules*, not *beyond what the engine will hold*. That is not a choice a save editor offers; it is
+   a corrupt byte.
+4. **The mode governs reach, not just Save.** With the check on, a skill the class cannot allocate
+   is disabled and the proficiency budget binds; with it off, both open and are marked `beyond the
+   class` / `enhanced`. A mode that constrained one and not the other would be two modes wearing
+   one label.
+
+### What it revealed, twice
+
+⚠️ **A rule is only as complete as the surfaces it reaches.** The verdict first landed on the value
+*rows* and not the ability *tiles* — going silent on the field people most often open a save editor
+to change. Then `errorText` marked text fields but not the Strength *stepper*. Both were found by
+photographing, not by reading. **When adding a rule, enumerate every control that renders the
+thing.**
+
+### Not yet true
+
+The limits are static numbers in the spike's demo data. In the application they must be **derived
+per character** from the rules tables — `RulesTables`, `SavingThrowTables` and the proficiency
+tables already do exactly this. The spike proves the interaction; it does not prove the derivation.
