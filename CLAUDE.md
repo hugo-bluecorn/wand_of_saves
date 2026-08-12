@@ -182,6 +182,26 @@ character's numbers the ones the engine would have written).
 Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
 four workflows they serve.
 
+> ### 🔷 A UI direction is chosen, and it is not merged
+>
+> **Branch `ui/critique-and-three-spikes` — uncommitted, `lib/` untouched.** It holds an exhaustive
+> critique of the current UI (`planning/ui-review.md`) and three runnable alternatives in
+> `spikes/ui_spikes/`, one of which was chosen.
+>
+> - **D15 — Workbench structure, Starfleet palette.** Picked by looking at three built options.
+> - **D16 — a rules check the user can switch off**, distinguishing *impossible* from *beyond the
+>   rules* from *the engine owns it*.
+>
+> ⚠️ **The review found eight defects in the shipped UI**, three of which close with a single edit
+> (`enabled: false` → `readOnly: true` for read-only values). **Two of them are unreachable by the
+> test suite**: `flutter test` runs as `TargetPlatform.android`, which pads tap targets and draws a
+> full-em-square font — so the 22 × 22 pip button measures 40 there, and no label-width assertion
+> means anything.
+>
+> ⚠️ **The claim at the top of this file that the UI is "adaptive" is not true today.** `MediaQuery`
+> appears zero times in `lib/`; there is one responsive construct in the whole application, and it
+> violates its own stated minimum card width.
+
 > ### 🔶 Where the last session stopped, 2026-08-11 (evening)
 >
 > **`main` is clean, synced and green** — **697 app tests, 287 format tests**, `analyze` clean,
