@@ -137,16 +137,19 @@ void main() {
       quarterstaff: ProficiencyEntry(
         id: quarterstaff,
         identifier: 'QUARTERSTAFF',
+        nameStrref: 25014,
         maximumByColumn: {'MAGE': 2, 'FIGHTER': 5, 'FIGHTER_MAGE': 2},
       ),
       dagger: ProficiencyEntry(
         id: dagger,
         identifier: 'DAGGER',
+        nameStrref: 25007,
         maximumByColumn: {'MAGE': 2, 'FIGHTER': 5, 'FIGHTER_MAGE': 2},
       ),
       twoHandedSword: ProficiencyEntry(
         id: twoHandedSword,
         identifier: 'TWOHANDEDSWORD',
+        nameStrref: 25004,
         maximumByColumn: {'MAGE': 0, 'FIGHTER': 5, 'FIGHTER_MAGE': 2},
       ),
     }),

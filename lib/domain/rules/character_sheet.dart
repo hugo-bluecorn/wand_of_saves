@@ -194,10 +194,14 @@ class CharacterSheet {
   /// Degrades in steps, each one a little less informative and none of them
   /// invented: the talk table's name, else the rules table's own identifier,
   /// else the number. A blank tile would be the only worse answer.
-  String proficiencyLabel(int proficiencyId) {
-    final entry = proficiencies[proficiencyId];
-    return entry?.name ?? entry?.identifier ?? 'Proficiency $proficiencyId';
-  }
+  /// ⚠️ **Never the `2DA` row label.** `FLAILMORNINGSTAR` reached a screen once
+  /// and was a defect, and the fallback that allowed it was this method's own
+  /// `?? entry.identifier`. It is reachable in real data: one creature BioWare
+  /// ships carries a pip in id 116, a padding row whose name resolves to
+  /// nothing — so that record would have read `EXTRA2`. An id is honest where a
+  /// row label is not.
+  String proficiencyLabel(int proficiencyId) =>
+      proficiencies[proficiencyId]?.name ?? 'Proficiency $proficiencyId';
 
   /// Strength as the game writes it — `18/27` — or `null` when there is no
   /// percentile to write.

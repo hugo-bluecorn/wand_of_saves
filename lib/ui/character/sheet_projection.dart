@@ -459,28 +459,17 @@ List<SheetProficiency> _proficienciesFrom(CharacterSheet sheet) {
       proficiency.id: proficiency,
   };
 
-  // ⚠️ **A row that names nothing is not a proficiency.** BG:EE's
-  // `weapprof.2da` ends with fourteen padding rows — `EXTRA2`…`EXTRA15`, IDs
-  // 116–129 — whose `NAME_REF` is 4294967296, which is 2^32 and beyond any talk
-  // table, and whose every class column is zero. `ResourceRepository` already
-  // rejects an out-of-range strref, so they arrive with a null `nameStrref` and
-  // that is the signal. Offered unfiltered, they became fourteen rows labelled
-  // with their own row label — the `FLAILMORNINGSTAR` defect class — each
-  // reading `0/0` under an `at ceiling` tag.
-  //
-  // ⚠️ **Gated on `nameStrref`, never on `name`.** A machine with no game
-  // installed resolves no names at all; filtering on the resolved string would
-  // empty the panel there instead of degrading it.
+  // ⚠️ **`live`, not every row in the file.** `weapprof.2da` carries three
+  // generations and only one is current — see `ProficiencyCatalogue.live` for
+  // the bands and the measurement behind them. Offering the file whole is what
+  // put `Bow` beside `Long Bow` and fourteen rows called `EXTRA*` on the sheet.
   //
   // ⚠️ **The catalogue half only.** A pip the record actually holds survives
-  // regardless, because an anomaly you cannot touch is one you cannot correct.
-  final named = {
-    for (final entry in sheet.proficiencies.entries.entries)
-      if (entry.value.nameStrref != null) entry.key,
-  };
-
+  // regardless, because an anomaly you cannot touch is one you cannot correct —
+  // and this is not hypothetical: one creature BioWare ships carries a pip in a
+  // padding row.
   return [
-    for (final id in {...named, ...held.keys})
+    for (final id in {...sheet.proficiencies.live.entries.keys, ...held.keys})
       SheetProficiency(
         id,
         sheet.proficiencyLabel(id),

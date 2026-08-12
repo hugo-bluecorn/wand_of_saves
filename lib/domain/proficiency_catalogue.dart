@@ -107,4 +107,53 @@ class ProficiencyCatalogue with ProficiencyCatalogueMappable {
             name: byStrref[entry.value.nameStrref],
           ),
       });
+
+  /// The proficiencies a character may actually be given.
+  ///
+  /// ⚠️ **`weapprof.2da` holds three generations of the file and only one of
+  /// them is live.** BG:EE's copy has 46 rows in three bands, and offering all
+  /// of them is what put `Bow` beside `Long Bow` and fourteen rows called
+  /// `EXTRA2`…`EXTRA15` on the character sheet:
+  ///
+  /// | band | IDs | `NAME_REF` | class columns |
+  /// |---|---|---|---|
+  /// | obsolete BG1 | 0–7 | 8668, 8732–8734, 9400–9403 | non-zero |
+  /// | live EE | 89–115 | 25000–25023 | non-zero |
+  /// | padding | 116–129 | 4294967296 | all zero |
+  ///
+  /// **Two filters, because one signal does not cover both.**
+  ///
+  /// 1. **A row that names nothing is not a proficiency.** The padding rows'
+  ///    `NAME_REF` is 2^32, beyond any talk table, so `ResourceRepository`
+  ///    rejects it and they arrive with a null [ProficiencyEntry.nameStrref].
+  ///    Gated on the strref rather than the resolved [ProficiencyEntry.name],
+  ///    because a machine with no installation resolves nothing and must
+  ///    degrade rather than empty.
+  /// 2. ⚠️ **The obsolete band carries valid names and non-zero caps**, so no
+  ///    column in the table separates it from the live one, and `profs.2da`
+  ///    cannot either — it is per-class, not per-proficiency. **So this is a
+  ///    measured constant, and D13 requires saying why no table answers it.**
+  ///
+  /// **The measurement, 2026-08-12.** Every creature record BioWare ships was
+  /// read out of the archives — **2,253 of them, none unreadable** — and every
+  /// opcode 233 effect counted. **24 distinct proficiency IDs are used and not
+  /// one is below 89.** IDs 8–88 do not exist in the table at all. The obsolete
+  /// band is dead in the shipped data, which is the strongest evidence short of
+  /// the engine itself.
+  ///
+  /// ⚠️ **Per-game, and in scope only because D3 scopes v1 to BG1EE.** A game
+  /// that renumbered its proficiencies would need this measured again. ⚠️ And
+  /// one shipped creature *does* carry a pip in ID 116, a padding row — so a
+  /// value the record actually holds must never be filtered by this; only what
+  /// is *offered* is.
+  ProficiencyCatalogue get live => ProficiencyCatalogue({
+    for (final entry in entries.entries)
+      if (entry.value.nameStrref != null && entry.key >= _liveFloor)
+        entry.key: entry.value,
+  });
 }
+
+/// The lowest proficiency id BG:EE actually uses.
+///
+/// See [ProficiencyCatalogue.live] for the measurement.
+const int _liveFloor = 89;
