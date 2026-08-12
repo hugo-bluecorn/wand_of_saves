@@ -53,23 +53,36 @@ see `docs/findings/verified-format-offsets.md` §Known bugs.)
 
 **Gate:** spike behaviour reproduced by tests, all four bugs fixed, non-ASCII strings correct.
 
-## Phase 1 — the writer · **deferred, deliberately**
+## Phase 1 — the writer · **RETIRED as a phase, 2026-08-12**
 
-Skipped for now because **nothing in Phase 2 needs it**: gold, XP, HP, THAC0 and
-ability scores are all fixed-width, and the existing patch-a-copy writer already
-handles them — proven in-game. It becomes unavoidable at Phase 4, when inventory and
-spells start resizing sections. Two traps are recorded in
-`docs/findings/verified-format-offsets.md`: `GamHeaderField` covers only five of the
-GAM's nine offset fields, and "absent" is encoded three different ways in that one
-header.
+⚠️ **Three of its four bullets shipped and its gate was superseded.** Keeping it on the board as
+"the hard phase, deferred" made a solved problem look untouched and an unsolved one look bigger
+than it is. What was actually true when this was checked:
 
-The hard phase. See `planning/architecture.md` §Offset recalculation.
+| bullet | state |
+|---|---|
+| Layout pass: compute sizes, assign offsets, patch offset fields, emit | **Shipped for CRE.** `Cre.withEntryInserted` creates an absent section, splices an entry, raises that section's count, shifts every *other* section's offset by the stride, and relocates the item-slot table — which carries an offset and no count. |
+| Original-byte retention and patching | **Shipped** in Phase 0/2 — `spec/field_patch.dart`, patch-a-copy. |
+| `BackupService`: atomic temp+rename, `.bak` always | **Shipped** in Phase 2, proven in-game. |
+| **Gate:** round-trip byte identity on every fixture | **Superseded, and the findings say why:** byte identity on an *unedited* file proves nothing, because `return input` passes it. The gate that shipped is stronger — *exactly N bytes differ, all inside the field*. |
 
-- Layout pass: compute sizes, assign offsets, patch offset fields, emit.
-- Original-byte retention and patching.
-- `BackupService`: atomic write via temp+rename, `.bak` always.
+**And its premise was falsified.** This section said the layout pass "becomes unavoidable at
+Phase 4, when inventory and spells start resizing". **Spells already resize** — `LearnSpell`,
+`MemoriseSpell` and `GrantProficiency` are shipped commands and the creation flow issues all
+three, through a `.chr` where the same edit costs one pointer.
 
-**Gate: round-trip byte identity on every fixture.** No writer ships without it.
+### What is actually left: the GAM relocation
+
+**One method.** `Gam.withCreature` throws `UnsupportedError`; `Chr.withCreature` does the same job
+for one pointer. It unlocks exactly one thing: **adding an item or a new proficiency to a character
+inside a live save.** Everything else already works, in place or through export.
+
+Cost, measured rather than estimated: **39 pointers, 81–93 KB shifted** — 3 GAM header offsets, the
+`creOffset` of the 0–3 later party members, and the `creOffset` of each of the 33–36 non-party NPCs
+after it. ⚠️ **Nobody had recorded those 36 before**; a relocation that patches only the GAM header
+corrupts the save silently. Two further traps are in
+`docs/findings/verified-format-offsets.md`: `GamHeaderField` covers only five of the GAM's nine
+offset fields, and "absent" is encoded three different ways in that one header.
 
 ## Phase 2 — first useful app · **done 2026-08-07**
 

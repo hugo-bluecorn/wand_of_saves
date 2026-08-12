@@ -1267,7 +1267,13 @@ ways:
 - **In game:** Strength and THAC0 written through that path both survive a load, with nothing
   else disturbed. See §Stored vs displayed.
 
-Still fixed-width, so still no layout pass. Phase 1 remains the untouched half.
+Still fixed-width, so no relocation was exercised here.
+
+⚠️ **Updated 2026-08-12.** This line used to read "Phase 1 remains the untouched half", which stopped
+being true without anyone editing it. The **CRE-internal** layout pass shipped —
+`Cre.withEntryInserted` shifts sibling section offsets and relocates the item-slot table — and the
+`.chr` wrapper shipped with it. What remains untouched is **the GAM relocation alone**:
+`Gam.withCreature`, 39 pointers. See `planning/roadmap.md` §Phase 1, retired.
 
 ### Extended 2026-08-08 — a field inside an *effect*, and it is read by the engine
 

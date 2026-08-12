@@ -18,7 +18,7 @@ architecture are deliberately different:
 
 | | EE Keeper | This project |
 |---|---|---|
-| UI | Win32/MFC, MDI, 31 modal dialogs | Material 3, adaptive desktop layout |
+| UI | Win32/MFC, MDI, 31 modal dialogs | Material 3, **single-column** desktop layout (Starfleet palette, D15) |
 | Architecture | MFC Document/View (MVC-ish) | Flutter **MVVM** (`context/mvvm-architecture-record.md`) |
 | State | one 11,848-byte mutable `CEEKeeperDoc` | immutable domain model + edit commands (gives undo/redo) |
 
@@ -39,7 +39,10 @@ to undo.
    **verified against real save data**. Do not re-derive these.
 5. `docs/findings/eekeeper-reverse-engineering.md` — what EE Keeper actually does, recovered from
    the binary. This is the feature checklist.
-6. `context/` — the pinned target-side canon (Flutter AI rules, Effective Dart, MVVM record,
+6. `docs/findings/known-defects.md` — **what is measured, located and deliberately not fixed.**
+   Read it before reporting a bug or picking up work; every entry names the file and line, and
+   ⚠️ **entry 1 is a live rules defect** — the character sheet's pip ceiling.
+7. `context/` — the pinned target-side canon (Flutter AI rules, Effective Dart, MVVM record,
    Java semantics ledger, **Dart data-modelling ledger**). Where code disagrees with `context/`,
    that is a defect or a recorded deviation, not a preference. Deviations recorded so far:
    D2, D6, D7, D8, D9.
@@ -182,25 +185,26 @@ character's numbers the ones the engine would have written).
 Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
 four workflows they serve.
 
-> ### 🔷 A UI direction is chosen, and it is not merged
+> ### 🔷 The UI is the Starfleet Workbench, single column
 >
-> **Branch `ui/critique-and-three-spikes` — uncommitted, `lib/` untouched.** It holds an exhaustive
-> critique of the current UI (`planning/ui-review.md`) and three runnable alternatives in
-> `spikes/ui_spikes/`, one of which was chosen.
+> The three-spike branch **merged as `1a675af`** (PR #7) and the chosen spike has been **promoted
+> into `lib/`**; `spikes/ui_spikes/` is deleted. Both decisions stand in `planning/decisions.md`:
 >
 > - **D15 — Workbench structure, Starfleet palette.** Picked by looking at three built options.
 > - **D16 — a rules check the user can switch off**, distinguishing *impossible* from *beyond the
 >   rules* from *the engine owns it*.
 >
-> ⚠️ **The review found eight defects in the shipped UI**, three of which close with a single edit
-> (`enabled: false` → `readOnly: true` for read-only values). **Two of them are unreachable by the
-> test suite**: `flutter test` runs as `TargetPlatform.android`, which pads tap targets and draws a
-> full-em-square font — so the 22 × 22 pip button measures 40 there, and no label-width assertion
-> means anything.
+> ⚠️ **Single column, by direction and not by accident.** Panels stack in a named order —
+> Character, Abilities, Skills, Proficiencies, Combat, Resistances, Condition. An earlier
+> arrangement balanced them greedily across two columns and read as a zigzag. One column also
+> removes the 222 px tile grid the review measured as 19.3 % dead space per row. There is **no
+> breakpoint logic**: `MediaQuery` and `LayoutBuilder` are deliberately absent from the sheet.
 >
-> ⚠️ **The claim at the top of this file that the UI is "adaptive" is not true today.** `MediaQuery`
-> appears zero times in `lib/`; there is one responsive construct in the whole application, and it
-> violates its own stated minimum card width.
+> ⚠️ **Two of the review's eight defects are unreachable by the test suite**, so a Linux capture is
+> the only evidence: `flutter test` runs as `TargetPlatform.android`, which pads tap targets and
+> draws a full-em-square font — the 22 × 22 pip button measures 40 there, and no label-width
+> assertion means anything. `planning/ui-review.md` is the critique; the widgets that answered it
+> are `lib/ui/core/` and `lib/ui/character/`.
 
 > ### 🔶 Where the last session stopped, 2026-08-11 (evening)
 >
@@ -382,7 +386,7 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | Who may Turn Undead, and who may Track | **Half-closed 2026-08-10.** Stored 25 and 100 on a Fighter/Mage/Thief both **survived** the record and the Skills tab showed **neither** — so the display is class-gated and a stored value alone grants nothing. *Which* classes qualify is still in no table that has been found, so both stay editable rather than take an invented rule. |
 | Multi-class saving throws | **Closed 2026-08-10 — best of each column, each class at its own level.** QUAYLE, a Cleric/Mage, stores a row neither table holds. ⚠️ Plus a racial Constitution bonus: `savecndh` for dwarves and halflings, `savecng` for gnomes, whose death row is all zeros. |
 | Multi-class **Lore** | **Closed 2026-08-11 — the HIGHEST, not the sum.** A Gnome Cleric/Illusionist made in BG:EE's own flow stores **3** where a sum gives 4. The shipped NPCs read like sums and cannot referee it (they hold a Fighter 1 with Lore 4); this record was written by the engine at creation. Code already followed the engine. ⚠️ Still open and *not* in code: the walkthrough says a **Blade** gets half Lore per level, and `lore.2da` has no kit rows. |
-| The proficiency pip cap | **Closed 2026-08-11 — `min(profsmax.FIRST_LEVEL, weapprof[column])`.** `profsmax` gives every row 2; `weapprof` gives `CLERIC`/`THIEF`/`CLERIC_MAGE` **1** and `FIGHTER` 5. Engine-confirmed: a thief was refused a second pip with a slot unspent. ⚠️ **The column is not simply the kit's** — `SWASHBUCKLER` is 2 where `THIEF` is 1, but `ILLUSIONIST` is 0 for War Hammer where `CLERIC_MAGE` is 1 and the engine gave the gnome one. Kit's column when the kit is the whole class; class's column when multi-class. **Implemented 2026-08-11**, in creation and on the character sheet alike. |
+| The proficiency pip cap | **Closed 2026-08-11 — `min(profsmax.FIRST_LEVEL, weapprof[column])`.** `profsmax` gives every row 2; `weapprof` gives `CLERIC`/`THIEF`/`CLERIC_MAGE` **1** and `FIGHTER` 5. Engine-confirmed: a thief was refused a second pip with a slot unspent. ⚠️ **The column is not simply the kit's** — `SWASHBUCKLER` is 2 where `THIEF` is 1, but `ILLUSIONIST` is 0 for War Hammer where `CLERIC_MAGE` is 1 and the engine gave the gnome one. Kit's column when the kit is the whole class; class's column when multi-class. ⚠️ **Implemented in creation ONLY — the character sheet is still wrong, verified 2026-08-12.** `CreationViewModel.rankCapFor` (`lib/ui/creation/creation_viewmodel.dart:305-314`) takes the `min`; `CharacterSheet.maximumPipsFor` (`lib/domain/rules/character_sheet.dart:148-149`) returns `weapprof`'s class column **alone**, so the sheet offers a fighter **5**. This entry claimed both for a day. Not a copy-paste: creation is always level 1 and the sheet is not, so the sheet needs `profsmax` against the character's own level. **Owed.** |
 | A forced specialisation | **Closed 2026-08-11.** A multi-class gets **no kit screen**, yet a Gnome Cleric/Illusionist stores `kit = 0x04000000` → `MAGESCHOOL_ILLUSIONIST`. `clsrcreq.2da`'s `GNOME` column allows exactly one school, so the choice is a lookup and only the forcing is a rule. **Implemented 2026-08-11**; `clsrcreq.2da`'s forty kit rows were being dropped by the catalogue, which also meant a gnome mage was offered all eight schools. |
 | A specialist's forbidden school | **Closed 2026-08-10 — it is in each `SPL`,** exclusion flags at `0x1E`, bit = `mschool.2da` row + 5. Exact across all 22 first-level spells. No 2DA pairs the schools. |
 | Which fields the engine owns | **Closed 2026-08-10 — D14.** A probe character with every field at an underivable value was imported, played and saved: the engine overwrote **six** fields and left **sixty-seven** alone. Hit points and Lore store the class-and-level part only, with the ability bonus added at display. |

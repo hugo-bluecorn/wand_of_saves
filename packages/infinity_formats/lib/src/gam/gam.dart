@@ -183,20 +183,22 @@ final class Gam implements CreatureDocument<Gam> {
   /// **Refused.** A savegame cannot take a resized creature yet.
   ///
   /// ⚠️ Measured, not guessed: adding one 264-byte effect inside a save
-  /// invalidates **39** pointers and shifts about 90 KB — the nine GAM header
-  /// offsets, the `creLength` in this NPC's struct, and the `creOffset` of
-  /// every one of the 36 non-party NPCs after it. That is Phase 1's layout
-  /// pass. Until it exists, this says so rather than writing a file that loads
-  /// and is subtly wrong.
+  /// invalidates **39** pointers and shifts 81–93 KB. The composition, from
+  /// `docs/findings/verified-format-offsets.md`: **3** GAM header offsets, the
+  /// `creOffset` of the **0–3** later *party* members, and the `creOffset` of
+  /// each of the **33–36** non-party NPCs after this one. An earlier version of
+  /// this comment said "the nine GAM header offsets, the `creLength` … and 36
+  /// non-party", which totals 46 and disagreed with the measurement it cited.
   ///
-  /// The creation flow is unaffected: it writes a `.chr`, where the same edit
-  /// costs one dword.
+  /// Until a relocation pass exists this says so rather than writing a file
+  /// that loads and is subtly wrong. The creation flow is unaffected: it writes
+  /// a `.chr`, where the same edit costs one dword.
   @override
   Gam withCreature({required int creOffset, required Cre creature}) {
     throw UnsupportedError(
       'a savegame cannot take a resized creature yet: growing the record at '
-      '$creOffset would move 39 pointers, which is Phase 1’s layout pass. '
-      'Export the character and edit that instead.',
+      '$creOffset would move 39 pointers. Export the character and edit that '
+      'instead.',
     );
   }
 

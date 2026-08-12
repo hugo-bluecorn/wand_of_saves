@@ -15,8 +15,10 @@ rather than Win32/MFC, and Flutter MVVM rather than MFC Document/View.
 > each character's numbers both as the file stores them and as the game will display them, since
 > the two differ more than you would expect. Next: the resource index, for item and spell pickers.
 >
-> **Phase 1 (the writer's layout pass) is deliberately deferred** — every edit the app makes so far
-> is a fixed-width field, so nothing resizes. That changes when inventory arrives.
+> **Resizing edits work through export, not in place.** Granting a proficiency or learning a spell
+> grows the record; in an exported `.chr` that moves one pointer, and inside a savegame it moves
+> thirty-nine. So the creation flow writes a character file, and a savegame refuses a resize rather
+> than risk corrupting hours of play. Everything the app edits in place is fixed-width.
 
 ## What's here
 

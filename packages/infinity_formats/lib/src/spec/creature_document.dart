@@ -44,10 +44,14 @@ import 'package:infinity_formats/src/spec/cre_v1_0.dart';
 /// document that had to throw `UnsupportedError` at run time would be exactly
 /// the bug a sealed hierarchy exists to prevent at compile time.
 ///
-/// ⚠️ **Fixed-width edits only.** Nothing here moves anything. Adding an item
-/// or granting a proficiency resizes a section, which needs the layout pass —
-/// and that is a far smaller problem in a `.chr` (one pointer) than in a
-/// savegame (thirty-nine), which is why exporting matters.
+/// ⚠️ **All but one of these edits is fixed-width, and the exception is
+/// [withCreature].** Adding an item or granting a proficiency resizes a
+/// section, which means relocating everything after it — a far smaller problem
+/// in a `.chr` (one pointer) than in a savegame (thirty-nine), which is why
+/// exporting matters and why `Chr` implements that method while `Gam` refuses
+/// it. An earlier version of this comment said "nothing here moves anything",
+/// which was true when it was written and has been false since [withCreature]
+/// was declared below it.
 abstract interface class CreatureDocument<T extends CreatureDocument<T>> {
   /// The complete file, exactly as read. Unmodifiable.
   Uint8List get bytes;

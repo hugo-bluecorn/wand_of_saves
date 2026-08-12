@@ -833,7 +833,8 @@ party, an inventory of eighty slots, or a light desktop in daily use.
 
 ## D16 — A **rules check** the user can switch off, and three kinds of wrong · CLOSED (2026-08-12)
 
-Proposed by the project owner and spiked in `spikes/ui_spikes/lib/workbench/`. A visible toggle in
+Proposed by the project owner and spiked in `spikes/ui_spikes/lib/workbench/` (since deleted; the
+code now lives in `lib/ui/character/`). A visible toggle in
 the app bar: **on by default**, and when off the same edits are allowed and *marked*.
 
 ### The three kinds of wrong, which this project has already measured apart
@@ -876,3 +877,63 @@ thing.**
 The limits are static numbers in the spike's demo data. In the application they must be **derived
 per character** from the rules tables — `RulesTables`, `SavingThrowTables` and the proficiency
 tables already do exactly this. The spike proves the interaction; it does not prove the derivation.
+
+---
+
+## D17 — The spike is **promoted**, the old views are **deleted**, and the sheet is **one column** · CLOSED (2026-08-12)
+
+**Decision.** Rather than repair the eight defects `planning/ui-review.md` found in the shipped UI,
+promote the chosen spike into `lib/` and delete what it replaces. The character sheet and the home
+screen are laid out in **a single column**.
+
+### Why not repair
+
+⚠️ **Fixing views that are about to be deleted is throwaway work**, and the spike had already
+answered most of the critique it was built against. Checked rather than assumed:
+
+| review finding | Workbench |
+|---|---|
+| A1 / A3 / A7 — read-only values as disabled `TextField`s | **`enabled: false` appears nowhere.** `ValueReadout` is not a text field at all |
+| A6 + five surfaces riding `outlineVariant` at its *specified* 1.0:1 | Starfleet writes its `ColorScheme` **by hand**, so it never rides the contrast curve |
+| Opacity carrying three different meanings | `ScreenTone` — a mechanism for *unavailable*, with each palette supplying its own fill |
+| Transient scrollbars | `thumbVisibility: true` in the theme |
+
+The old widget tests were **not breakage to repair** — they tested deleted code, and went with their
+subjects. `party_view_test.dart` (919 lines) and `save_browser_view_test.dart` (319) were replaced by
+tests against the new screens. **Every ViewModel survived untouched**, which is what made this cheap.
+
+### Why one column
+
+⚠️ **The two-column arrangement read as a zigzag.** Panels were balanced greedily — each joined
+whichever column was shorter — so the named order (Character, Abilities, Skills, Proficiencies,
+Combat, Resistances, Condition) went down one column and back up the other. One column is the order
+a person reads a character in.
+
+It also **deletes** rather than adds: the `LayoutBuilder` and the balancing loop are gone, and with
+them the 222 px tile grid the review measured as 19.3 % dead space on every row. `MediaQuery` and
+`LayoutBuilder` do not appear in the sheet at all. **The simpler layout is also the correct one**,
+which is not usually how that trade goes.
+
+### What was deliberately not carried over
+
+- **Inventory and Spells screens** (406 and 294 lines). Neither has any backing: there is no
+  inventory model, and spell editing inside a save needs the relocation `Gam.withCreature` refuses.
+  ⚠️ **A destination that can never enable is a dead control**, which is the class of defect this
+  pass exists to remove.
+- **The staging buffer.** The spike held pending edits in a local map because it had no ViewModel.
+  `EditSession` already gives undo, redo and a dirty marker over immutable snapshots; a second
+  staging model beside it would be two sources of truth for one question.
+- **Hand-authored finding sentences.** The spike matched prose to fields by longest-label-match,
+  necessary only because the demo character's sentences were written by hand. Findings are now
+  **derived** — an anomalous field *is* the finding — which deletes the matching and the class of bug
+  where a sentence silently stops naming the field it is about.
+- **The three unchosen palettes**, and with them the Ben-Day halftone. ⚠️ The finding it proved is
+  preserved in `docs/findings/known-defects.md`: 38 % opacity composites to 2.68:1 and cannot reach
+  3:1, while an uneven halftone can. Starfleet supplies a flat unlit plate through the same
+  `ScreenTone` mechanism.
+
+### D16's limits are now derived
+
+The spike's `rulesMaximum` / `gameMaximum` were constants in demo data — which D16 recorded as
+*not yet true*. They are now projected per character from `CharacterSheet`, in
+`lib/ui/character/sheet_projection.dart`. That was the one piece of this that was not a port.
