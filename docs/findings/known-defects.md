@@ -121,6 +121,29 @@ leaves anything non-obvious undiscoverable. Undo, redo and save are obvious; not
 
 ---
 
+## 5b `CHARBASE` stores 255 attacks per round, and nobody knows what that means
+
+**Measured 2026-08-12** by reading the archives: the engine's own creation template holds
+`numberOfAttacks = 255`, where every shipped NPC — `IMOEN`, `MINSC`, `KHALID` — holds `1`.
+
+**So every character this app creates carries 255**, because it patches a copy of `CHARBASE` and
+preserving the template's bytes is what it is supposed to do. The field declares 0–10 (0–5 whole
+attacks, 6–10 halves), so 255 is outside the code entirely and the sheet now says **nothing** about
+what the game will draw for it rather than extrapolating — it used to report `499/2`.
+
+⚠️ **What 255 means to the engine is not known and is not guessed at.** Three readings fit and no
+measurement separates them:
+
+1. A sentinel for *the engine computes this*, like D14's six fields.
+2. Junk in a template field the engine never reads.
+3. A real value the engine clamps.
+
+**How to settle it:** import a created character, look at the record screen's attacks figure, save,
+and read the byte back. That is D14's own method and it costs one trip into the game. Until then the
+app is right to preserve the byte and right to say nothing about it.
+
+---
+
 ## 6 Rules the record does not yet enforce
 
 - **A Blade's Lore is half per level.** The walkthrough says so and `lore.2da` has no kit rows, so
