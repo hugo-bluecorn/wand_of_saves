@@ -94,17 +94,28 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
   void _applyPips(SheetProficiency proficiency, int pips) {
     final effectOffset = proficiency.effectOffset;
     final creOffset = _creOffset;
-    // A proficiency the record has no effect for would have to be *granted*,
-    // which appends one. That is safe in a `.chr` and is the creation flow's
-    // path; wiring it here needs `GrantProficiency` and its own slice.
-    if (effectOffset == null || creOffset == null) return;
+    if (creOffset == null) return;
+
+    // ⚠️ **A `.chr` is the document that can grow, so this is where granting
+    // belongs.** Raising a proficiency from zero appends a 264-byte opcode 233
+    // effect: **one** pointer here, the length in its 100-byte header, against
+    // **thirty-nine** inside a savegame. An earlier version of this method
+    // refused it anyway, with a comment saying it was safe, which made every
+    // proficiency the record did not already hold inert on the one screen where
+    // it is safe to add one.
     _notifier.edit(
-      SetProficiency(
-        creOffset: creOffset,
-        effectOffset: effectOffset,
-        proficiencyId: proficiency.id,
-        pips: pips,
-      ),
+      effectOffset == null
+          ? GrantProficiency(
+              creOffset: creOffset,
+              proficiencyId: proficiency.id,
+              pips: pips,
+            )
+          : SetProficiency(
+              creOffset: creOffset,
+              effectOffset: effectOffset,
+              proficiencyId: proficiency.id,
+              pips: pips,
+            ),
     );
   }
 
@@ -217,6 +228,8 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
                           character: sheet,
                           rulesBind: _rulesBind,
                           onOpen: _open,
+                          // One pointer, not thirty-nine. See `_applyPips`.
+                          canGrant: true,
                         ),
                       ),
                     ),

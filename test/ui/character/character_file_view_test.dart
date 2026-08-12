@@ -38,6 +38,11 @@ void main() {
   Future<void> showCharacter(
     WidgetTester tester, {
     SyntheticCharacter character = const SyntheticCharacter(),
+    ProficiencyCatalogue proficiencies = ProficiencyCatalogue.empty,
+    // ⚠️ A catalogue's names come from the talk table, not from the 2DA, so a
+    // fixture that sets `name:` and no string is a shape the app never sees —
+    // `withNames` overwrites it with null.
+    Map<int, String> strings = const {},
   }) async {
     tester.view
       ..physicalSize = const Size(1600, 2200)
@@ -53,12 +58,14 @@ void main() {
     final container = ProviderContainer.test(
       overrides: [
         characterFileRepositoryProvider.overrideWithValue(files),
-        stringRepositoryProvider.overrideWithValue(FakeStringRepository()),
+        stringRepositoryProvider.overrideWithValue(
+          FakeStringRepository(strings),
+        ),
         // ⚠️ Not optional. Left to the real one this reads the machine's own
         // chitin.key and a 30 MB archive, and pumpAndSettle does not await real
         // file I/O -- the widget never settles and the whole file times out.
         resourceRepositoryProvider.overrideWithValue(
-          const FakeResourceRepository(ProficiencyCatalogue.empty),
+          FakeResourceRepository(proficiencies),
         ),
       ],
     );
@@ -90,6 +97,57 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('grants a proficiency the record does not have yet', (
+    tester,
+  ) async {
+    // ⚠️ **The `.chr` is the document that CAN grow, and this screen refused
+    // anyway.** Raising a proficiency from zero appends a 264-byte opcode 233
+    // effect: thirty-nine pointers inside a savegame, and **one** in a
+    // character file. So a savegame is right to refuse; this screen was not.
+    // Reported
+    // as "I deselected all proficiencies but I cannot add pip to other
+    // proficiencies": the pips were at zero with their effects intact, so every
+    // *other* row was inert.
+    await showCharacter(
+      tester,
+      proficiencies: const ProficiencyCatalogue({
+        104: ProficiencyEntry(
+          id: 104,
+          identifier: 'LONGBOW',
+          nameStrref: 25016,
+          maximumByColumn: {'FIGHTER_MAGE': 2},
+        ),
+      }),
+      strings: const {25016: 'Long Bow'},
+    );
+
+    // The row exists and the record holds no effect for it.
+    expect(find.text('Long Bow'), findsOneWidget);
+
+    await tester.tap(find.text('Long Bow'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithIcon(IconButton, Icons.add));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('$fileName •'),
+      findsOneWidget,
+      reason: 'granting a pip is an edit and marks the document dirty',
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    final written = CreCodec.decode(files.written.single.creBytes);
+    final granted = written.effects.where(
+      (e) => e.isProficiency && e.parameter2 == 104,
+    );
+    expect(granted, hasLength(1), reason: 'one opcode 233 effect appended');
+    expect(granted.single.parameter1, 1, reason: 'at one pip');
+  });
 
   testWidgets('names the file in the bar and the character on the sheet', (
     tester,

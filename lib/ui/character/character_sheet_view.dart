@@ -33,6 +33,7 @@ class CharacterSheetView extends StatelessWidget {
     required this.character,
     required this.rulesBind,
     required this.onOpen,
+    this.canGrant = false,
     super.key,
   });
 
@@ -42,8 +43,18 @@ class CharacterSheetView extends StatelessWidget {
   /// Whether a value past the rules is an error or a deliberate enhancement.
   final bool rulesBind;
 
-  /// Called when a row or tile is opened for editing.
+  /// Called when a row is opened for editing.
   final ValueChanged<Subject> onOpen;
+
+  /// Whether this document can take a proficiency it does not already hold.
+  ///
+  /// ⚠️ **A property of the document, not of the character.** Raising a
+  /// proficiency from zero appends a 264-byte opcode 233 effect, which moves
+  /// **one** pointer in a `.chr` and **thirty-nine** inside a savegame. So a
+  /// character file passes `true` and a savegame `false` — and the sheet itself
+  /// does not know which it is looking at, which is why this is a parameter
+  /// rather than something it works out.
+  final bool canGrant;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +102,7 @@ class CharacterSheetView extends StatelessWidget {
       built['Proficiencies'] = _Proficiencies(
         character: character,
         onOpen: onOpen,
+        canGrant: canGrant,
       );
     }
 
@@ -444,10 +456,17 @@ class _Abilities extends StatelessWidget {
 /// does not count them — a savegame cannot take a proficiency the record has no
 /// effect for anyway, because granting one resizes the record.
 class _Proficiencies extends StatelessWidget {
-  const _Proficiencies({required this.character, required this.onOpen});
+  const _Proficiencies({
+    required this.character,
+    required this.onOpen,
+    required this.canGrant,
+  });
 
   final SheetCharacter character;
   final ValueChanged<Subject> onOpen;
+
+  /// Whether a proficiency the record does not hold can be taken up.
+  final bool canGrant;
 
   @override
   Widget build(BuildContext context) {
@@ -455,24 +474,33 @@ class _Proficiencies extends StatelessWidget {
       for (final proficiency in character.proficiencies)
         if (proficiency.effectOffset != null) proficiency,
     ];
+    final held = grantable.length;
+    final total = character.proficiencies.length;
     return PanelCard(
       title: 'Proficiencies',
-      note: grantable.length == character.proficiencies.length
+      // ⚠️ **The note is about the DOCUMENT and was shown against both.** In a
+      // `.chr` every row is editable, so saying otherwise was not merely noise:
+      // it explained a restriction that did not apply, while the rows really
+      // were inert — which is how "I deselected all proficiencies but I cannot
+      // add pip to other proficiencies" happened.
+      note: canGrant || held == total
           ? null
           : 'Only the proficiencies this character already has can be changed '
                 'in a savegame. Adding one resizes the record; export the '
-                'character to do that.',
-      trailing: Tag(
-        '${grantable.length}/${character.proficiencies.length}',
-        caption: 'editable',
-      ),
+                'character and it becomes editable there.',
+      trailing: canGrant
+          ? Tag('$total', caption: 'all editable')
+          : Tag('$held/$total', caption: 'editable'),
       children: [
         for (final proficiency in character.proficiencies)
           PipMeter(
             proficiency: proficiency,
-            onTap: proficiency.effectOffset == null
-                ? null
-                : () => onOpen(ProficiencySubject(proficiency)),
+            // ⚠️ Open when the record already holds the effect, **or** when the
+            // document can grow one. A `.chr` moves one pointer; a savegame
+            // moves thirty-nine and is right to refuse.
+            onTap: proficiency.effectOffset != null || canGrant
+                ? () => onOpen(ProficiencySubject(proficiency))
+                : null,
           ),
       ],
     );
