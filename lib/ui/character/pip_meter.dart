@@ -90,10 +90,27 @@ class PipMeter extends StatelessWidget {
             width: 108,
             child: Align(
               alignment: Alignment.centerRight,
-              child: switch ((over, pips == maximum)) {
-                (true, _) => const Tag('over ceiling', tone: TagTone.conflict),
-                (false, true) => const Tag('at ceiling', tone: TagTone.muted),
-                (false, false) => const SizedBox.shrink(),
+              // ⚠️ **A ceiling of zero is not a ceiling reached.** `0` in a
+              // `weapprof.2da` class column is how the table says *not this
+              // class* — `character_sheet.dart` documents exactly that — so
+              // `at ceiling` on a `0/0` row states the opposite of the truth:
+              // it reads as a limit spent rather than a row that never applied.
+              // Fourteen padding rows made this obvious; it was wrong before
+              // them, on any proficiency a class simply cannot take.
+              child: switch ((over, maximum == 0, pips == maximum)) {
+                (true, _, _) => const Tag(
+                  'over ceiling',
+                  tone: TagTone.conflict,
+                ),
+                (false, true, _) => const Tag(
+                  'not for this class',
+                  tone: TagTone.muted,
+                ),
+                (false, false, true) => const Tag(
+                  'at ceiling',
+                  tone: TagTone.muted,
+                ),
+                (false, false, false) => const SizedBox.shrink(),
               },
             ),
           ),

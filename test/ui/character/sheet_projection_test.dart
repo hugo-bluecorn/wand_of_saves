@@ -75,24 +75,34 @@ const _skills = SkillCatalogue({
   'SET_TRAPS': {'THIEF': 100, 'FIGHTER_MAGE': 0},
 });
 
-// Three rows of `weapprof.2da`: one Aard has and may have, one he has and may
-// have more of, and one his class caps at nothing.
+/// Three rows of `weapprof.2da`: one Aard has and may have, one he has and may
+/// have more of, and one his class caps at nothing.
+///
+/// ⚠️ **Every entry carries its `nameStrref`, because a real one always does.**
+/// `ResourceRepository` reads the strref out of `weapprof.2da` and only then
+/// resolves it against the talk table, so a `name` without a `nameStrref` is a
+/// shape the installation never produces — and a fixture missing it hid that a
+/// row naming nothing is not a proficiency. These are the real strrefs:
+/// 25023, 25012, 25014.
 const _catalogue = ProficiencyCatalogue({
   114: ProficiencyEntry(
     id: 114,
     identifier: '2WEAPON',
+    nameStrref: 25023,
     name: 'Two-Weapon Style',
     maximumByColumn: {'FIGHTER_MAGE': 3, 'THIEF': 1},
   ),
   100: ProficiencyEntry(
     id: 100,
     identifier: 'FLAILMORNINGSTAR',
+    nameStrref: 25012,
     name: 'Flail / Morning Star',
     maximumByColumn: {'FIGHTER_MAGE': 5},
   ),
   102: ProficiencyEntry(
     id: 102,
     identifier: 'QUARTERSTAFF',
+    nameStrref: 25014,
     name: 'Quarterstaff',
     maximumByColumn: {'FIGHTER_MAGE': 0},
   ),
@@ -436,6 +446,39 @@ void main() {
       expect(field.rulesMaximum, isNull);
     });
 
+    test('and it says nothing about what the game draws', () {
+      // ⚠️ **The engine draws NOTHING for a skill the class cannot allocate**,
+      // so claiming a number here is the sheet asserting something false about
+      // the one thing it speaks for the engine on. Measured 2026-08-10: a
+      // stored 25 and 100 on a Fighter/Mage/Thief both survived the record and
+      // the Skills tab showed neither, so the display is class-gated and a
+      // stored value alone grants nothing.
+      //
+      // It rendered `stored 0` beside `in game 25` — 0 + Dexterity + race,
+      // computed without asking whether the row is shown at all.
+      final greyed = fieldNamed(projected(), 'Open Locks');
+
+      expect(greyed.available, isFalse);
+      expect(greyed.inGame, isNull, reason: 'the engine draws no such row');
+      expect(greyed.arithmetic, isNull, reason: 'nothing to add up');
+
+      // ⚠️ And an anomaly says nothing either — whether the engine draws a
+      // *stored* value on a gated row is not established, so absent rather
+      // than invented.
+      final anomalous = fieldNamed(projected(lockpicking: 40), 'Open Locks');
+
+      expect(anomalous.anomalous, isTrue);
+      expect(anomalous.inGame, isNull);
+
+      // The class that does have it is unaffected, which is what makes this
+      // test able to fail rather than pass vacuously.
+      final allowed = fieldNamed(projected(classId: 4), 'Open Locks');
+
+      expect(allowed.available, isTrue);
+      expect(allowed.inGame, isNotNull);
+      expect(allowed.arithmetic, isNotNull);
+    });
+
     test('the group says once what the greyed rows have in common', () {
       expect(
         projected().sections[2].groups.single.note,
@@ -517,6 +560,42 @@ void main() {
       expect(proficiencies.map((p) => p.maximum), [5, 5]);
     });
 
+    test('a row that names nothing is not a proficiency', () {
+      // ⚠️ **Measured, not assumed.** BG:EE's `weapprof.2da` ends with fourteen
+      // padding rows labelled `EXTRA2`…`EXTRA15`, IDs 116–129, whose `NAME_REF`
+      // is 4294967296 — 2^32, beyond any talk table — and whose every class
+      // column is zero. `ResourceRepository` already rejects an out-of-range
+      // strref, so they arrive with `nameStrref: null`.
+      //
+      // They were being offered as fourteen proficiencies, each labelled with
+      // its row label — the `FLAILMORNINGSTAR` defect class — and each reading
+      // `0/0` with an `at ceiling` tag.
+      //
+      // ⚠️ The test gates on `nameStrref`, not on `name`: a machine with no
+      // game installed resolves no names at all, and must not lose every row.
+      final sheet = projected(
+        proficiencies: const ProficiencyCatalogue({
+          114: ProficiencyEntry(
+            id: 114,
+            identifier: '2WEAPON',
+            nameStrref: 25023,
+            name: 'Two-Weapon Style',
+            maximumByColumn: {'FIGHTER_MAGE': 3},
+          ),
+          116: ProficiencyEntry(
+            id: 116,
+            identifier: 'EXTRA2',
+            maximumByColumn: {'FIGHTER_MAGE': 0},
+          ),
+        }),
+      );
+
+      expect(sheet.proficiencies.map((p) => p.id), isNot(contains(116)));
+      expect(sheet.proficiencies.map((p) => p.name), isNot(contains('EXTRA2')));
+      // The named one survives, so this cannot pass by filtering everything.
+      expect(sheet.proficiencies.map((p) => p.id), contains(114));
+    });
+
     test(
       'a proficiency the record holds outside the catalogue is not lost',
       () {
@@ -525,6 +604,7 @@ void main() {
             102: ProficiencyEntry(
               id: 102,
               identifier: 'QUARTERSTAFF',
+              nameStrref: 25014,
               name: 'Quarterstaff',
               maximumByColumn: {'FIGHTER_MAGE': 0},
             ),

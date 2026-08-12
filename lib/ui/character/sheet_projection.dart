@@ -376,12 +376,30 @@ SheetField _statField(
 }
 
 /// One thief skill, with what the game will draw beside what was allocated.
+///
+/// ⚠️ **Silent about the game's number when the class cannot allocate the
+/// skill**, and that is a correctness rule rather than a tidiness one. The
+/// modifiers are readable for any character — `skilldex` and `skillrac` answer
+/// for a Fighter/Mage as readily as for a thief — so this used to compute
+/// `0 + Dexterity + race` and print the result. **The engine draws no such
+/// row.** Measured 2026-08-10: a stored 25 and 100 on a Fighter/Mage/Thief both
+/// survived the record and the Skills tab showed *neither*, so the display is
+/// class-gated and a stored value alone grants nothing.
+///
+/// The `in game` value is the one thing on this sheet that claims to speak for
+/// the engine, so a wrong number there is worse than a missing one.
+///
+/// ⚠️ **An anomaly gets the same silence.** Whether the engine draws a *stored*
+/// value on a gated row was not established by that run — only that it drew
+/// nothing on the screen. Absent, rather than invented in either direction.
 SheetField _thiefSkillField(
   CharacterSheet sheet,
   CharacterStat stat,
   int value,
 ) {
-  final shown = sheet.thiefSkillInGame(stat);
+  final shown = _availableFor(sheet, stat)
+      ? sheet.thiefSkillInGame(stat)
+      : null;
   return _statField(
     sheet,
     stat,
@@ -441,8 +459,28 @@ List<SheetProficiency> _proficienciesFrom(CharacterSheet sheet) {
       proficiency.id: proficiency,
   };
 
+  // ⚠️ **A row that names nothing is not a proficiency.** BG:EE's
+  // `weapprof.2da` ends with fourteen padding rows — `EXTRA2`…`EXTRA15`, IDs
+  // 116–129 — whose `NAME_REF` is 4294967296, which is 2^32 and beyond any talk
+  // table, and whose every class column is zero. `ResourceRepository` already
+  // rejects an out-of-range strref, so they arrive with a null `nameStrref` and
+  // that is the signal. Offered unfiltered, they became fourteen rows labelled
+  // with their own row label — the `FLAILMORNINGSTAR` defect class — each
+  // reading `0/0` under an `at ceiling` tag.
+  //
+  // ⚠️ **Gated on `nameStrref`, never on `name`.** A machine with no game
+  // installed resolves no names at all; filtering on the resolved string would
+  // empty the panel there instead of degrading it.
+  //
+  // ⚠️ **The catalogue half only.** A pip the record actually holds survives
+  // regardless, because an anomaly you cannot touch is one you cannot correct.
+  final named = {
+    for (final entry in sheet.proficiencies.entries.entries)
+      if (entry.value.nameStrref != null) entry.key,
+  };
+
   return [
-    for (final id in {...sheet.proficiencies.entries.keys, ...held.keys})
+    for (final id in {...named, ...held.keys})
       SheetProficiency(
         id,
         sheet.proficiencyLabel(id),
