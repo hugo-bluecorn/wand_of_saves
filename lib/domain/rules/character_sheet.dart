@@ -15,6 +15,7 @@
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
+import 'package:wand_of_saves/domain/rules/creation_derivation.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/skill_catalogue.dart';
 
@@ -194,10 +195,14 @@ class CharacterSheet {
   /// Degrades in steps, each one a little less informative and none of them
   /// invented: the talk table's name, else the rules table's own identifier,
   /// else the number. A blank tile would be the only worse answer.
-  String proficiencyLabel(int proficiencyId) {
-    final entry = proficiencies[proficiencyId];
-    return entry?.name ?? entry?.identifier ?? 'Proficiency $proficiencyId';
-  }
+  /// ⚠️ **Never the `2DA` row label.** `FLAILMORNINGSTAR` reached a screen once
+  /// and was a defect, and the fallback that allowed it was this method's own
+  /// `?? entry.identifier`. It is reachable in real data: one creature BioWare
+  /// ships carries a pip in id 116, a padding row whose name resolves to
+  /// nothing — so that record would have read `EXTRA2`. An id is honest where a
+  /// row label is not.
+  String proficiencyLabel(int proficiencyId) =>
+      proficiencies[proficiencyId]?.name ?? 'Proficiency $proficiencyId';
 
   /// Strength as the game writes it — `18/27` — or `null` when there is no
   /// percentile to write.
@@ -406,11 +411,27 @@ class CharacterSheet {
   ///
   /// Written as the game writes it — a vulgar fraction, not `4.5` — because
   /// that is what the player will be comparing it against.
-  String get attacksPerRound {
-    final stored = character.numberOfAttacks;
-    if (stored <= wholeAttacksCeiling) return '$stored';
+  String? get attacksPerRound => attacksPerRoundFor(character.numberOfAttacks);
+
+  /// What the game draws for a stored [value] of this field.
+  ///
+  /// ⚠️ **Exposed for a value that is not the character's own**, so a screen
+  /// can say what a number *would* mean before it is written. Without it a
+  /// player reading `9/2` has no way to work out that two attacks a round is a
+  /// stored `2`: the encoding runs one way and they need it the other way.
+  static String? attacksPerRoundFor(int value) {
+    // ⚠️ **Outside the encoded range there is no meaning, and extrapolating
+    // produced nonsense.** The arithmetic is happy to run on any number: a
+    // stored 255 — which a real `.chr` was found holding — came out as `499/2`,
+    // the app calmly reporting two hundred and forty-nine and a half attacks a
+    // round. `numberOfAttacks` declares 0–10 and the code stops there.
+    if (value < CharacterStat.numberOfAttacks.minimum ||
+        value > CharacterStat.numberOfAttacks.maximum) {
+      return null;
+    }
+    if (value <= wholeAttacksCeiling) return '$value';
     // 6 is one half, 7 is three halves, and so on: `(stored - 5) * 2 - 1`.
-    return '${(stored - wholeAttacksCeiling) * 2 - 1}/2';
+    return '${(value - wholeAttacksCeiling) * 2 - 1}/2';
   }
 
   /// The highest stored value that means whole attacks rather than halves.
@@ -443,5 +464,47 @@ class CharacterSheet {
   int? get maximumHitPointsInGame {
     final bonus = hitPointBonus;
     return bonus == null ? null : character.maximumHitPoints + bonus;
+  }
+
+  /// What the tables say this character's stored numbers **should** be.
+  ///
+  /// ⚠️ **Stored is not always base, and this project's own findings say so.**
+  /// `verified-format-offsets.md` states flatly that "a savegame stores base
+  /// values". That holds for most fields and fails for the interesting ones:
+  ///
+  /// - **THAC0** — a stored `25` at level 2, against a computed 20, survived
+  ///   import and play. The engine never recomputes it, so stored is whatever
+  ///   was written.
+  /// - **Current hit points** — a stored value above the maximum is clamped
+  ///   away on load, so stored is neither base nor effective.
+  /// - **Percentile strength** — a stored `19/100` arrived in a new game as
+  ///   `19/0`.
+  /// - **Any anomaly** — a class-gated skill holding a non-zero value is stored
+  ///   by definition and base necessarily zero.
+  ///
+  /// So there are three numbers per field, not two: what the file holds
+  /// ([Character]), what the rules say it should hold (this), and what the
+  /// engine draws (the `…InGame` getters). ⚠️ **A field where the first two
+  /// disagree is exactly D16's *beyond the rules*** — not a fourth concept, the
+  /// one the findings already rest on, available per row rather than only in a
+  /// sentence underneath.
+  ///
+  /// **Reuses the creation flow's own function** rather than a second copy of
+  /// the arithmetic: `derivedStatsFor` takes the levels, so it answers for a
+  /// character at any level and not only a new one. A stat the tables cannot
+  /// answer is **absent**, never defaulted.
+  Map<CharacterStat, int> get derivedStats {
+    final classIdentifier = rules.classIdentifier(character.classId);
+    final levels = classLevels;
+    if (classIdentifier == null || levels.isEmpty) {
+      return const <CharacterStat, int>{};
+    }
+    return derivedStatsFor(
+      rules: rules,
+      classIdentifier: classIdentifier,
+      raceIdentifier: rules.raceIdentifier(character.raceId),
+      levels: levels,
+      constitution: character.abilities.constitution,
+    );
   }
 }

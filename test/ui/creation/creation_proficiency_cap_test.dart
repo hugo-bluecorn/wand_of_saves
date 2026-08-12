@@ -66,6 +66,7 @@ void main() {
       shortSword: ProficiencyEntry(
         id: shortSword,
         identifier: 'SHORTSWORD',
+        nameStrref: 25002,
         maximumByColumn: {
           'THIEF': 1,
           'SWASHBUCKLER': 2,
@@ -76,6 +77,7 @@ void main() {
       warHammer: ProficiencyEntry(
         id: warHammer,
         identifier: 'WARHAMMER',
+        nameStrref: 25008,
         maximumByColumn: {
           'THIEF': 0,
           'SWASHBUCKLER': 0,

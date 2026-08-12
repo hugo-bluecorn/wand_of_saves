@@ -387,8 +387,15 @@ class CreationState with CreationStateMappable {
   /// ⚠️ **`0` in a class's column is that table's way of saying "not this
   /// class"**, so a proficiency capped at zero is left out rather than shown
   /// greyed — the creation screen offers only what can be chosen.
+  ///
+  /// ⚠️ **And the zero cap is not enough on its own.** It drops
+  /// `weapprof.2da`'s fourteen padding rows, whose columns are all zero, but
+  /// **not its obsolete BG1 generation** — `BOW`, `LARGE_SWORD` and six others
+  /// carry real names and a cap of 2, so this screen offered `Bow` beside
+  /// `Long Bow` and `Short Bow`. `ProficiencyCatalogue.live` is where that band
+  /// is defined and where the measurement behind it is recorded.
   List<ProficiencyEntry> get proficienciesAvailable => [
-    for (final entry in catalogue.proficiencies.entries.values)
+    for (final entry in catalogue.proficiencies.live.entries.values)
       if ((entry.maximumFor(proficiencyColumn) ?? 0) > 0) entry,
   ];
 

@@ -54,6 +54,17 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // A floor, not a preference. KDE half-tiles a 1366-pixel display at 683, and
+  // at that width the character-creation steps overflow rather than reflow —
+  // the Name step tears at about 731. Nothing in this application is designed
+  // to be usable narrower than this, so the window manager is told so instead
+  // of leaving the user to discover it.
+  GdkGeometry geometry;
+  geometry.min_width = 900;
+  geometry.min_height = 600;
+  gtk_window_set_geometry_hints(window, nullptr, &geometry,
+                                static_cast<GdkWindowHints>(GDK_HINT_MIN_SIZE));
+
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);

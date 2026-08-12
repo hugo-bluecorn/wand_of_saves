@@ -400,9 +400,12 @@ void main() {
       );
 
       expect(sheet.proficiencyLabel(114), 'Two-Weapon Style');
-      // No talk table, so the table's own row label — which is information,
-      // where invented text would not be.
-      expect(sheet.proficiencyLabel(100), 'FLAILMORNINGSTAR');
+      // ⚠️ **Never the row label**, and this expectation used to be
+      // `FLAILMORNINGSTAR` — the defect itself, written down as intended
+      // behaviour. `FLAILMORNINGSTAR` reached a real screen once. It is
+      // reachable in shipped data too: one creature BioWare ships holds a pip
+      // in id 116, a padding row, which would have read `EXTRA2`.
+      expect(sheet.proficiencyLabel(100), 'Proficiency 100');
       // Nothing at all known: the number, rather than a blank tile.
       expect(sheet.proficiencyLabel(96), 'Proficiency 96');
     });

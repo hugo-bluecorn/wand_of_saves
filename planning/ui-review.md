@@ -5,7 +5,8 @@
 Inventory is the next feature and the largest surface this app will ever grow: 80 item slots, a
 picker over 37,000 indexed resources, an item detail. The decision was taken not to build it on a
 visual foundation nobody had inspected. This document is the inspection. Three alternative UI
-approaches are spiked separately, in `spikes/ui_spikes/`.
+approaches were spiked separately, in `spikes/ui_spikes/` — **deleted 2026-08-12** once the
+chosen one was promoted into `lib/`. The spikes are in git history and in PR #7.
 
 **Nothing here is a matter of taste.** Every finding is anchored to a line in the app and to a line
 in the Flutter SDK the app compiles against, a Material 3 design token, or a WCAG success
