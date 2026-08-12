@@ -179,11 +179,18 @@ expected, not a problem to fix.
 
 ## Current stage
 
-**Phases 0, 2 and 2.5 are done. Three plans are done** — the Characters plan (six slices), the
-creation flow (steps A–F) and **authored-and-derived** (six slices, which is what makes a created
-character's numbers the ones the engine would have written).
-Phase 1 is deferred on purpose — see below. `planning/roadmap.md` has all seven phases and the
-four workflows they serve.
+**Phases 0, 2 and 2.5 are done, and so is the UI.** Three plans are done — the Characters plan (six
+slices), the creation flow (steps A–F) and **authored-and-derived** (six slices, which is what makes
+a created character's numbers the ones the engine would have written) — plus the Starfleet Workbench,
+which replaced the shipped UI rather than repairing it.
+
+⚠️ **"Phase 1" is retired as a phase**, not deferred: three of its four bullets had shipped and its
+gate was superseded. What is left is one method, `Gam.withCreature`. See `planning/roadmap.md`, which
+also carries the four workflows.
+
+**The basic workflow is the product, and it works**: open a save or a character file, edit the
+record, write it back. **Next up is spells and inventory** — both need reading first, and inventory
+has no domain model at all.
 
 > ### 🔷 The UI is the Starfleet Workbench, single column
 >
@@ -206,57 +213,46 @@ four workflows they serve.
 > assertion means anything. `planning/ui-review.md` is the critique; the widgets that answered it
 > are `lib/ui/core/` and `lib/ui/character/`.
 
-> ### 🔶 Where the last session stopped, 2026-08-11 (evening)
+> ### 🔶 Where the last session stopped, 2026-08-12 (evening)
 >
-> **`main` is clean, synced and green** — **697 app tests, 287 format tests**, `analyze` clean,
-> zero suppressions. Three PRs merged plus one direct fix.
+> **`main` is clean and green — 743 app tests, 287 format tests**, `analyze` clean, zero
+> suppressions. The Workbench branch is merged.
 >
-> ✅ **The two golden characters were made in BG:EE and closed three rules.** Every predicted number
-> was exact. `000000102-Gnome Start` and `000000103-Halfling Start`:
+> **The user walked the app with a checklist and reported nine items. Seven are fixed**, one turned
+> out to be correct behaviour, and two are recorded in `docs/findings/known-defects.md` — **read that
+> file before reporting a bug or picking up work.**
 >
-> - **Best of each saving-throw column**, measured at last on a multi-class with no fighter in it.
-> - **`savecndh` and `savecng` are not swapped** — the halfling's death save is 9 where the gnome
->   table would give 13.
-> - ⚠️ **Multi-class Lore is the HIGHEST, not the sum** — the last rule this project carried with
->   its two readings openly disagreeing. The gnome stores **3** where a sum gives 4.
+> ⚠️ **Three defects were the app stating what the engine draws, wrongly**, and that is now the
+> sharpest recurring fault in this codebase:
 >
-> ⚠️ **Those two saves now exist ONLY as gitignored fixtures.** The user deleted every save through
-> the app, emptied the bin, and asked that they never be restored. `sync_fixtures.dart` cannot
-> regenerate them — its source is empty. Lose that directory and both characters must be remade.
+> - `in game 25` on a thief skill a Fighter/Mage cannot allocate. The engine draws **no such row** —
+>   measured 2026-08-10 — but `skilldex`/`skillrac` answer for any character, so the sum was computed
+>   and printed.
+> - `in game 499/2` on attacks per round, from a stored **255**. The encoding covers 0–10 and the
+>   arithmetic extrapolated past it.
+> - A findings badge reading **13** on a healthy first-level character, every entry restating the two
+>   chips beside it.
 >
-> **The rules tables have a typed vocabulary**: `GameTable` (38 tables) and `TableColumn` (13
-> columns) replace bare strings, and `values` turns the invariants into tests — including one that
-> confirms every resref really is in the archives. **D11 is now a checkable property**, not a
-> paragraph: a table may be generated from IESDP or carry strrefs, never both.
+> **The rule that came out of it: the `in game` value is the one thing on the sheet that speaks for
+> the engine, so absent always beats invented.**
 >
-> **Six defects were found by using the app**, none reachable by the suite as written:
+> ⚠️ **`weapprof.2da` holds three generations and only one is live.** Settled by reading **all 2,253
+> shipped creature records**: 24 distinct proficiency ids are in use and **none is below 89**. The
+> obsolete BG1 band (0–7, `Bow`, `Large Sword`) carries valid names and non-zero caps, so no column
+> in the table separates it — hence a measured constant, D18. `ProficiencyCatalogue.live` serves the
+> sheet and creation alike; creation had the same bug.
 >
-> - ⚠️ **The app could delete its way into losing its own data.** A save root was recognised by
->   counting slots inside it, so emptying it made the app forget the folder existed — taking the
->   character folder, the portraits, the language and the recycle bin's address with it. The failure
->   sealed itself: "Empty deleted items" greyed out over a full bin.
-> - A blank home screen with no way to create a character.
-> - Alignments in the wrong order (the legal axis, where the engine groups by the moral one) and the
->   wrong words ("Neutral" for **True Neutral**), and with no descriptions at all.
-> - Proficiencies shown as **`FLAILMORNINGSTAR`** — the row label, not the name.
-> - Spells that said nothing about themselves.
+> ⚠️ **`CHARBASE` itself stores `numberOfAttacks = 255`** where every shipped NPC stores `1`, so every
+> created character carries it. What it means is **unknown and not guessed at** — `known-defects.md`
+> §5b has the three readings and the one trip into the game that would settle it.
 >
-> ⚠️ **Three of those were one defect**: `loadCreationCatalogue` keeps a hand-maintained set of
-> strrefs, and anything added to the catalogue must remember to join it. When it does not, nothing
-> fails — the fallback quietly wins. There is now a test that walks the whole catalogue.
->
-> **The pip cap and the forced specialisation are implemented**, not merely recorded — see the
-> questions table. A kit replaces its class column only where it **is** the whole class.
->
-> **The panel's hints were swept**: arithmetic onto the always-visible helper line, caveats behind a
-> short ⓘ, and no `2DA` file names anywhere a player can see them.
->
-> ⚠️ **Still owed, and it needs a human:** nobody has looked at the **"What the game shows"** group
-> on the Skills tab. Tiles have been too narrow twice. A `FontLoader` capture harness hung under
-> `flutter test` twice and was deleted rather than left half-working.
+> ⚠️ **Those two golden saves still exist ONLY as gitignored fixtures.** The user deleted every save
+> through the app and asked that they never be restored; `sync_fixtures.dart` cannot regenerate them.
+> Lose that directory and `000000102-Gnome Start` and `000000103-Halfling Start` must be remade.
 >
 > **Still parked by the user, do not propose:** the stored-hit-point rule, a Gnome Mage's
-> Intelligence minimum, a Barbarian's bytes at `0x244`, and the export half of the Phase 2 gate.
+> Intelligence minimum, a Barbarian's bytes at `0x244`, the export half of the Phase 2 gate, and an
+> anime theme.
 
 ### What exists
 
@@ -308,8 +304,18 @@ four workflows they serve.
   - ⚠️ **A `2DA` row label is not a key either.** BG:EE's `weapprof.2da` labels two rows `AXE` and
     two `SPEAR` — the obsolete BG1 proficiencies and the live ones — so the `ID` column is the
     key. `Table2da` keeps the displaced rows in `shadowed`, the same fix `IdsMap` needed.
-- Party portraits come from `PORTRT<n>.bmp` beside each save; `dart:ui` decodes them, so no BIFF
-  index or BAM decoder is involved. `PORTRT<n>` is the n-th **party slot**, settled 2026-08-08.
+  - ⚠️ **And a table can hold whole generations of itself.** `weapprof.2da` has 46 rows in three
+    bands — obsolete BG1 at ids 0–7, live EE at 89–115, and fourteen padding rows at 116–129 whose
+    `NAME_REF` is `4294967296` (2³², beyond any talk table). **Only the padding is detectable from the
+    file**; the obsolete band carries valid names, valid descriptions and non-zero caps. So the live
+    floor is a **measured constant** — D18, from reading all 2,253 shipped creature records — and
+    `ProficiencyCatalogue.live` is where it lives. Offering the file whole put `Bow` beside `Long Bow`
+    and fourteen rows called `EXTRA*` on the sheet, in creation as well.
+- ⚠️ **Two portraits, two purposes, and confusing them is a shipped defect.**
+  `Character.portraitBaseName` is the resref the record names and is **what a sheet shows**;
+  `portraitPath` is `PORTRT<n>.bmp` beside the save — a stale snapshot the engine drew, kept only as
+  this project's cheapest oracle. `dart:ui` decodes BMP, so no BAM decoder is involved, and
+  `PORTRT<n>` is the n-th **party slot**, settled 2026-08-08.
 
 ### The gate that matters, and it passed
 
@@ -390,10 +396,24 @@ None of these is blocking; none is guessed at in code. All are in the findings.
 | A forced specialisation | **Closed 2026-08-11.** A multi-class gets **no kit screen**, yet a Gnome Cleric/Illusionist stores `kit = 0x04000000` → `MAGESCHOOL_ILLUSIONIST`. `clsrcreq.2da`'s `GNOME` column allows exactly one school, so the choice is a lookup and only the forcing is a rule. **Implemented 2026-08-11**; `clsrcreq.2da`'s forty kit rows were being dropped by the catalogue, which also meant a gnome mage was offered all eight schools. |
 | A specialist's forbidden school | **Closed 2026-08-10 — it is in each `SPL`,** exclusion flags at `0x1E`, bit = `mschool.2da` row + 5. Exact across all 22 first-level spells. No 2DA pairs the schools. |
 | Which fields the engine owns | **Closed 2026-08-10 — D14.** A probe character with every field at an underivable value was imported, played and saved: the engine overwrote **six** fields and left **sixty-seven** alone. Hit points and Lore store the class-and-level part only, with the ability bonus added at display. |
+| Which proficiencies are live | **Closed 2026-08-12 — ids ≥ 89, and it is a measured constant.** `weapprof.2da` holds three generations; only the padding band is detectable from the file, because the obsolete BG1 rows carry valid names, valid descriptions and non-zero caps. **All 2,253 shipped creature records** use 24 ids and **none below 89**. **D18**, and per-game. |
+| `CHARBASE`'s `numberOfAttacks = 255` | **OPEN, and not guessed at.** The engine's own creation template stores 255 where `IMOEN`, `MINSC` and `KHALID` all store `1`, so every created character carries it. The field encodes 0–10, so the sheet says **nothing** about what the game draws for it rather than extrapolating — it used to report `499/2`. Three readings fit (an *engine computes this* sentinel, junk, or a value it clamps) and no measurement separates them. One trip into the game settles it: `docs/findings/known-defects.md` §5b. |
 
-⚠️ **Seeing the screen is still the only way some defects surface.** The panel's stat tiles have
-now been too narrow **twice** — 148 truncated "Exceptional strength", 222 was needed for
-"Paralysis / Poison / Death" — and both times the suite, the analyzer and code review all passed.
+⚠️ **Seeing the screen is still the only way some defects surface, and the tally keeps growing.**
+On 2026-08-12 a clean `analyze` and **743 passing tests** shipped, in one branch:
+
+- **a red error screen** — `SelectionArea` in `MaterialApp.router`'s `builder` sits above the
+  router's `Navigator`, so there is no `Overlay` and `SelectableRegion` throws on frame one. The app
+  did not start;
+- a findings badge reading **13** on a healthy character;
+- a sheet that **named nobody**, because the identity header was missing and the app bar names the
+  *document*;
+- `in game 499/2` on attacks per round;
+- the first row looking greyed, from a focus highlight that mimics the *unavailable* plate.
+
+Before that the stat tiles were too narrow **twice** — 148 truncated "Exceptional strength", 222 was
+needed for "Paralysis / Poison / Death" — and each time the suite, the analyzer and code review all
+passed.
 Rendering and measuring in a test does not help: `flutter test` draws with a font whose every
 glyph is a full em square, so it reports labels as overflowing that fit perfectly well. What is
 in the suite is a budget on the label *strings*. **Look at a capture after any panel change.**
@@ -413,16 +433,27 @@ rather than recomputing it from equipment, equipping an item will not update arm
 itself. EE Keeper's "Recalculate Stats" is therefore **required**, not the optional parity feature
 the roadmap files it as.
 
-### Phase 1 is deliberately deferred, and that is not an oversight
+### What is left of "Phase 1", which is one method
 
-Phase 1 is the writer's **layout pass** — the cascade where a resized section shifts every offset
-after it. It was skipped because **nothing in Phase 2 needs it**: gold, XP, HP, THAC0, ability
-scores and reputation are all *fixed-width* fields, and the existing patch-a-copy writer already
-handles them, proven in-game.
+⚠️ **Retired as a phase on 2026-08-12** — three of its four bullets had shipped and its gate was
+superseded, so keeping it on the board made a solved problem look untouched and an unsolved one look
+bigger than it is. `planning/roadmap.md` has the audit.
 
-**So the hard problem is untouched.** Every CRE section is variable-length: adding one item moves
-everything after it in the CRE, then the CRE's size in the GAM NPC struct, then every GAM offset
-past that. Two facts recorded for whoever picks it up, both in
+**Shipped:** the CRE-internal layout pass (`Cre.withEntryInserted` creates an absent section, splices
+an entry, raises its count, shifts every sibling offset and relocates the item-slot table), original-
+byte retention, and atomic write with a `.bak`. **Superseded:** the round-trip gate, because byte
+identity on an *unedited* file proves nothing — `return input` passes it. The gate that shipped is
+*exactly N bytes differ*.
+
+⚠️ **And its premise was false.** It claimed the layout pass "becomes unavoidable at Phase 4, when
+inventory and spells start resizing". **Spells already resize** — `LearnSpell`, `MemoriseSpell` and
+`GrantProficiency` all ship, through a `.chr` where the same edit costs one pointer.
+
+**What remains is `Gam.withCreature`**, which throws. It unlocks exactly one thing: adding an item or
+a new proficiency to a character **inside a live save**. Cost measured: **39 pointers, 81–93 KB** — 3
+GAM header offsets, the `creOffset` of the 0–3 later party members, and each of the 33–36 non-party
+NPCs after it. ⚠️ Those 36 went unrecorded until 2026-08-09; a relocation patching only the header
+corrupts the save silently. Two more traps, both in
 `docs/findings/verified-format-offsets.md`:
 
 - **`GamHeaderField` records five of the GAM's nine offset fields.** A layout pass that relocates
