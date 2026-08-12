@@ -24,7 +24,7 @@ import 'package:wand_of_saves/ui/character/character_sheet_view.dart';
 import 'package:wand_of_saves/ui/character/command_palette.dart';
 import 'package:wand_of_saves/ui/character/findings.dart';
 import 'package:wand_of_saves/ui/character/findings_badge.dart';
-import 'package:wand_of_saves/ui/character/portrait_image.dart';
+import 'package:wand_of_saves/ui/character/portrait_tile.dart';
 import 'package:wand_of_saves/ui/character/rules_toggle.dart';
 import 'package:wand_of_saves/ui/character/sheet_projection.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
@@ -375,10 +375,27 @@ class _PortraitRail extends ConsumerWidget {
           .read(partyProvider(slotDirectoryName).notifier)
           .select,
       labelType: NavigationRailLabelType.all,
+      minWidth: PortraitTile.width + 32,
+      groupAlignment: -1,
+      indicatorShape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+      ),
       destinations: [
-        for (final (index, member) in state.members.indexed)
+        for (final member in state.members)
           NavigationRailDestination(
-            icon: PortraitImage(baseName: 'PORTRT$index', iconSize: 32),
+            // ⚠️ **`portraitBaseName`, never `PORTRT<n>`.** The first is the
+            // resref the record itself names; the second is a file beside the
+            // save holding a stale snapshot the engine drew, kept only as an
+            // oracle. Passing the filename here resolved nothing and drew a
+            // generic icon for every member.
+            icon: PortraitTile(baseName: member.portraitBaseName),
+            // ⚠️ **Not decoration.** A portrait is opaque and fills the rail's
+            // M3 indicator exactly, hiding it — so selection had no visible
+            // effect at all until the frame moved onto the portrait itself.
+            selectedIcon: PortraitTile(
+              baseName: member.portraitBaseName,
+              selected: true,
+            ),
             label: SizedBox(
               // ⚠️ A floor with no ceiling let one long name widen the rail
               // and move every figure downstream of it.
