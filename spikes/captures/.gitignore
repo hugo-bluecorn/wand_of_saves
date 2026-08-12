@@ -1,3 +1,0 @@
-# Spike captures, kept out of git the same way docs/findings/screens/ is.
-# They are regenerable: build an entry point and run tool/capture.sh.
-*.png
