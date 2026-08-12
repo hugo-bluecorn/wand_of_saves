@@ -1,0 +1,33 @@
+name: ui_spikes
+description: >-
+  Three non-derivative UI approaches for Wand of Saves, spiked so they can be
+  looked at rather than argued about. Disposable: whichever wins becomes a real
+  plan, and this package is then deleted.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Only `lib/main_baseline.dart` uses this — CharacterPanel is a
+  # ConsumerWidget, so the "before" shell has to supply a ProviderScope. The
+  # three spikes import no state management at all.
+  flutter_riverpod: ^3.4.2
+
+  # Only `lib/main_baseline.dart` uses this — it renders the *real* app's
+  # CharacterPanel so the "before" capture is the actual current UI rather than
+  # a redrawing of it. The three spikes themselves import nothing from the app:
+  # they are static, and a spike that needed the app's providers would be
+  # measuring the plumbing instead of the design.
+  wand_of_saves:
+    path: ../..
+
+dev_dependencies:
+  very_good_analysis: ^10.3.0
+
+flutter:
+  uses-material-design: true
