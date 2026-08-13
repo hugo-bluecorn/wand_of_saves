@@ -177,8 +177,17 @@ final portraitImportServiceProvider = Provider<PortraitImportService>(
 /// own rule rather than a tuning choice:** without it "one state per parameter
 /// combination will be created, which can lead to memory leaks"
 /// (`concepts2/auto_dispose.mdx`). The picker shows 210 portraits; scrolling it
-/// would otherwise retain every one for the session. The named argument, not
-/// `.autoDispose` — that form is codegen-only, which D2 forbids.
+/// would otherwise retain every one for the session.
+///
+/// ⚠️ **The named argument, not `.autoDispose`** — and the reason recorded
+/// here until 2026-08-12 was false. It said `.autoDispose` "is codegen-only,
+/// which D2 forbids"; Riverpod's own **non-codegen** snippets use it
+/// (`concepts2/family/functional/raw.dart`). The real reason is that the builder
+/// classes behind `.autoDispose` are `@internal`
+/// (`riverpod/src/builder.dart`), while `isAutoDispose:` is what
+/// `concepts2/auto_dispose.mdx` prescribes by name for hand-declared
+/// providers. Same choice, checkable citation — which is what D2 rests on.
+///
 final FutureProviderFamily<Uint8List?, String> portraitProvider =
     FutureProvider.family<Uint8List?, String>(
       isAutoDispose: true,

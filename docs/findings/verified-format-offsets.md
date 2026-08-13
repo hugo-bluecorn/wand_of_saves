@@ -527,6 +527,68 @@ also shifts every slot index above the one removed.
 No item record in the fixture is unreferenced by a slot, so the engine keeps the table tight;
 writing an orphan would be novel behaviour rather than something it already tolerates.
 
+### ITM V1 — read 2026-08-12, header verified against real bytes
+
+**1,530 items** in a BG:EE install, across 7 archives (1,282 in `data/ITEMS.BIF`). Reading every
+header costs **28 ms**; resolving both name strrefs for all of them costs **69 ms** more.
+
+The 114-byte header, derived from IESDP's own width rules and then **checked against `BOOT01`**,
+whose arithmetic closes exactly: 114 + 2 feature blocks × 48 = **210**, the file's length.
+
+| offset | field | | offset | field |
+|---|---|---|---|---|
+| `0x08` | unidentified name (strref) | | `0x42` | lore to identify |
+| `0x0c` | identified name (strref) | | `0x44` | ground icon (resref) |
+| `0x18` | flags | | `0x4c` | weight |
+| `0x1c` | item type (`ITEMCAT.IDS`) | | `0x50`/`0x54` | descriptions (strref) |
+| `0x1e`–`0x21` | usability, **4 separate bytes** | | `0x58` | description icon (resref) |
+| `0x34` | price | | `0x64`/`0x68` | extended headers offset/count |
+| `0x38` | stack amount | | `0x6a` | feature-block pool offset |
+| `0x3a` | inventory icon (resref) | | `0x6e`/`0x70` | equipping index/count |
+
+⚠️ **`0x6a` is a dword at a non-4-aligned offset.** ⚠️ **The min-stat bytes `0x28`–`0x31` are
+interleaved with the kit-usability bytes**, not laid out as two blocks. ⚠️ **Usability is four
+independent bytes** — IESDP presents it as a Bit × Byte grid, and reading it little-endian as a
+dword scrambles the classes ("Mage and Sorcerer" is byte 3 bit 2).
+
+**Signedness is measured, not inherited.** IESDP states none for any ITM field. **195 of the 1,530
+items carry a negative value in one of the two name strrefs**, so both are signed and `Itm` answers
+`null` rather than `-1` — the idiom `Spl.nameStrref` established.
+
+#### ⚠️ The offerable filter is two-stage, and the two numbers differ
+
+| where | count | what it means |
+|---|---|---|
+| `Itm.hasName` — the format layer | **102** | neither name strref is present at all |
+| the app, after the talk table | **107** | plus five whose strref resolves to *empty text* |
+
+`infinity_formats` must never open the talk table — where the game is installed and which language
+the player chose are facts about a machine, not a file format (D11) — so the second stage belongs
+above the repository. Both numbers are right about different questions, and recording only one is
+how somebody later "fixes" a passing test.
+
+The nameless ones are `GHOST`, `DEMOGORG`, `ANKHEG1` and their like: **a monster's innate attack is
+an item to the engine**, and must never be offered to a player as one. Same shape as `SPL`, where
+86 of 108 first-level wizard spells are engine plumbing.
+
+#### Two more rules that are not guessable
+
+- **Stacking needs two conditions.** IESDP: *"For items to be stackable, they must contain at least
+  one extension header, even if it is empty."* So `stackAmount > 1` is necessary and **not
+  sufficient** — asserted against the shipped data: no item claims to stack with zero extended
+  headers.
+- ⚠️ **A name is not a key.** `BOOT01`, `BOOTDRIZ`, `DASBOOT` and `TROLLBOO` all resolve to strref
+  6823, "The Paws of the Cheetah". The **resref** is the key. Fifth time this project has met that
+  shape, after `KIT.IDS`, two `AXE` rows in `weapprof.2da`, `FALLEN_CLERIC`, and `weapprof`'s
+  padding band.
+- ⚠️ **"Boots of Speed" matches no item name in BG:EE** and three item *descriptions*. The name a
+  player remembers is not always a name the game holds.
+
+⚠️ **`ItmCodec` checks the version where `SplCodec` deliberately does not**, and the difference is
+recorded in both: a BG:EE install has one `SPL` layout, but `ITM` has three — V1.1 is Planescape and
+V2.0 is Icewind Dale II. Read with V1's table either yields a plausible name, type and price, all
+wrong. Dropping an item from a picker is visible; showing the wrong name for one is not.
+
 ### ⚠️ The first byte of a CRE resref is overwritten with `*` — 2026-08-08
 
 `CHARBASE` → `*HARBASE`, `IMOEN1` → `*MOEN1`, `XZAR` → `*ZAR`. **Replacement, not a prefix**:
