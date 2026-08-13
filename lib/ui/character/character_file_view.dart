@@ -204,7 +204,12 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => InventoryScreen(
-                      character: character,
+                      character: () =>
+                          ref
+                              .watch(characterFileProvider(widget.fileName))
+                              .value
+                              ?.character ??
+                          character,
                       onAdd: (resref, slot) => notifier.edit(
                         AddItem(
                           creOffset: character.creOffset,

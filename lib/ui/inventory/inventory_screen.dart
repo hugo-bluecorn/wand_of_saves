@@ -39,8 +39,14 @@ class InventoryScreen extends ConsumerStatefulWidget {
     super.key,
   });
 
-  /// Whose inventory this is.
-  final Character character;
+  /// Whose inventory this is, re-read on every build.
+  ///
+  /// ⚠️ **A callback, not a value, and that was a real defect.** Pushed with a
+  /// `Character` snapshot the screen showed the inventory as it stood when the
+  /// route opened: adding an item applied the edit and changed nothing on
+  /// screen, which is the invisible-behaviour failure this project has shipped
+  /// three times. The caller watches its own view model and this asks again.
+  final Character Function() character;
 
   /// Called with the resref and the slot to put it in.
   final void Function(String resref, CreItemSlot slot) onAdd;
@@ -58,6 +64,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     super.dispose();
   }
 
+  List<CarriedItem> get _items => widget.character().items;
+
   /// The first backpack slot nothing points at.
   ///
   /// ⚠️ **Scans rather than counts.** Holes are legal — a real character fills
@@ -65,7 +73,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   /// the next free slot, and using it would overwrite what is already there.
   CreItemSlot? get _firstFreePack {
     final taken = {
-      for (final item in widget.character.items)
+      for (final item in _items)
         if (item.isInASlot) item.slotIndex,
     };
     for (final slot in CreItemSlot.pack) {
@@ -90,7 +98,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final results = catalogue.search(_query.text);
 
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.character.name} · Inventory')),
+      appBar: AppBar(title: Text('${widget.character().name} · Inventory')),
       body: Scrollbar(
         child: SingleChildScrollView(
           child: Center(
@@ -109,13 +117,13 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     ),
                     if (free == null)
                       Text(
-                        'The backpack is full. Nothing can be added until '
+                        'The inventory is full. Nothing can be added until '
                         'something is taken out in game.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     if (_query.text.trim().isNotEmpty)
                       _Results(results: results, onAdd: _add),
-                    _Carried(items: widget.character.items),
+                    _Carried(items: _items),
                   ],
                 ),
               ),
@@ -214,6 +222,13 @@ class _Results extends StatelessWidget {
 }
 
 /// What the character is already carrying.
+/// What the character is carrying.
+///
+/// ⚠️ **Called *Inventory* because that is what the game calls it.** Asked of
+/// the talk table rather than agreed by ear: strrefs 6671, 11292 and 24358 are
+/// exactly "Inventory", and "Inventory Full" names the same container.
+/// **"Backpack" appears nowhere in it** — that word is this project's, and so
+/// is "pack" in `CreItemSlot.pack`.
 class _Carried extends StatelessWidget {
   const _Carried({required this.items});
 
@@ -221,7 +236,7 @@ class _Carried extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PanelCard(
-    title: 'Carried',
+    title: 'Inventory',
     note: items.isEmpty ? 'Nothing yet.' : null,
     trailing: Tag('${items.length}', caption: 'items'),
     children: [

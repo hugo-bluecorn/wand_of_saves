@@ -55,7 +55,7 @@ Future<void> pump(
         itemCatalogueProvider.overrideWith((ref) async => _catalogue),
       ],
       child: MaterialApp(
-        home: InventoryScreen(character: character, onAdd: onAdd),
+        home: InventoryScreen(character: () => character, onAdd: onAdd),
       ),
     ),
   );
@@ -155,7 +155,7 @@ void main() {
     expect(added.single.$2, CreItemSlot.pack2);
   });
 
-  testWidgets('says so when the backpack is full, rather than failing', (
+  testWidgets('says so when the inventory is full, rather than failing', (
     tester,
   ) async {
     await pump(
@@ -170,7 +170,7 @@ void main() {
       ]),
       onAdd: (_, _) {},
     );
-    expect(find.textContaining('backpack is full'), findsOneWidget);
+    expect(find.textContaining('inventory is full'), findsOneWidget);
   });
 
   testWidgets('an empty query shows no results panel at all', (tester) async {

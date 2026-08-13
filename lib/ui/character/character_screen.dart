@@ -18,7 +18,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
-import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
@@ -157,9 +156,30 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
       .read(partyProvider(widget.slotDirectoryName).notifier)
       .edit(AddItem(creOffset: _creOffset, resref: resref, slot: slot));
 
-  void _openInventory(Character character) => Navigator.of(context).push(
+  /// Opens the inventory, which re-reads the party on every build.
+  ///
+  /// ⚠️ **Watched, not captured.** A snapshot taken here would leave the screen
+  /// showing the inventory as it stood when the route opened.
+  void _openInventory() => Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) => InventoryScreen(character: character, onAdd: _addItem),
+      builder: (_) => Consumer(
+        builder: (context, ref, _) {
+          final selected = ref
+              .watch(partyProvider(widget.slotDirectoryName))
+              .value
+              ?.selected;
+          if (selected == null) return const SizedBox.shrink();
+          return InventoryScreen(
+            character: () =>
+                ref
+                    .watch(partyProvider(widget.slotDirectoryName))
+                    .value
+                    ?.selected ??
+                selected,
+            onAdd: _addItem,
+          );
+        },
+      ),
     ),
   );
 
@@ -242,7 +262,7 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
             const SizedBox(width: 8),
             if (selected != null)
               IconButton(
-                onPressed: () => _openInventory(selected),
+                onPressed: _openInventory,
                 icon: const Icon(Icons.backpack_outlined),
                 tooltip: 'Inventory',
               ),
