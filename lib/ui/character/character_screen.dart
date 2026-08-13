@@ -421,6 +421,13 @@ class _PortraitRail extends ConsumerWidget {
       labelType: NavigationRailLabelType.all,
       minWidth: PortraitTile.width + 32,
       groupAlignment: -1,
+      // ⚠️ **A full party of six does not fit an ordinary window**, and the
+      // default is `false` — the destinations sit in a bare `Column` and paint
+      // past the bottom. Six is the size the game allows; every fixture before
+      // Conan had one member or four, which is why this survived until now.
+      // The framework wraps them in a `SingleChildScrollView` itself, so this
+      // is a property rather than a hand-rolled scroll view.
+      scrollable: true,
       indicatorShape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.all(Radius.circular(10)),
       ),

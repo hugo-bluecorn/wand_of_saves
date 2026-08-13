@@ -386,6 +386,59 @@ void main() {
           value: value,
         );
 
+    test(
+      '⚠️ a RESIZING edit does not cost the members below it their names',
+      () async {
+        // ⚠️ **`creOffset` stopped being a stable identity the day the
+        // relocation shipped.** Growing member 0 moves every record after them,
+        // so a name resolved against the file on disk and looked up by offset
+        // misses — and the fallback prints a raw resref, `*IMOEN`, on screen.
+        //
+        // It needs two members AND a resizing edit: resizing the LAST member
+        // moves nobody, and a one-member party can never show it at all.
+        final repository = FakeSaveGameRepository(
+          slots: [fakeSlot('last')],
+          gam: GamCodec.decode(
+            buildSave(
+              party: const [
+                SyntheticCharacter(),
+                SyntheticCharacter(
+                  resref: '*IMOEN',
+                  displayName: '',
+                  nameStrref: 9501,
+                  partyOrder: 1,
+                ),
+              ],
+            ),
+          ),
+        );
+        final container = ProviderContainer.test(
+          overrides: [
+            saveGameRepositoryProvider.overrideWithValue(repository),
+            stringRepositoryProvider.overrideWithValue(
+              FakeStringRepository(const {9501: 'Imoen'}),
+            ),
+          ],
+        );
+        await container.read(partyProvider(slotName).future);
+        expect(stateOf(container).members[1].name, 'Imoen', reason: 'to begin');
+
+        notifierOf(container).edit(
+          AddItem(
+            creOffset: stateOf(container).members[0].creOffset,
+            resref: 'BOOT01',
+            slot: CreItemSlot.pack1,
+          ),
+        );
+
+        expect(
+          stateOf(container).members[1].name,
+          'Imoen',
+          reason: 'her record moved; her name did not change',
+        );
+      },
+    );
+
     test('an edit shows up in the character it changed', () async {
       final (container, _) = editable();
       await container.read(partyProvider(slotName).future);
