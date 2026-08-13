@@ -14,6 +14,7 @@
 
 import 'dart:typed_data';
 
+import 'package:infinity_formats/src/cre/cre_item.dart';
 import 'package:infinity_formats/src/cre/cre_section.dart';
 import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/exceptions.dart';
@@ -690,6 +691,186 @@ final class Cre {
 
   /// Whether this creature carries any items.
   bool get hasItems => hasSection(itemsOffset);
+
+  /// Whether this creature has a slot table at all.
+  ///
+  /// A created character does: `CHARBASE` is 804 bytes — a 724-byte header plus
+  /// the 80-byte table — with every word empty and no items section.
+  bool get hasItemSlots => hasSection(itemSlotsOffset);
+
+  /// What the creature is carrying, in the order the section stores them.
+  ///
+  /// ⚠️ **The index into this list is what a slot word holds**, which is why
+  /// removing an item is not simply dropping an entry — see [withItemRemoved].
+  ///
+  /// Empty when the section is absent, which is an ordinary state: `CHARBASE`
+  /// carries no items and several fixture creatures carry `itemsOffset == 0`.
+  List<CreItem> get items => [
+    for (var i = 0; i < itemsCount; i++)
+      if (entryStart(CreSection.items, i) case final int at)
+        CreItem(
+          resref: decodeFixedString(
+            bytes,
+            at + CreItemField.resref.offset,
+            CreItemField.resref.length,
+          ),
+          quantity: _readAt(at, CreItemField.quantity1),
+          quantity2: _readAt(at, CreItemField.quantity2),
+          quantity3: _readAt(at, CreItemField.quantity3),
+          expiration: _readAt(at, CreItemField.expiration),
+          flags: CreItemFlag.setFrom(_readAt(at, CreItemField.flags)),
+          start: at,
+        ),
+  ];
+
+  /// Which item each occupied slot holds, by index into [items].
+  ///
+  /// ⚠️ **Reads 38 words, not 40.** The last two are *selected weapon* and
+  /// *selected weapon ability*; both hold `0` on the fixtures, which as an item
+  /// index would read as "item 0 is equipped here" — twice, in slots that are
+  /// not slots.
+  ///
+  /// Empty slots are omitted rather than mapped to `null`, so a caller iterates
+  /// what is there instead of filtering.
+  Map<CreItemSlot, int> get itemSlots {
+    if (!hasItemSlots) return const {};
+    final view = ByteData.sublistView(bytes);
+    return {
+      for (final slot in CreItemSlot.values)
+        if (view.getUint16(itemSlotsOffset + slot.byteOffset, Endian.little)
+            case final int word when word != CreItemSlot.empty)
+          slot: word,
+    };
+  }
+
+  /// Which item [slot] holds, or `null` when it is empty.
+  int? itemIndexAt(CreItemSlot slot) => itemSlots[slot];
+
+  /// The first backpack slot with nothing in it, or `null` when it is full.
+  ///
+  /// ⚠️ **Scans rather than counts.** Holes are legal — `Aard1.chr` fills packs
+  /// 1–7 and 9, leaving 8 empty — so "the number of items" is not the index of
+  /// the next free slot, and using it would overwrite an occupied one.
+  CreItemSlot? get firstFreePackSlot {
+    final occupied = itemSlots.keys.toSet();
+    for (final slot in CreItemSlot.pack) {
+      if (!occupied.contains(slot)) return slot;
+    }
+    return null;
+  }
+
+  /// Items no slot points at.
+  ///
+  /// ⚠️ **Always empty on real data**, and that is the finding: every item in
+  /// every fixture is referenced by a slot, so the engine keeps the table
+  /// tight. Writing an orphan would be novel behaviour rather than something
+  /// the engine is known to tolerate — an item nothing points at exists in the
+  /// file and nowhere in the game.
+  List<int> get orphanedItems {
+    final referenced = itemSlots.values.toSet();
+    return [
+      for (var i = 0; i < itemsCount; i++)
+        if (!referenced.contains(i)) i,
+    ];
+  }
+
+  /// A copy with [slot] pointing at [itemIndex], or cleared when it is `null`.
+  ///
+  /// **Fixed-width — exactly one word changes.** The slot table never grows, so
+  /// this is as safe as any header edit and works in a savegame with no
+  /// relocation.
+  ///
+  /// Throws [InfinityFormatException] if there is no slot table, and
+  /// [RangeError] if [itemIndex] names an item the record does not have — a
+  /// slot pointing past the array is how an inventory screen reads somebody
+  /// else's bytes.
+  Cre withItemSlot(CreItemSlot slot, int? itemIndex) {
+    if (!hasItemSlots) {
+      throw InfinityFormatException.truncated(
+        what: 'no item-slot table to write $slot into',
+        expected: creItemSlotsLength,
+        actual: 0,
+      );
+    }
+    if (itemIndex != null && (itemIndex < 0 || itemIndex >= itemsCount)) {
+      throw RangeError.range(itemIndex, 0, itemsCount - 1, 'itemIndex');
+    }
+    final copy = Uint8List.fromList(bytes);
+    ByteData.sublistView(copy).setUint16(
+      itemSlotsOffset + slot.byteOffset,
+      itemIndex ?? CreItemSlot.empty,
+      Endian.little,
+    );
+    return Cre.trusted(copy.asUnmodifiableView());
+  }
+
+  /// A copy with the item at [index] removed and every slot renumbered.
+  ///
+  /// ⚠️ **The renumbering is the whole point, and it is the hazard this class
+  /// documents for memorisation windows and never documented for items.** Slot
+  /// words are *indices into the items array*, so dropping entry `i` leaves
+  /// every word above `i` pointing one item too high — a boot in the helmet
+  /// slot, or worse, past the end of the array.
+  ///
+  /// The slot that held it is cleared; slots below it are untouched.
+  ///
+  /// Throws [RangeError] if [index] is not an item this record holds.
+  Cre withItemRemoved(int index) {
+    if (index < 0 || index >= itemsCount) {
+      throw RangeError.range(index, 0, itemsCount - 1, 'index');
+    }
+    final at = entryStart(CreSection.items, index);
+    final shrunk = Uint8List(bytes.length - creItemLength)
+      ..setRange(0, at, bytes)
+      ..setRange(at, bytes.length - creItemLength, bytes, at + creItemLength);
+    final view = ByteData.sublistView(shrunk)
+      ..setUint32(
+        CreHeaderField.itemsCount.offset,
+        itemsCount - 1,
+        Endian.little,
+      );
+
+    // Sections after the removed entry move up by one stride, and so does the
+    // slot table — the mirror of what `withEntryInserted` does going the other
+    // way.
+    for (final section in CreSection.all) {
+      if (section == CreSection.items) continue;
+      final where = _read(section.offsetField);
+      if (!hasSection(where) || where < at) continue;
+      view.setUint32(
+        section.offsetField.offset,
+        where - creItemLength,
+        Endian.little,
+      );
+    }
+    final slots = itemSlotsOffset;
+    final movedSlots = hasSection(slots) && slots >= at
+        ? slots - creItemLength
+        : slots;
+    if (hasSection(slots) && slots >= at) {
+      view.setUint32(
+        CreHeaderField.itemSlotsOffset.offset,
+        movedSlots,
+        Endian.little,
+      );
+    }
+
+    if (hasItemSlots) {
+      for (final entry in itemSlots.entries) {
+        final word = switch (entry.value) {
+          final int i when i == index => CreItemSlot.empty,
+          final int i when i > index => i - 1,
+          final int i => i,
+        };
+        view.setUint16(
+          movedSlots + entry.key.byteOffset,
+          word,
+          Endian.little,
+        );
+      }
+    }
+    return Cre.trusted(shrunk.asUnmodifiableView());
+  }
 
   /// Where the creature's content ends — its total size, derived.
   ///

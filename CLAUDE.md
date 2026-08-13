@@ -260,7 +260,7 @@ package can write the 80-byte item-slot table.
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 330 tests.
+  one table serves reader and writer and they cannot disagree. 373 tests.
   - **`Cre` resizes**: `withEntryInserted` (insert at an entry index, not only append),
     `withEntryField`, `withEffectVersion` and `readField`. The three spell sections have their own
     field tables and readers; `SplCodec` reads enough of an `SPL` header to list a spellbook.
@@ -270,6 +270,10 @@ package can write the 80-byte item-slot table.
     resref read `Spl` has no branch for. ⚠️ **It checks the version where `SplCodec` does not**:
     `ITM` has three layouts across the Infinity games and reading V2.0 with V1's table yields a
     plausible name, type and price, all wrong.
+  - **The CRE inventory layer** — `CreItemField`, `CreItemFlag`, `itemEntry`, `Cre.items`, and the
+    slot table: `CreItemSlot` (⚠️ **38 slots, not 40** — the last two words are selection state),
+    `itemSlots`, `withItemSlot`, `firstFreePackSlot` and `withItemRemoved`, which renumbers every
+    slot above the one it drops. Adding is `withEntryAppended` then `withItemSlot`.
   - **The whole character sheet reads**: saving throws, resistances, thief skills, attacks,
     armour class modifiers, morale, fatigue, luck. Homogeneous groups come back as **records**.
   - **`Effect`** — enough of the 264-byte v2 record to find proficiencies, which on BG:EE are

@@ -527,6 +527,32 @@ also shifts every slot index above the one removed.
 No item record in the fixture is unreferenced by a slot, so the engine keeps the table tight;
 writing an orphan would be novel behaviour rather than something it already tolerates.
 
+#### Modelled 2026-08-12, and three things the prose above did not say
+
+⚠️ **The table is 40 words and only 38 are slots.** Indices 38 and 39 are *selected weapon* and
+*selected weapon ability* — state, not item indices. Both hold `0` on the fixtures, which read as a
+slot would say "item 0 is equipped here" twice, in two places that are not slots. `CreItemSlot` has
+38 values for exactly this reason.
+
+⚠️ **Holes in the backpack are legal.** `Aard1.chr` fills packs 1–7 and 9 and leaves **pack 8
+empty**. So "the first free slot" has to *scan*; deriving it from the item count answers pack 9 and
+overwrites the quarterstaff sitting there.
+
+⚠️ **On real data the slot table comes BEFORE the items section** — `Aard1.chr` has it at 1040 with
+items at 1120. That is why `Cre.withEntryInserted`'s slot-relocation branch (`slots >= spliceAt`)
+had **never once fired in a test**: every fixture and every synthetic builder used the same order.
+A test now builds the other order deliberately.
+
+**Removing renumbers.** Slot words are *indices into the items array*, so dropping entry `i` leaves
+every word above `i` pointing one item too high. `Cre.withItemRemoved` clears the slot that held it,
+decrements the ones above, and shifts the sections and the slot table — the mirror of an insert.
+This is the same hazard the code documents for memorisation windows and had never documented for
+items.
+
+**Adding composes from what already exists**: `withEntryAppended(section: items)` then
+`withItemSlot(...)`. Verified against `Aard1.chr` — 11 items to 12, no orphans, and the section
+chain still closes on the declared size.
+
 ### ITM V1 — read 2026-08-12, header verified against real bytes
 
 **1,530 items** in a BG:EE install, across 7 archives (1,282 in `data/ITEMS.BIF`). Reading every

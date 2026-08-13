@@ -127,6 +127,26 @@ app is right to preserve the byte and right to say nothing about it.
 
 ---
 
+## 5c EE Keeper has a fourth item flag and IESDP does not name it
+
+**Measured 2026-08-12** from EE Keeper's own dialog templates: `CSetItemFlagsDlg` (dialog 186) has
+four checkboxes — **Identified**, **Given**, **Stolen**, **Undropable** (sic).
+
+IESDP names bit 1 of the CRE item's flags **Unstealable**. `CreItemFlag` follows IESDP, because
+IESDP is the specification source and EE Keeper is not readable as one (D1).
+
+⚠️ **Whether "Given" and "Unstealable" are the same bit under two names is not established**, and
+nothing separates them: both would sit at bit 1, and no fixture item has that bit set alone. Three
+readings fit and no measurement chooses between them.
+
+**How to settle it:** set bit 1 on an item, load the game, and see whether a thief can steal it —
+or open the same file in EE Keeper under Wine and read which box it ticks. Neither has been done.
+
+Not blocking: the app can offer the flag under IESDP's name, and the value it writes is the same
+either way. It is the *label* that is uncertain.
+
+---
+
 ## 6 Rules the record does not yet enforce
 
 - **A Blade's Lore is half per level.** The walkthrough says so and `lore.2da` has no kit rows, so
