@@ -567,9 +567,40 @@ decrements the ones above, and shifts the sections and the slot table — the mi
 This is the same hazard the code documents for memorisation windows and had never documented for
 items.
 
-**Adding composes from what already exists**: `withEntryAppended(section: items)` then
-`withItemSlot(...)`. Verified against `Aard1.chr` — 11 items to 12, no orphans, and the section
-chain still closes on the declared size.
+#### ⚠️ Adding by appending writes a record the engine would not — CORRECTED 2026-08-13
+
+This section used to say: *"**Adding composes from what already exists**: `withEntryAppended(section:
+items)` then `withItemSlot(...)`. Verified against `Aard1.chr` — 11 items to 12, no orphans, and the
+section chain still closes on the declared size."* Every one of those checks passes and every one is
+structural — none of them looked at the **order** of the entries.
+
+**The engine keeps the items array in ascending slot order.** Measured across **41 engine-written
+records** — the party of every fixture savegame plus every `.chr` on disk — with **zero inversions
+and zero unreferenced entries**. Walking the slot table in slot order yields item indices
+`0, 1, 2, … n−1`, exactly.
+
+⚠️ **Sparse slots, dense indices — two different sequences, and only one has gaps.** Conan's pack
+occupies slots 1, 2, 3, 5, 6, 11, 13, 15, 16, so **seven holes**; his entry indices across those same
+slots run 3, 4, 5, 6, 7, 8, 9, 10, 11 with **no gap at all**. A hole in the slot table does not put a
+hole in the items array, and neither fact implies the other.
+
+**And the engine fills a hole by *inserting*, not appending.** Measured on the
+`000000022-Conan Full Party` → `000000023-Conan Inventory Move` pair, one in-game inventory transfer
+apart: Imoen's `pack1` was empty, the engine placed `SCRL68` in it and spliced the entry in at
+**index 6**, renumbering every index above. Two further items that landed in `pack7`/`pack8` were
+appended at 12 and 13 — because *there* the append already is the ordered position.
+
+**So `withEntryAppended` + `withItemSlot` is right only when the target slot is above every occupied
+one.** Into a hole it produces `pack3=[5] pack4=[8] pack5=[6]`, a shape occurring in none of the 41.
+⚠️ **Whether the engine rejects such a record is not answerable from the bytes and is owed an
+in-game load.** `Cre.withEntryInserted` exists but relocates the slot table *without* renumbering the
+indices inside it, so it is not a drop-in — it needs the mirror of `withItemRemoved`'s renumbering.
+
+**The same pair is the relocation answer key.** Four items left Conan for Imoen and Xzar: Conan
+−80 bytes and −4 entries, Imoen +60 and +3, Xzar +20 and +1 — **20 bytes per entry, confirmed three
+independent ways**, 30 entries before and after. The cumulative shift reaches **exactly zero** by
+Jaheira, so the last two records never moved and both files are 107,588 bytes. That is the engine
+performing `Gam.withCreature`'s job with the answer published.
 
 ### ITM V1 — read 2026-08-12, header verified against real bytes
 
