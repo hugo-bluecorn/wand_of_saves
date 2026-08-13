@@ -49,7 +49,7 @@ class CharacterSheetView extends StatelessWidget {
   ///
   /// ⚠️ **A property of the document, not of the character.** Raising a
   /// proficiency from zero appends a 264-byte opcode 233 effect, which moves
-  /// **one** pointer in a `.chr` and **thirty-nine** inside a savegame. So a
+  /// **one** pointer in a `.chr` and **forty-three** inside a savegame. So a
   /// character file passes `true` and a savegame `false` — and the sheet itself
   /// does not know which it is looking at, which is why this is a parameter
   /// rather than something it works out.

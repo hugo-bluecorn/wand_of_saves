@@ -70,7 +70,8 @@ T applyCharacterEdit<T extends CreatureDocument<T>>(
   }(),
   // ⚠️ **The two that resize.** Both go through `Cre.withEntryAppended`, which
   // creates the section when it is absent — `CHARBASE` has neither — and then
-  // through `withCreature`, which is where a savegame refuses.
+  // through `withCreature`, which relocates in a savegame and patches one
+  // pointer in a `.chr`.
   GrantProficiency(:final creOffset, :final proficiencyId, :final pips) => () {
     if (!EffectV2Field.parameter1.holds(pips)) {
       throw InvalidEditException(

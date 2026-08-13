@@ -163,6 +163,10 @@ KEY/BIFF reader in an isolate; 2DA/IDS tables; item and spell pickers.
 
 **Cheaper than this entry assumed.** Measured 2026-08-08:
 
+✅ **Shipped 2026-08-13, narrowed**: search by name/resref and add, inventory slots only. The `ITM`
+codec, the CRE item and slot layer, the catalogue and the screen. **Equipment slots and armour class
+were cut** to ship in a day.
+
 - **Inventory already reads** with the existing `CreCodec`. Item records are 20 bytes and the slot
   table is **fixed at 80**, so quantities, charges and the identified/stolen/undroppable flags are
   all *fixed-width* edits needing neither Phase 3 nor Phase 1. Only adding or removing an item

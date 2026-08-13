@@ -39,7 +39,7 @@ import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 /// between, and the party's reputation, which no exported character has.
 ///
 /// ⚠️ **A `.chr` is the document that can grow.** Adding a proficiency moves
-/// one pointer here against thirty-nine inside a savegame, so this is the
+/// one pointer here against forty-three inside a savegame, so this is the
 /// screen where resizing edits are safe — the reason export is a primary path
 /// and not a convenience.
 class CharacterFileView extends ConsumerStatefulWidget {
@@ -101,7 +101,7 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
     // ⚠️ **A `.chr` is the document that can grow, so this is where granting
     // belongs.** Raising a proficiency from zero appends a 264-byte opcode 233
     // effect: **one** pointer here, the length in its 100-byte header, against
-    // **thirty-nine** inside a savegame. An earlier version of this method
+    // **forty-three** inside a savegame. An earlier version of this method
     // refused it anyway, with a comment saying it was safe, which made every
     // proficiency the record did not already hold inert on the one screen where
     // it is safe to add one.

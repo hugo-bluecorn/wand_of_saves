@@ -524,8 +524,26 @@ four weapons, four quivers, cloak, three quick items, sixteen pack slots, magic 
 are all fixed-width edits.** Only adding or removing an item resizes the items table — and removing
 also shifts every slot index above the one removed.
 
-No item record in the fixture is unreferenced by a slot, so the engine keeps the table tight;
-writing an orphan would be novel behaviour rather than something it already tolerates.
+⚠️ **CORRECTED 2026-08-13.** This section used to say: *"No item record in the fixture is
+unreferenced by a slot, so the engine keeps the table tight; writing an orphan would be novel
+behaviour rather than something it already tolerates."* That was generalised from **one** savegame's
+party, and it is false as a claim about the format.
+
+Measured across **all 2,253 shipped creature records**: **618 items in 220 records are referenced by
+no slot at all** — `APPAR` orphans all five of its. None is explained by a missing slot table; every
+record has one. So BioWare's authored data contains orphans and the engine ships with them.
+
+**The split is clean, and the corrected statement is narrower:**
+
+| | orphans |
+|---|---|
+| **engine-written** — 18 party members and `.chr` files, 82 items | **0** |
+| **hand-authored** — the 2,253 shipped creatures | 618 across 220 |
+
+**The engine keeps *its own* tables tight; authored data does not.** So an added item should still
+get a slot word — an item nothing points at is invisible in the inventory screen — but the reason is
+*the player would not see it*, not *the engine would reject it*. And a reader must tolerate orphans,
+because anything that walks the shipped creatures meets 220 records full of them.
 
 #### Modelled 2026-08-12, and three things the prose above did not say
 

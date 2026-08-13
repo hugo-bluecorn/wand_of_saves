@@ -34,7 +34,7 @@ import 'package:infinity_formats/src/text/fixed_field.dart';
 /// ### Why this is a document and not a savegame's by-product
 ///
 /// A `.chr` is a 100-byte header wrapped around a plain `CRE`, and the header
-/// carries **one** pointer. A savegame carries thirty-nine, and adding a single
+/// carries **one** pointer. A savegame carries forty-three, and adding a single
 /// 264-byte effect inside one shifts about 90 KB of file. So a resizing edit —
 /// granting a proficiency, adding an item — is reachable through this format
 /// long before it is safe in place. That is why exporting is a first-class

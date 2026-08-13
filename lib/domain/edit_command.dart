@@ -282,8 +282,9 @@ enum SpellType {
 /// On BG:EE a proficiency is a 264-byte opcode 233 effect, so granting one adds
 /// an entry to the effects section and moves everything after it.
 ///
-/// ⚠️ **A savegame refuses this.** Growing a record inside a save moves 39
-/// pointers; a `.chr` moves one. That is why creation writes a character file.
+/// ⚠️ **A savegame took this from 2026-08-12.** Growing a record inside a save
+/// moves 43 pointers against a `.chr`'s one, which is why creation still writes
+/// a character file — but it is no longer a refusal.
 final class GrantProficiency extends CharacterEditCommand {
   /// Grants [proficiencyId] at [pips] to the creature at [creOffset].
   const GrantProficiency({

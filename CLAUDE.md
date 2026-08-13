@@ -189,10 +189,9 @@ which replaced the shipped UI rather than repairing it.
 `planning/roadmap.md`, which also carries the four workflows.
 
 **The basic workflow is the product, and it works**: open a save or a character file, edit the
-record, write it back. **Next up is inventory** — `planning/inventory-seed.md` is the researched
-brief and `~/.claude/plans/swirling-purring-aho.md` the approved plan. ⚠️ **Inventory has no domain
-model at all**: there is no `ITM` codec, no `CreItemField`, no `Cre.items`, and nothing in the
-package can write the 80-byte item-slot table.
+record, write it back. ✅ **Inventory now works too** — see `planning/inventory-seed.md` for the
+researched brief and `~/.claude/plans/swirling-purring-aho.md` for the plan it was cut from.
+**Next is the inventory screen's redesign**, listed in `docs/findings/known-defects.md`.
 
 > ### 🔷 The UI is the Starfleet Workbench, single column
 >
@@ -217,8 +216,18 @@ package can write the 80-byte item-slot table.
 
 > ### 🔶 Where the last session stopped, 2026-08-12 (evening)
 >
-> **743 app tests, 306 format tests**, `analyze` clean, zero suppressions. The Workbench branch is
-> merged, and **Phase A of the inventory plan — the GAM relocation — is done and uncommitted.**
+> **769 app tests, 374 format tests**, `analyze` clean, zero suppressions. On branch
+> **`feat/inventory-format-layer`**, six commits, tree clean, not pushed.
+>
+> ✅ **Inventory ships**: search an item by name or resref and add it, in a savegame *or* a `.chr`.
+> The GAM relocation, the `ITM` codec, the CRE item and slot layer, the catalogue, `AddItem` and a
+> screen on both editors.
+>
+> ⚠️ **Scope was cut deliberately to ship in a day**: **inventory slots only, add only.** No
+> equipment slots, no remove, no quantity, no armour class. That dropped the plan's Phases E and F
+> entirely.
+>
+> ⚠️ **The engine has never opened one of these files.** Every gate is a byte gate.
 >
 > **The user walked the app with a checklist and reported nine items. Seven are fixed**, one turned
 > out to be correct behaviour, and two are recorded in `docs/findings/known-defects.md` — **read that
@@ -260,7 +269,7 @@ package can write the 80-byte item-slot table.
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 373 tests.
+  one table serves reader and writer and they cannot disagree. 374 tests.
   - **`Cre` resizes**: `withEntryInserted` (insert at an entry index, not only append),
     `withEntryField`, `withEffectVersion` and `readField`. The three spell sections have their own
     field tables and readers; `SplCodec` reads enough of an `SPL` header to list a spellbook.

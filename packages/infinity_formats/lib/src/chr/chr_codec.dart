@@ -125,7 +125,7 @@ abstract final class ChrCodec {
   /// **The safest write this application performs**: it produces a new file and
   /// never touches the savegame. It is also how a *resizing* edit will first
   /// become possible — a `.chr` carries one pointer where a savegame carries
-  /// thirty-nine — so this is a load-bearing path, not a convenience.
+  /// forty-three — so this is a load-bearing path, not a convenience.
   ///
   /// ### Every byte is copied, none is computed
   ///

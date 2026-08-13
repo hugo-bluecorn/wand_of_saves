@@ -470,7 +470,7 @@ final class Cre {
   /// **The first write in this project that changes a record's size**, and the
   /// reason it can exist yet is that the creation flow puts it in a `.chr`: one
   /// length field in a 100-byte header, against a file this app built seconds
-  /// earlier. The same edit inside a savegame moves thirty-nine pointers and is
+  /// earlier. The same edit inside a savegame moves forty-three pointers and is
   /// still Phase 1's work.
   ///
   /// What it does, in order:

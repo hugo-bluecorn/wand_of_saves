@@ -147,6 +147,34 @@ either way. It is the *label* that is uncertain.
 
 ---
 
+## 8 The inventory screen is a list where it should be slots — agreed 2026-08-13
+
+Inventory shipped narrow on purpose, and the user walked the app and named what is missing. **None
+of this is a bug; it is the screen not yet being what it should be.** Recorded so it is not
+rediscovered as a surprise.
+
+| | what it needs |
+|---|---|
+| **Slots, not a list** | Sixteen fixed cells. A list hides that capacity is finite, which is the one thing an inventory has to convey. |
+| **Weight and capacity** | ⚠️ **The table exists**: `strmod.2da` carries a `WEIGHT_ALLOWANCE` column keyed by Strength, and *"Weight Allowance"* is the game's own phrase (strref 10338). Item weight is ITM `0x4c` — measured zero negatives across all 1,530 items, so the unsigned read is safe. |
+| **Item properties in results** | Weight, price, type and description are already loaded by `ItemEntry` and simply not rendered. |
+| **Categories** | `itemType` → `ITEMCAT.IDS`. Swords, bows, helms. |
+| **Two columns** | ⚠️ D15/D17 fixed **single column for the character sheet**, deliberately. The inventory is a different surface — a picker beside a grid — so two columns is not a contradiction, but it must be a **stated** divergence rather than a quiet one. |
+
+### ⚠️ 8b Item pictures need a BAM decoder, and that is its own phase
+
+The user asked for the item's picture in each slot with the name on hover. The icon is a **BAM**
+resref at ITM `0x3a`.
+
+**Portraits are not precedent.** They work because they are plain BMP and `dart:ui` decodes BMP for
+free — no decoder was ever written. **BAM is palettised and RLE-compressed, and no Dart decoder
+exists**; writing one is a new codec on the scale of the CRE work, plus a frame cache.
+
+**Held back deliberately.** The screen is usable without it — names in slots, detail on hover — and
+bundling a format phase into a UI phase is how a day's work becomes a week's.
+
+---
+
 ## 6 Rules the record does not yet enforce
 
 - **A Blade's Lore is half per level.** The walkthrough says so and `lore.2da` has no kit rows, so
