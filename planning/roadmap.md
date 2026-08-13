@@ -71,18 +71,24 @@ Phase 4, when inventory and spells start resizing". **Spells already resize** �
 `MemoriseSpell` and `GrantProficiency` are shipped commands and the creation flow issues all
 three, through a `.chr` where the same edit costs one pointer.
 
-### What is actually left: the GAM relocation
+### ✅ The GAM relocation — **done 2026-08-12**
 
-**One method.** `Gam.withCreature` throws `UnsupportedError`; `Chr.withCreature` does the same job
-for one pointer. It unlocks exactly one thing: **adding an item or a new proficiency to a character
-inside a live save.** Everything else already works, in place or through export.
+`Gam.withCreature` relocates instead of throwing, so **adding an item or a new proficiency to a
+character inside a live save works.** That was the last structural gap; nothing in this project
+is now blocked on a format the codec cannot write.
 
-Cost, measured rather than estimated: **39 pointers, 81–93 KB shifted** — 3 GAM header offsets, the
-`creOffset` of the 0–3 later party members, and the `creOffset` of each of the 33–36 non-party NPCs
-after it. ⚠️ **Nobody had recorded those 36 before**; a relocation that patches only the GAM header
-corrupts the save silently. Two further traps are in
-`docs/findings/verified-format-offsets.md`: `GamHeaderField` covers only five of the GAM's nine
-offset fields, and "absent" is encoded three different ways in that one header.
+Cost, measured by building it rather than estimated: **43 pointers, 95,436 bytes shifted** on
+`000000022-last` — 36 non-party `creOffset` fields, 6 GAM header section offsets, and the owning
+struct's `creLength`.
+
+⚠️ **The figure recorded here was 39, and it was a floor.** It counted only the header offsets
+`GamHeaderField` modelled; the enum stopped at `0x58` and three live section offsets sat past the
+party creature unnamed — familiar info in particular is a real pointer on every save. All four are
+named now, and `GamSection` carries the three encodings of "absent". The corrected table is in
+`docs/findings/verified-format-offsets.md`.
+
+⚠️ **Owed: an in-game load.** Every gate on this is a byte gate. Only BG:EE can answer whether a
+relocated save *opens*, and that trip has not been made.
 
 ## Phase 2 — first useful app · **done 2026-08-07**
 

@@ -18,6 +18,7 @@ import 'package:infinity_formats/src/cre/cre.dart';
 import 'package:infinity_formats/src/cre/effect.dart';
 import 'package:infinity_formats/src/exceptions.dart';
 import 'package:infinity_formats/src/gam/gam_npc.dart';
+import 'package:infinity_formats/src/gam/gam_section.dart';
 import 'package:infinity_formats/src/spec/cre_v1_0.dart';
 import 'package:infinity_formats/src/spec/creature_document.dart';
 import 'package:infinity_formats/src/spec/field_patch.dart';
@@ -180,25 +181,104 @@ final class Gam implements CreatureDocument<Gam> {
   Uint8List creatureAt(int creOffset) =>
       partyMembers.firstWhere((npc) => npc.creOffset == creOffset).creBytes;
 
-  /// **Refused.** A savegame cannot take a resized creature yet.
+  /// A copy of this save carrying [creature] in place of the record at
+  /// [creOffset], relocating everything the change moves.
   ///
-  /// ⚠️ Measured, not guessed: adding one 264-byte effect inside a save
-  /// invalidates **39** pointers and shifts 81–93 KB. The composition, from
-  /// `docs/findings/verified-format-offsets.md`: **3** GAM header offsets, the
-  /// `creOffset` of the **0–3** later *party* members, and the `creOffset` of
-  /// each of the **33–36** non-party NPCs after this one. An earlier version of
-  /// this comment said "the nine GAM header offsets, the `creLength` … and 36
-  /// non-party", which totals 46 and disagreed with the measurement it cited.
+  /// ⚠️ **Measured, not guessed: on the 95,968-byte fixture, growing the
+  /// protagonist moves 43 pointers and shifts 95,436 bytes.** The composition
+  /// is 36 non-party `creOffset` fields, **6** GAM header section offsets, and
+  /// the owning struct's own `creLength`.
   ///
-  /// Until a relocation pass exists this says so rather than writing a file
-  /// that loads and is subtly wrong. The creation flow is unaffected: it writes
-  /// a `.chr`, where the same edit costs one dword.
+  /// ⚠️ **The recorded figure used to be 39**, and it was a floor rather than a
+  /// total: it counted only the header offsets [GamHeaderField] happened to
+  /// name. Three more sit past the party creatures — familiar info, stored
+  /// locations and pocket plane — and the first of those is **live on every
+  /// save examined**. A relocation blind to it corrupts the file silently,
+  /// which is the failure this whole method exists to avoid.
+  ///
+  /// The rule is one line, and [GamSection] carries the exceptions:
+  ///
+  /// > everything at or after `creOffset + oldLength` moves by the size
+  /// > difference, except an offset that is an absence marker.
+  ///
+  /// The three encodings of "absent" are why that needs a table rather than an
+  /// `!= 0` test. Two are skipped; the third — offset equals end-of-file with a
+  /// count of zero — is **not** skipped, and needs no special case: an offset
+  /// equal to the old end of file is at or after any splice, so the ordinary
+  /// shift carries it to the new end of file for free.
+  ///
+  /// ⚠️ **Pointers are enumerated from the OLD buffer and written into the new
+  /// one at their shifted positions.** The non-party struct array itself moves
+  /// when a party creature grows, so reading structs out of the new buffer at
+  /// their old addresses reads the wrong bytes.
+  ///
+  /// Throws [InfinityFormatException] if no character in this save owns a
+  /// record at [creOffset]. A relocation aimed at nothing would otherwise
+  /// splice the buffer at an arbitrary point.
   @override
   Gam withCreature({required int creOffset, required Cre creature}) {
-    throw UnsupportedError(
-      'a savegame cannot take a resized creature yet: growing the record at '
-      '$creOffset would move 39 pointers. Export the character and edit that '
-      'instead.',
+    final owner = _npcOwning(creOffset);
+    final oldLength = owner.creLength;
+    final record = creature.bytes;
+    final delta = record.length - oldLength;
+    final splice = creOffset + oldLength;
+
+    final out = Uint8List(bytes.length + delta)
+      ..setRange(0, creOffset, bytes)
+      ..setRange(creOffset, creOffset + record.length, record)
+      ..setRange(
+        creOffset + record.length,
+        bytes.length + delta,
+        bytes,
+        splice,
+      );
+    // The owning struct's length always changes; its offset never does, since
+    // the record starts before the splice.
+    final view = ByteData.sublistView(out)
+      ..setUint32(
+        _shift(owner.structOffset, splice, delta) +
+            GamNpcField.creLength.offset,
+        record.length,
+        Endian.little,
+      );
+
+    if (delta != 0) {
+      for (final npc in [...partyMembers, ...nonPartyMembers]) {
+        if (npc.creOffset < splice) continue;
+        view.setUint32(
+          _shift(npc.structOffset, splice, delta) +
+              GamNpcField.creOffset.offset,
+          npc.creOffset + delta,
+          Endian.little,
+        );
+      }
+
+      for (final section in GamSection.all) {
+        final where = _u32(section.offsetField);
+        if (section.isAbsent(where) || where < splice) continue;
+        view.setUint32(
+          section.offsetField.offset,
+          where + delta,
+          Endian.little,
+        );
+      }
+    }
+
+    return Gam.trusted(out.asUnmodifiableView());
+  }
+
+  /// Where [position] lands once [delta] bytes are inserted at [splice].
+  static int _shift(int position, int splice, int delta) =>
+      position >= splice ? position + delta : position;
+
+  GamNpc _npcOwning(int creOffset) {
+    for (final npc in [...partyMembers, ...nonPartyMembers]) {
+      if (npc.creOffset == creOffset) return npc;
+    }
+    throw InfinityFormatException.truncated(
+      what: 'no character in this save has a record at $creOffset',
+      expected: creOffset,
+      actual: bytes.length,
     );
   }
 

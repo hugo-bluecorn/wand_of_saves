@@ -65,6 +65,14 @@ enum GamHeaderField implements FormatField {
   /// Main area resref.
   mainArea(0x40, 8),
 
+  /// Absolute offset to the familiar-extra block.
+  ///
+  /// ⚠️ **Absent as `0xFFFFFFFF`, not as `0`.** Every BG1EE fixture holds all
+  /// ones here. A relocation that adds a delta to "any non-zero offset" would
+  /// turn it into `0x1000000B`, which is why `GamSection` exists rather than a
+  /// bare `offset != 0` test.
+  familiarExtraOffset(0x48, 4),
+
   /// Number of journal entries.
   journalCount(0x4c, 4),
 
@@ -75,7 +83,37 @@ enum GamHeaderField implements FormatField {
   reputation(0x54, 4),
 
   /// Current area resref.
-  currentArea(0x58, 8);
+  currentArea(0x58, 8),
+
+  /// Absolute offset to the familiar-info block.
+  ///
+  /// ⚠️ **Live on every save, and it was invisible to this table until
+  /// 2026-08-12.** Measured across all eleven fixtures it is always
+  /// `file length - 400`, sitting after the journal and after every party
+  /// creature — so a creature that grows moves it. The findings' figure of
+  /// "3 GAM header offsets, 39 pointers" counted only the offsets this enum
+  /// modelled; with these four the real figure is **43**.
+  familiarInfoOffset(0x68, 4),
+
+  /// Absolute offset to the stored-location array.
+  ///
+  /// ⚠️ **The third encoding of "absent": offset equals EOF with a count of
+  /// zero.** Every fixture holds exactly its own file length here. That it
+  /// tracks the length across saves of 95,968, 101,352 and 88,280 bytes is
+  /// what says the engine maintains it at EOF — so a writer must move it to
+  /// the *new* EOF rather than leave it or skip it.
+  storedLocationsOffset(0x6c, 4),
+
+  /// Number of stored locations. Zero on every fixture.
+  storedLocationsCount(0x70, 4),
+
+  /// Absolute offset to the pocket-plane location array.
+  ///
+  /// Same EOF-with-zero-count encoding as [storedLocationsOffset].
+  pocketPlaneOffset(0x78, 4),
+
+  /// Number of pocket-plane locations. Zero on every fixture.
+  pocketPlaneCount(0x7c, 4);
 
   const GamHeaderField(this.offset, this.length);
 

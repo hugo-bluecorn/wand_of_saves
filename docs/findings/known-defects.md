@@ -53,23 +53,6 @@ Not a basic-workflow blocker, which is the only reason it is here rather than do
 
 ---
 
-## 3 Resizing edits inside a savegame — the GAM relocation
-
-`Gam.withCreature` throws `UnsupportedError`. It is the single thing standing between the app and
-**adding an item, or granting a proficiency the character does not already have, in a live save.**
-
-Measured: **39 pointers, 81–93 KB shifted** — 3 GAM header offsets, the `creOffset` of the 0–3 later
-party members, and the `creOffset` of each of the 33–36 non-party NPCs after it. ⚠️ Those 36 were
-unrecorded until 2026-08-09; a relocation patching only the GAM header corrupts the save silently.
-
-Everything else already works: fixed-width edits in place (engine-confirmed twice), and resizing
-edits through export, where the same change costs one pointer.
-
-**Consequence visible in the UI today:** the Proficiencies panel marks a proficiency the record has
-no effect for as not editable, and says why. That is honest, not a bug — but it is a limit.
-
----
-
 ## 3b The first row of the sheet looks greyed when the screen opens
 
 `Focus(autofocus: true)` in `character_screen.dart` wraps the scrolling body so `Ctrl+K` reaches the
@@ -168,6 +151,27 @@ app is right to preserve the byte and right to say nothing about it.
   the shared demo data broke the merge that was that spike's clearest claim — 13 fields becoming 11
   rows, with `Lore` appearing once. The published captures stand as history; the code did not.
   Recorded so nobody rediscovers it as a bug.
+
+---
+
+## Fixed since — entry 3, the GAM relocation
+
+⚠️ **Closed 2026-08-12 by building it.** `Gam.withCreature` relocates rather than throwing, so
+**adding an item or granting a proficiency now works inside a live savegame**, not only through
+export. It was the last structural gap in the project.
+
+The entry's own figure was wrong and the fix is what found it: **43 pointers, not 39.** The
+recorded number counted only the header offsets the layout table modelled, and three live section
+offsets — familiar info, stored locations, pocket plane — sat past the party creature unnamed.
+`creLength` is the forty-third. See `verified-format-offsets.md` §"What adding a proficiency
+actually costs" for the corrected table and the three encodings of "absent".
+
+⚠️ **Two tests inverted rather than being deleted**, and that is deliberate: `save_editor_test.dart`
+asserted that a savegame *refuses* a resizing edit. The refusal was the defect, so the assertions
+that guarded the limitation now prove it gone.
+
+⚠️ **Still owed: the engine has not seen one of these files.** Every gate here is a byte gate.
+Only BG:EE can answer whether a relocated save *loads*, and that trip has not been made.
 
 ---
 

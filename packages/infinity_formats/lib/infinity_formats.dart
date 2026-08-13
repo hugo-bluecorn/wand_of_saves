@@ -30,6 +30,7 @@ export 'src/exceptions.dart';
 export 'src/gam/gam.dart';
 export 'src/gam/gam_codec.dart';
 export 'src/gam/gam_npc.dart';
+export 'src/gam/gam_section.dart';
 export 'src/io/atomic_file.dart';
 export 'src/resource/bif_archive.dart';
 export 'src/resource/key_index.dart';

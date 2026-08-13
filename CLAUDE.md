@@ -184,13 +184,15 @@ slices), the creation flow (steps A–F) and **authored-and-derived** (six slice
 a created character's numbers the ones the engine would have written) — plus the Starfleet Workbench,
 which replaced the shipped UI rather than repairing it.
 
-⚠️ **"Phase 1" is retired as a phase**, not deferred: three of its four bullets had shipped and its
-gate was superseded. What is left is one method, `Gam.withCreature`. See `planning/roadmap.md`, which
-also carries the four workflows.
+✅ **"Phase 1" is finished, and so is the last structural gap.** `Gam.withCreature` relocates
+(2026-08-12), so **a resizing edit works inside a live savegame** and not only through export. See
+`planning/roadmap.md`, which also carries the four workflows.
 
 **The basic workflow is the product, and it works**: open a save or a character file, edit the
-record, write it back. **Next up is spells and inventory** — both need reading first, and inventory
-has no domain model at all.
+record, write it back. **Next up is inventory** — `planning/inventory-seed.md` is the researched
+brief and `~/.claude/plans/swirling-purring-aho.md` the approved plan. ⚠️ **Inventory has no domain
+model at all**: there is no `ITM` codec, no `CreItemField`, no `Cre.items`, and nothing in the
+package can write the 80-byte item-slot table.
 
 > ### 🔷 The UI is the Starfleet Workbench, single column
 >
@@ -215,8 +217,8 @@ has no domain model at all.
 
 > ### 🔶 Where the last session stopped, 2026-08-12 (evening)
 >
-> **`main` is clean and green — 743 app tests, 287 format tests**, `analyze` clean, zero
-> suppressions. The Workbench branch is merged.
+> **743 app tests, 306 format tests**, `analyze` clean, zero suppressions. The Workbench branch is
+> merged, and **Phase A of the inventory plan — the GAM relocation — is done and uncommitted.**
 >
 > **The user walked the app with a checklist and reported nine items. Seven are fixed**, one turned
 > out to be correct behaviour, and two are recorded in `docs/findings/known-defects.md` — **read that
@@ -258,10 +260,12 @@ has no domain model at all.
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 287 tests.
+  one table serves reader and writer and they cannot disagree. 306 tests.
   - **`Cre` resizes**: `withEntryInserted` (insert at an entry index, not only append),
     `withEntryField`, `withEffectVersion` and `readField`. The three spell sections have their own
     field tables and readers; `SplCodec` reads enough of an `SPL` header to list a spellbook.
+  - **`Gam` relocates** — `withCreature` shifts the 43 pointers a resized record moves.
+    `GamSection` names all nine header sections and the three encodings of "absent".
   - **The whole character sheet reads**: saving throws, resistances, thief skills, attacks,
     armour class modifiers, morale, fatigue, luck. Homogeneous groups come back as **records**.
   - **`Effect`** — enough of the 264-byte v2 record to find proficiencies, which on BG:EE are
@@ -433,33 +437,35 @@ rather than recomputing it from equipment, equipping an item will not update arm
 itself. EE Keeper's "Recalculate Stats" is therefore **required**, not the optional parity feature
 the roadmap files it as.
 
-### What is left of "Phase 1", which is one method
-
-⚠️ **Retired as a phase on 2026-08-12** — three of its four bullets had shipped and its gate was
-superseded, so keeping it on the board made a solved problem look untouched and an unsolved one look
-bigger than it is. `planning/roadmap.md` has the audit.
+### ✅ "Phase 1" is finished — the GAM relocation shipped 2026-08-12
 
 **Shipped:** the CRE-internal layout pass (`Cre.withEntryInserted` creates an absent section, splices
 an entry, raises its count, shifts every sibling offset and relocates the item-slot table), original-
-byte retention, and atomic write with a `.bak`. **Superseded:** the round-trip gate, because byte
-identity on an *unedited* file proves nothing — `return input` passes it. The gate that shipped is
-*exactly N bytes differ*.
+byte retention, atomic write with a `.bak`, and now **`Gam.withCreature`**. **Superseded:** the
+round-trip gate, because byte identity on an *unedited* file proves nothing — `return input` passes
+it. The gate that shipped is *exactly N pointers differ*.
 
-⚠️ **And its premise was false.** It claimed the layout pass "becomes unavoidable at Phase 4, when
-inventory and spells start resizing". **Spells already resize** — `LearnSpell`, `MemoriseSpell` and
-`GrantProficiency` all ship, through a `.chr` where the same edit costs one pointer.
+⚠️ **Its premise was false too.** It claimed the layout pass "becomes unavoidable at Phase 4, when
+inventory and spells start resizing". **Spells already resized** through a `.chr`, where the same
+edit costs one pointer.
 
-**What remains is `Gam.withCreature`**, which throws. It unlocks exactly one thing: adding an item or
-a new proficiency to a character **inside a live save**. Cost measured: **39 pointers, 81–93 KB** — 3
-GAM header offsets, the `creOffset` of the 0–3 later party members, and each of the 33–36 non-party
-NPCs after it. ⚠️ Those 36 went unrecorded until 2026-08-09; a relocation patching only the header
-corrupts the save silently. Two more traps, both in
-`docs/findings/verified-format-offsets.md`:
+⚠️ **The recorded cost was wrong, and building it is what found that.** This file said **39
+pointers**; it is **43** — 36 non-party `creOffset` fields, **6** GAM header section offsets, and the
+owning struct's `creLength`. Measured on `000000022-last`: the protagonist sits at 532, runs 6,780
+bytes, and growing it shifts 95,436. The old figure counted only the header offsets `GamHeaderField`
+happened to model, and the enum stopped at `0x58`.
 
-- **`GamHeaderField` records five of the GAM's nine offset fields.** A layout pass that relocates
-  data without patching all nine corrupts the save silently.
-- **"Absent" is encoded three different ways** in that one header — `0`, `0xFFFFFFFF`, and
-  *offset-equals-EOF with count 0*. The `offset != 0` rule used elsewhere is not sufficient there.
+**Now named, and all four were missing:** `familiarExtraOffset` `0x48`, `familiarInfoOffset` `0x68`,
+`storedLocationsOffset` `0x6c`, `pocketPlaneOffset` `0x78`. ⚠️ **`0x68` is live on every save** —
+always file length − 400 — so a relocation blind to it corrupts silently.
+
+**"Absent" is encoded three different ways** in that one header, and `GamSection` is where that now
+lives — `0` and `0xFFFFFFFF` are skipped; **offset-equals-EOF-with-count-0 is not**, because the
+engine keeps those at the end of the file. It needs no special case: an offset equal to the old EOF
+is past any splice, so the ordinary shift carries it to the new EOF for free.
+
+⚠️ **Owed: an in-game load.** Every gate on the relocation is a byte gate. Only BG:EE can answer
+whether a relocated save *opens*, and that trip has not been made.
 
 The read-path spike that started this project was **deleted** on 2026-08-08 once all four of its
 recorded bugs were answered and everything it did lived in tested code. It is in git history.

@@ -835,15 +835,56 @@ record. Measured on both saves:
 
 | | in a savegame | in a `.chr` |
 |---|---|---|
-| GAM header offsets | 3 | — |
+| GAM header offsets | **6** | — |
 | later party `creOffset`s | 0–3 | — |
 | **non-party `creOffset`s** | **33–36** | — |
+| the owning struct's `creLength` | 1 | — |
 | CHR header length field | — | 1 |
-| **total pointers to patch** | **39** | **1** |
-| bytes shifted | 81–93 KB | 0 |
+| **total pointers to patch** | **43** | **1** |
+| bytes shifted | 81–95 KB | 0 |
 
-⚠️ **36 of those 39 are the `creOffset` embedded in each non-party NPC struct.** No earlier note
+⚠️ **36 of those 43 are the `creOffset` embedded in each non-party NPC struct.** No earlier note
 mentioned them; a layout pass that patches only the GAM header corrupts the save silently.
+
+⚠️ **This table said 39 until 2026-08-12, and that was a floor rather than a total.** It counted
+only the header offsets `GamHeaderField` happened to *model* — the enum stopped at `0x58`. Three
+more section offsets sit past the party creature, and `creLength` is a fourth pointer nobody
+counted. Corrected by building the relocation and measuring what it patches: on
+`000000022-last` the protagonist sits at **532**, runs **6,780** bytes, and growing it patches
+**exactly 43** dwords and shifts **95,436** bytes. `gam_relocation_fixture_test.dart` asserts the
+number and names every field.
+
+**The four header fields that were missing**, read off IESDP's GAM V2.0 page and confirmed across
+all eleven fixtures:
+
+| field | offset | what every fixture holds |
+|---|---|---|
+| Offset to Familiar Extra | `0x48` | `0xFFFFFFFF` |
+| Offset to familiar info | `0x68` | ⚠️ **live** — always file length − 400 |
+| Offset to stored locations | `0x6c` | == EOF, count `0` |
+| Offset to pocket plane locations | `0x78` | == EOF, count `0` |
+
+⚠️ **`0x68` is the dangerous one**: it is a real pointer, it sits after every party creature, and a
+relocation blind to it leaves it 20 bytes inside the file with nothing to say so.
+
+#### The three encodings of "absent", and the one that must still move
+
+All three appear in a single real save, which is why `offset != 0` is not sufficient here:
+
+| encoding | field | on relocation |
+|---|---|---|
+| `0` | `partyInventoryOffset` | leave alone |
+| `0xFFFFFFFF` | `familiarExtraOffset` | leave alone |
+| **== EOF with count `0`** | `storedLocations`, `pocketPlane` | ⚠️ **patch to the NEW EOF** |
+
+The third is settled by measurement rather than reasoning: across three saves of **different**
+lengths — 95,968 / 101,352 / 88,280 — both fields equal the file length every time, so the engine
+maintains them at the end of the file.
+
+**And it needs no special case, which is the useful part.** An offset equal to the old end of file
+is at or after any splice, so the ordinary "shift everything past the splice" rule carries it to the
+new end of file for free. Only the two sentinels need excluding, and `GamSection` is where that
+lives.
 
 **The engine performs this resize constantly.** Aurel's record was **1,908 bytes** at
 `000000007-Prologue Start` and **6,924** by `000000101-Aurel Start`: the prologue attached 19

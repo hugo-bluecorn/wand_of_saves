@@ -824,25 +824,33 @@ void main() {
       );
     });
 
-    test('⚠️ a savegame refuses to memorise, for the same reason', () {
-      // Every resizing command shares one refusal, and each is stated rather
-      // than assumed: `withCreature` is where a `Gam` says no, and a command
-      // that reached the section splice would already have moved bytes.
+    test('⚠️ a savegame now MEMORISES, and grows to fit', () {
+      // **This test used to assert the opposite**, and the inversion is the
+      // point of the GAM relocation rather than an accident of refactoring:
+      // `Gam.withCreature` threw, so every resizing command shared one refusal.
+      // It now relocates — 43 pointers on the real fixture — so the assertion
+      // that guarded the limitation becomes the assertion that proves it gone.
       final gam = openSave();
+      final before = gam.bytes.length;
+
+      final after = applyEdit(
+        gam,
+        MemoriseSpell(
+          creOffset: creOffsetOf(gam),
+          resref: 'SPWI112',
+          level: 1,
+          type: SpellType.wizard,
+          memorisable: 1,
+        ),
+      );
 
       expect(
-        () => applyEdit(
-          gam,
-          MemoriseSpell(
-            creOffset: creOffsetOf(gam),
-            resref: 'SPWI112',
-            level: 1,
-            type: SpellType.wizard,
-            memorisable: 1,
-          ),
-        ),
-        throwsA(isA<UnsupportedError>()),
+        after.bytes.length,
+        greaterThan(before),
+        reason: 'memorising adds a row and a spell, so the file grows',
       );
+      // What the refusal was really protecting: a save that still parses.
+      expect(after.partyMembers, hasLength(gam.partyMembers.length));
     });
 
     test('says what it did, naming the spell', () {
@@ -859,10 +867,12 @@ void main() {
     });
 
     test(
-      '⚠️ a savegame refuses a resizing edit rather than corrupting itself',
+      '⚠️ a savegame takes a resizing edit and relocates around it',
       () {
-        // Adding one effect inside a save moves 39 pointers. Until Phase 1's
-        // layout pass exists, saying so is the only safe answer.
+        // The other half of the same inversion. Adding one 264-byte effect
+        // inside a save moves 43 pointers — measured, and three of them were
+        // invisible to the codec until the header table named them. The
+        // refusal this test used to assert was honest while that was true.
         final gam = openSave();
 
         expect(
@@ -877,17 +887,25 @@ void main() {
           returnsNormally,
           reason: 'a fixed-width edit is still fine',
         );
-        expect(
-          () => applyEdit(
-            gam,
-            GrantProficiency(
-              creOffset: creOffsetOf(gam),
-              proficiencyId: 89,
-              pips: 1,
-            ),
+
+        final grown = applyEdit(
+          gam,
+          GrantProficiency(
+            creOffset: creOffsetOf(gam),
+            proficiencyId: 89,
+            pips: 1,
           ),
-          throwsA(isA<UnsupportedError>()),
         );
+
+        expect(
+          grown.bytes.length,
+          gam.bytes.length + creEffectV2Length,
+          reason: 'the file grows by exactly one effect record',
+        );
+        // Every character is still where the header says, which is the thing
+        // a silently-wrong relocation would break.
+        expect(grown.partyMembers, hasLength(gam.partyMembers.length));
+        expect(grown.nonPartyMembers, hasLength(gam.nonPartyMembers.length));
       },
     );
   });
