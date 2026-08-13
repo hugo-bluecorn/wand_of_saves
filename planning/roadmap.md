@@ -87,8 +87,11 @@ party creature unnamed — familiar info in particular is a real pointer on ever
 named now, and `GamSection` carries the three encodings of "absent". The corrected table is in
 `docs/findings/verified-format-offsets.md`.
 
-⚠️ **Owed: an in-game load.** Every gate on this is a byte gate. Only BG:EE can answer whether a
-relocated save *opens*, and that trip has not been made.
+✅ **The in-game load happened on 2026-08-13, and it passed.** BG:EE opened a six-member save this
+app had resized — `SCRL75` added to Xzar, fourth in the array — with the party intact and the item in
+his pack. Jaheira and Khalid moved 20 bytes each, the three members before him did not move, and six
+header sections shifted correctly including the two parked at the old EOF. Details in `CLAUDE.md`
+§"The engine opened a relocated save".
 
 ## Phase 2 — first useful app · **done 2026-08-07**
 

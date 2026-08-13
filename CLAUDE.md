@@ -227,7 +227,9 @@ researched brief and `~/.claude/plans/swirling-purring-aho.md` for the plan it w
 > equipment slots, no remove, no quantity, no armour class. That dropped the plan's Phases E and F
 > entirely.
 >
-> ⚠️ **The engine has never opened one of these files.** Every gate is a byte gate.
+> ✅ **The engine has now opened one.** On 2026-08-13 BG:EE loaded a six-member save this app had
+> resized, with the party intact and the added item in the right pack slot — see §"The engine opened
+> a relocated save". Before that, every gate was a byte gate.
 >
 > **The user walked the app with a checklist and reported nine items. Seven are fixed**, one turned
 > out to be correct behaviour, and two are recorded in `docs/findings/known-defects.md` — **read that
@@ -481,8 +483,26 @@ lives — `0` and `0xFFFFFFFF` are skipped; **offset-equals-EOF-with-count-0 is 
 engine keeps those at the end of the file. It needs no special case: an offset equal to the old EOF
 is past any splice, so the ordinary shift carries it to the new EOF for free.
 
-⚠️ **Owed: an in-game load.** Every gate on the relocation is a byte gate. Only BG:EE can answer
-whether a relocated save *opens*, and that trip has not been made.
+### ✅ The engine opened a relocated save — 2026-08-13
+
+**The trip was made and the relocation passed.** `000000023-Conan Inventory Move`, a **six-member**
+party, had `SCRL75` added to **Xzar** — fourth in the array, so his growth moves the two records
+after him as well as the header sections. BG:EE **loaded it, drew all six party members, and showed
+the scroll in his pack.**
+
+The write was byte-exact: 107,588 → 107,608, one 20-byte entry. Xzar `len 2868 → 2888`; **Jaheira
+`18728 → 18748` and Khalid `21856 → 21876`, and nobody before Xzar moved at all.** Six header
+sections shifted by exactly 20 — `nonPartyNpcs`, `globals`, `journal`, `familiarInfo`,
+`storedLocations`, `pocketPlane`.
+
+⚠️ **Both hazardous encodings were live in this file and both survived.** `familiarInfo` sat at
+file-length − 400 before and still does after. `storedLocations` and `pocketPlane` were both parked
+at the **old EOF** — the third encoding of "absent", the one that must *not* be skipped — and the
+ordinary shift carried them to the new EOF exactly as predicted.
+
+⚠️ **What this does not cover.** The engine was not asked to *re-save*, so nothing rules out a field
+it silently corrects rather than rejects. A load-then-save would give a byte diff and is the cheapest
+remaining strengthening.
 
 The read-path spike that started this project was **deleted** on 2026-08-08 once all four of its
 recorded bugs were answered and everything it did lived in tested code. It is in git history.

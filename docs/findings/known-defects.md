@@ -218,8 +218,15 @@ actually costs" for the corrected table and the three encodings of "absent".
 asserted that a savegame *refuses* a resizing edit. The refusal was the defect, so the assertions
 that guarded the limitation now prove it gone.
 
-⚠️ **Still owed: the engine has not seen one of these files.** Every gate here is a byte gate.
-Only BG:EE can answer whether a relocated save *loads*, and that trip has not been made.
+✅ **Closed 2026-08-13 — the engine has now seen one, and accepted it.** BG:EE loaded
+`000000023-Conan Inventory Move` after this app added `SCRL75` to Xzar, the fourth of six party
+members: the save opened, all six members were there, and the scroll was in his pack. The write
+moved Jaheira and Khalid by exactly 20 bytes each and left the three members before him untouched,
+and both hazardous header encodings — `familiarInfo` at file-length − 400, and two sections parked at
+the old EOF — came through correctly.
+
+⚠️ **Residual, and much smaller:** the engine was not asked to *re-save*, so a field it silently
+corrects rather than rejects would still be invisible. A load-then-save gives a byte diff.
 
 ---
 

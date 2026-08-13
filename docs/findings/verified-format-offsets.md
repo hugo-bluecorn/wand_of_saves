@@ -2030,3 +2030,48 @@ own words, and `creation_view.dart` already draws it.
 It is **prose**: display it and cross-check against it; never parse it into a lookup. And note what
 that means — our creation screen has been printing *"May only become Proficient (one slot) in any
 weapon class"* directly above a control that offers two.
+
+## ✅ The engine opened a relocated save — 2026-08-13
+
+**The gate this project had never passed.** Every check on `Gam.withCreature` was a byte gate: exactly
+N pointers differ, and here they are by name. Whether BG:EE would *load* the result was unknown, and
+only the engine could answer it.
+
+**The run.** `000000023-Conan Inventory Move` — a **six-member** party — opened in this app, `SCRL75`
+added to **Xzar**, saved, then loaded in BG:EE. ⚠️ **Xzar is fourth in the array deliberately**: a
+resize of the protagonist only ever shifts things downstream of him, which is the easy half. Growing
+a middle member moves the records *after* him as well as the header sections.
+
+**The engine loaded it, drew all six party members, and showed the scroll in Xzar's pack.**
+
+### What the write actually did
+
+107,588 → **107,608 bytes**, one 20-byte entry.
+
+| member | before | after |
+|---|---|---|
+| Conan, Imoen, Montaron | `@2292`, `@9320`, `@12812` | **unmoved** |
+| **Xzar** | `@15860` len 2868, 8 items | `@15860` len **2888**, **9** items, `SCRL75` in `pack7` |
+| Jaheira | `@18728` | **`@18748`** |
+| Khalid | `@21856` | **`@21876`** |
+
+Six header sections shifted by exactly 20 — `nonPartyNpcs` 24880, `globals` 102364, `journal` 106984,
+`familiarInfo` 107188, `storedLocations` and `pocketPlane` both 107588.
+
+### ⚠️ Both hazardous encodings were live in this file, and both survived
+
+- **`familiarInfo` sat at file-length − 400** before (107,588 − 400 = 107,188) and still does after
+  (107,608 − 400 = 107,208). This is the offset the old 39-pointer count missed entirely, and it is
+  live on every save — a relocation blind to it corrupts silently.
+- **`storedLocations` and `pocketPlane` were both parked at the old EOF**, which is the third
+  encoding of "absent" and the one that must *not* be skipped. The ordinary shift carried them to the
+  new EOF, exactly as `GamSection` predicts and with no special case.
+
+### ⚠️ What this does NOT establish
+
+The engine was asked to *load*, not to *re-save*. A field it silently **corrects** rather than
+rejects would be invisible to this run — the save opening proves acceptance, not equivalence. A
+load-then-save inside the game yields a byte diff and is the cheapest remaining strengthening.
+
+Nor does it say anything about the **out-of-order items array** the append bug used to produce: that
+record shape was never taken into the engine, and the fix means the app no longer creates one.
