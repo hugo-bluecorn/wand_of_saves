@@ -48,6 +48,9 @@ Future<void> pump(
   WidgetTester tester, {
   required Character character,
   required void Function(String, CreItemSlot) onAdd,
+  bool isDirty = false,
+  VoidCallback? onSave,
+  Widget? rail,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -55,7 +58,13 @@ Future<void> pump(
         itemCatalogueProvider.overrideWith((ref) async => _catalogue),
       ],
       child: MaterialApp(
-        home: InventoryScreen(character: () => character, onAdd: onAdd),
+        home: InventoryScreen(
+          character: () => character,
+          onAdd: onAdd,
+          isDirty: isDirty,
+          onSave: onSave,
+          rail: rail,
+        ),
       ),
     ),
   );
@@ -177,5 +186,84 @@ void main() {
     await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
     expect(find.text('By name'), findsNothing);
     expect(find.text('Found nothing'), findsNothing);
+  });
+
+  group('the editor shell, supplied by the caller', () {
+    testWidgets('no Save button when the caller supplies none', (tester) async {
+      // The shape a character file gets today, and it must keep working: this
+      // screen serves both documents and neither is the less capable surface.
+      await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
+      expect(find.widgetWithText(FilledButton, 'Save'), findsNothing);
+    });
+
+    testWidgets('Save is drawn but disabled while nothing is dirty', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const []),
+        onAdd: (_, _) {},
+        onSave: () {},
+      );
+      final button = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Save'),
+      );
+      expect(button.onPressed, isNull, reason: 'nothing to save yet');
+    });
+
+    testWidgets('Save saves once when there are edits', (tester) async {
+      var saved = 0;
+      await pump(
+        tester,
+        character: characterWith(const []),
+        onAdd: (_, _) {},
+        isDirty: true,
+        onSave: () => saved++,
+      );
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(saved, 1);
+    });
+
+    testWidgets('the title marks unsaved edits, as both editors do', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const []),
+        onAdd: (_, _) {},
+        isDirty: true,
+        onSave: () {},
+      );
+      expect(find.textContaining('\u2022'), findsOneWidget);
+    });
+
+    testWidgets('no rail when the caller supplies none', (tester) async {
+      // ⚠️ A character file has NO party, so there is nothing for a rail to
+      // show. A one-member rail there would be decoration.
+      await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
+      expect(find.byKey(const Key('inventory-rail')), findsNothing);
+    });
+
+    testWidgets('the rail is drawn beside the inventory when supplied', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const []),
+        onAdd: (_, _) {},
+        rail: const SizedBox(
+          key: Key('inventory-rail'),
+          width: 80,
+          child: Text('Imoen'),
+        ),
+      );
+      expect(find.byKey(const Key('inventory-rail')), findsOneWidget);
+      expect(find.text('Imoen'), findsOneWidget);
+      // Still the inventory, not a rail that replaced it.
+      expect(find.textContaining('Inventory'), findsWidgets);
+    });
   });
 }

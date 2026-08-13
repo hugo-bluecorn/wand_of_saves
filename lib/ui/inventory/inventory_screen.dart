@@ -20,6 +20,7 @@ import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/ui/core/panel_card.dart';
+import 'package:wand_of_saves/ui/core/save_button.dart';
 import 'package:wand_of_saves/ui/core/tag.dart';
 
 /// A character's inventory: what they carry, and a search that adds to it.
@@ -36,6 +37,9 @@ class InventoryScreen extends ConsumerStatefulWidget {
   const InventoryScreen({
     required this.character,
     required this.onAdd,
+    this.isDirty = false,
+    this.onSave,
+    this.rail,
     super.key,
   });
 
@@ -50,6 +54,23 @@ class InventoryScreen extends ConsumerStatefulWidget {
 
   /// Called with the resref and the slot to put it in.
   final void Function(String resref, CreItemSlot slot) onAdd;
+
+  /// Whether the document has edits it has not written yet.
+  final bool isDirty;
+
+  /// Writes the document, or `null` to leave this surface without a Save.
+  ///
+  /// ⚠️ **Supplied, not reached for.** The two documents have different view
+  /// models, and this screen serves both — see [character] for the same reason.
+  final VoidCallback? onSave;
+
+  /// The party, drawn down the left-hand side.
+  ///
+  /// ⚠️ **Null for an exported character, and that is a decision.** A `.chr` is
+  /// one character with no party, so there is nothing for a rail to show; a
+  /// one-member rail would be decoration, and a control that does nothing is a
+  /// defect in this application rather than a nicety.
+  final Widget? rail;
 
   @override
   ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
@@ -92,40 +113,66 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '${widget.character().name} · Inventory'
+          // The same marker both editors put beside the document's name.
+          '${widget.isDirty ? ' •' : ''}',
+        ),
+        actions: [
+          if (widget.onSave != null) ...[
+            SaveButton(isDirty: widget.isDirty, onSave: widget.onSave),
+            const SizedBox(width: 12),
+          ],
+        ],
+      ),
+      // ⚠️ **The same shape the character sheet uses**, so the two read as one
+      // editor rather than two screens: rail, divider, then the content.
+      body: Row(
+        children: [
+          if (widget.rail case final Widget rail) ...[
+            rail,
+            const VerticalDivider(width: 1),
+          ],
+          Expanded(child: _body(context)),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context) {
     final catalogue =
         ref.watch(itemCatalogueProvider).value ?? ItemCatalogue.empty;
     final free = _firstFreePack;
     final results = catalogue.search(_query.text);
 
-    return Scaffold(
-      appBar: AppBar(title: Text('${widget.character().name} · Inventory')),
-      body: Scrollbar(
-        child: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 900),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  spacing: 20,
-                  children: [
-                    _Search(
-                      controller: _query,
-                      onChanged: () => setState(() {}),
-                      enabled: free != null,
+    return Scrollbar(
+      child: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 20,
+                children: [
+                  _Search(
+                    controller: _query,
+                    onChanged: () => setState(() {}),
+                    enabled: free != null,
+                  ),
+                  if (free == null)
+                    Text(
+                      'The inventory is full. Nothing can be added until '
+                      'something is taken out in game.',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    if (free == null)
-                      Text(
-                        'The inventory is full. Nothing can be added until '
-                        'something is taken out in game.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    if (_query.text.trim().isNotEmpty)
-                      _Results(results: results, onAdd: _add),
-                    _Carried(items: _items),
-                  ],
-                ),
+                  if (_query.text.trim().isNotEmpty)
+                    _Results(results: results, onAdd: _add),
+                  _Carried(items: _items),
+                ],
               ),
             ),
           ),

@@ -136,4 +136,38 @@ void main() {
     expectRailRendered(1);
     expect(tester.takeException(), isNull);
   });
+
+  group('the inventory carries the editor shell with it', () {
+    /// Opens the inventory from the app bar.
+    Future<void> openInventory(WidgetTester tester) async {
+      await tester.tap(find.byTooltip('Inventory'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('it shows the whole party and a Save button', (tester) async {
+      await open(tester, size: 6, height: 700);
+      await openInventory(tester);
+
+      expect(find.textContaining('· Inventory'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
+      expectRailRendered(6);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('⚠️ selecting another member switches whose inventory it is', (
+      tester,
+    ) async {
+      // The behaviour that makes the rail worth putting there rather than
+      // being decoration: a control that does nothing is a defect here.
+      await open(tester, size: 6, height: 700);
+      await openInventory(tester);
+      expect(find.text('Member 0 · Inventory'), findsOneWidget);
+
+      await tester.tap(find.text('Member 3'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Member 3 · Inventory'), findsOneWidget);
+      expect(find.text('Member 0 · Inventory'), findsNothing);
+    });
+  });
 }

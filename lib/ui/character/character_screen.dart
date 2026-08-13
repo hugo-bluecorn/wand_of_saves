@@ -25,11 +25,12 @@ import 'package:wand_of_saves/ui/character/character_sheet_view.dart';
 import 'package:wand_of_saves/ui/character/command_palette.dart';
 import 'package:wand_of_saves/ui/character/findings.dart';
 import 'package:wand_of_saves/ui/character/findings_badge.dart';
-import 'package:wand_of_saves/ui/character/portrait_tile.dart';
+import 'package:wand_of_saves/ui/character/portrait_rail.dart';
 import 'package:wand_of_saves/ui/character/rules_toggle.dart';
 import 'package:wand_of_saves/ui/character/sheet_projection.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
 import 'package:wand_of_saves/ui/character/side_sheet.dart';
+import 'package:wand_of_saves/ui/core/save_button.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 import 'package:wand_of_saves/ui/party/export_button.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
@@ -164,11 +165,13 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
     MaterialPageRoute<void>(
       builder: (_) => Consumer(
         builder: (context, ref, _) {
-          final selected = ref
+          final state = ref
               .watch(partyProvider(widget.slotDirectoryName))
-              .value
-              ?.selected;
-          if (selected == null) return const SizedBox.shrink();
+              .value;
+          final selected = state?.selected;
+          if (state == null || selected == null) {
+            return const SizedBox.shrink();
+          }
           return InventoryScreen(
             character: () =>
                 ref
@@ -177,6 +180,18 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
                     ?.selected ??
                 selected,
             onAdd: _addItem,
+            isDirty: state.isDirty,
+            onSave: ref
+                .read(partyProvider(widget.slotDirectoryName).notifier)
+                .save,
+            // ⚠️ **Selecting here switches the inventory, and that is the
+            // point.** `character` above re-reads `selected` on every build, so
+            // the rail needs no wiring of its own — a rail that only decorated
+            // would be a control that does nothing.
+            rail: PortraitRail(
+              state: state,
+              slotDirectoryName: widget.slotDirectoryName,
+            ),
           );
         },
       ),
@@ -281,10 +296,9 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
               tooltip: 'Redo',
             ),
             const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: (state?.isDirty ?? false) ? notifier.save : null,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save'),
+            SaveButton(
+              isDirty: state?.isDirty ?? false,
+              onSave: notifier.save,
             ),
             const SizedBox(width: 12),
           ],
@@ -294,7 +308,7 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
               ? const _EmptyParty()
               : Row(
                   children: [
-                    _PortraitRail(
+                    PortraitRail(
                       state: state,
                       slotDirectoryName: widget.slotDirectoryName,
                     ),
@@ -405,65 +419,6 @@ class _Body extends StatelessWidget {
 ///
 /// A `NavigationRail` rather than a hand-rolled column: it brings selection
 /// semantics, keyboard traversal and the right sizes with it.
-class _PortraitRail extends ConsumerWidget {
-  const _PortraitRail({required this.state, required this.slotDirectoryName});
-
-  final PartyState state;
-  final String slotDirectoryName;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return NavigationRail(
-      selectedIndex: state.selectedIndex,
-      onDestinationSelected: ref
-          .read(partyProvider(slotDirectoryName).notifier)
-          .select,
-      labelType: NavigationRailLabelType.all,
-      minWidth: PortraitTile.width + 32,
-      groupAlignment: -1,
-      // ⚠️ **A full party of six does not fit an ordinary window**, and the
-      // default is `false` — the destinations sit in a bare `Column` and paint
-      // past the bottom. Six is the size the game allows; every fixture before
-      // Conan had one member or four, which is why this survived until now.
-      // The framework wraps them in a `SingleChildScrollView` itself, so this
-      // is a property rather than a hand-rolled scroll view.
-      scrollable: true,
-      indicatorShape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(10)),
-      ),
-      destinations: [
-        for (final member in state.members)
-          NavigationRailDestination(
-            // ⚠️ **`portraitBaseName`, never `PORTRT<n>`.** The first is the
-            // resref the record itself names; the second is a file beside the
-            // save holding a stale snapshot the engine drew, kept only as an
-            // oracle. Passing the filename here resolved nothing and drew a
-            // generic icon for every member.
-            icon: PortraitTile(baseName: member.portraitBaseName),
-            // ⚠️ **Not decoration.** A portrait is opaque and fills the rail's
-            // M3 indicator exactly, hiding it — so selection had no visible
-            // effect at all until the frame moved onto the portrait itself.
-            selectedIcon: PortraitTile(
-              baseName: member.portraitBaseName,
-              selected: true,
-            ),
-            label: SizedBox(
-              // ⚠️ A floor with no ceiling let one long name widen the rail
-              // and move every figure downstream of it.
-              width: 92,
-              child: Text(
-                member.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 class _EmptyParty extends StatelessWidget {
   const _EmptyParty();
 

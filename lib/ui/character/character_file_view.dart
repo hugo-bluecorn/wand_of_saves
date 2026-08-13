@@ -27,6 +27,7 @@ import 'package:wand_of_saves/ui/character/rules_toggle.dart';
 import 'package:wand_of_saves/ui/character/sheet_projection.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
 import 'package:wand_of_saves/ui/character/side_sheet.dart';
+import 'package:wand_of_saves/ui/core/save_button.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 
 /// The editor for one exported character.
@@ -201,22 +202,35 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
             // invert every other feature in this application.
             if (state?.character case final Character character)
               IconButton(
+                // ⚠️ **Inside a `Consumer`, which it was not.** The route used
+                // this widget's own `ref` from within the pushed screen's
+                // build — the shape that once left the inventory showing what
+                // it held when the route opened. The pushed route watches for
+                // itself now, exactly as the savegame editor does.
+                //
+                // ⚠️ **No rail: a `.chr` has no party.** A one-member rail
+                // would be decoration, and this is the one place the two
+                // editors deliberately differ.
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => InventoryScreen(
-                      character: () =>
-                          ref
-                              .watch(characterFileProvider(widget.fileName))
-                              .value
-                              ?.character ??
-                          character,
-                      onAdd: (resref, slot) => notifier.edit(
-                        AddItem(
-                          creOffset: character.creOffset,
-                          resref: resref,
-                          slot: slot,
-                        ),
-                      ),
+                    builder: (_) => Consumer(
+                      builder: (context, ref, _) {
+                        final file = ref
+                            .watch(characterFileProvider(widget.fileName))
+                            .value;
+                        return InventoryScreen(
+                          character: () => file?.character ?? character,
+                          onAdd: (resref, slot) => notifier.edit(
+                            AddItem(
+                              creOffset: character.creOffset,
+                              resref: resref,
+                              slot: slot,
+                            ),
+                          ),
+                          isDirty: file?.isDirty ?? false,
+                          onSave: notifier.save,
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -234,10 +248,9 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
               tooltip: 'Redo',
             ),
             const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: (state?.isDirty ?? false) ? notifier.save : null,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save'),
+            SaveButton(
+              isDirty: state?.isDirty ?? false,
+              onSave: notifier.save,
             ),
             const SizedBox(width: 12),
           ],
