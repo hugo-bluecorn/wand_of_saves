@@ -1133,4 +1133,191 @@ void main() {
       );
     });
   });
+
+  group('MoveItem', () {
+    /// A two-member party where member 0 carries [resrefs] in packs 1..n.
+    Gam twoWithItems(List<String> resrefs) {
+      var gam = GamCodec.decode(
+        buildSave(
+          party: const [
+            SyntheticCharacter(),
+            SyntheticCharacter(
+              resref: '*IMOEN',
+              displayName: 'Imoen',
+              partyOrder: 1,
+            ),
+          ],
+        ),
+      );
+      for (final (index, resref) in resrefs.indexed) {
+        gam = applyEdit(
+          gam,
+          AddItem(
+            creOffset: gam.partyMembers.first.creOffset,
+            resref: resref,
+            slot: CreItemSlot.pack[index],
+          ),
+        );
+      }
+      return gam;
+    }
+
+    Cre creOf(Gam gam, int position) =>
+        CreCodec.decode(gam.partyMembers[position].creBytes);
+
+    test('the source loses it and the destination gains it', () {
+      final before = twoWithItems(['BOOT01', 'RING01']);
+
+      final after = applyEdit(
+        before,
+        const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+      );
+
+      expect(creOf(after, 0).items.map((i) => i.resref), ['RING01']);
+      expect(creOf(after, 1).items.map((i) => i.resref), ['BOOT01']);
+      expect(creOf(after, 1).itemIndexAt(CreItemSlot.pack1), 0);
+      expect(creOf(after, 0).orphanedItems, isEmpty);
+      expect(creOf(after, 1).orphanedItems, isEmpty);
+    });
+
+    test('⚠️ the destination’s offset is re-read after the source shrinks', () {
+      // ⚠️ **The test the whole design exists for.** Member 1 sits AFTER member
+      // 0, so removing from 0 moves 1 by twenty bytes mid-command. Writing the
+      // second half at the offset read before the removal puts a creature
+      // record twenty bytes into the wrong place — a save that still parses and
+      // is wrong, which is this project's stated failure mode.
+      final before = twoWithItems(['BOOT01']);
+      final destinationWas = before.partyMembers[1].creOffset;
+
+      final after = applyEdit(
+        before,
+        const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+      );
+
+      expect(
+        after.partyMembers[1].creOffset,
+        destinationWas - creItemLength,
+        reason: 'the source shrank by one entry beneath it',
+      );
+      // And the record really is there: it parses and holds the item.
+      expect(creOf(after, 1).items.single.resref, 'BOOT01');
+      expect(creOf(after, 1).contentEnd, after.partyMembers[1].creLength);
+    });
+
+    test('the file and the party are the same size afterwards', () {
+      final before = twoWithItems(['BOOT01']);
+      final after = applyEdit(
+        before,
+        const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+      );
+
+      expect(after.bytes.length, before.bytes.length, reason: '−20 then +20');
+      expect(after.partyMembers, hasLength(2));
+    });
+
+    test('⚠️ quantity and flags survive, because the bytes are copied', () {
+      // Rebuilding the entry through `itemEntry` would quietly drop the second
+      // and third charge counts and the expiration. Preserving unknown bytes is
+      // a rule of this project, not a nicety.
+      var gam = twoWithItems(const []);
+      gam = applyEdit(
+        gam,
+        AddItem(
+          creOffset: gam.partyMembers.first.creOffset,
+          resref: 'AROW01',
+          slot: CreItemSlot.pack1,
+          quantity: 17,
+        ),
+      );
+      final original = creOf(gam, 0).items.single;
+
+      final after = applyEdit(
+        gam,
+        const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'AROW01'),
+      );
+
+      final moved = creOf(after, 1).items.single;
+      expect(moved.quantity, 17);
+      expect(moved.flags, original.flags);
+      expect(moved.expiration, original.expiration);
+    });
+
+    test('refuses a resref that disagrees with the index', () {
+      // The index is positional and shifts under any earlier removal, so the
+      // resref is the check field that catches a stale one.
+      final gam = twoWithItems(['BOOT01', 'RING01']);
+      expect(
+        () => applyEdit(
+          gam,
+          const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'RING01'),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('refuses an item that is not in a backpack slot', () {
+      // Equipment is not implemented, so an equipped item is not movable —
+      // which is also what keeps the stored armour class out of this.
+      var gam = twoWithItems(const []);
+      gam = applyEdit(
+        gam,
+        AddItem(
+          creOffset: gam.partyMembers.first.creOffset,
+          resref: 'BOOT01',
+          slot: CreItemSlot.boots,
+        ),
+      );
+      expect(
+        () => applyEdit(
+          gam,
+          const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('refuses a destination whose backpack is full', () {
+      var gam = twoWithItems(['BOOT01']);
+      for (var i = 0; i < 16; i++) {
+        gam = applyEdit(
+          gam,
+          AddItem(
+            creOffset: gam.partyMembers[1].creOffset,
+            resref: 'ITEM$i',
+            slot: CreItemSlot.pack[i],
+          ),
+        );
+      }
+      expect(
+        () => applyEdit(
+          gam,
+          const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('refuses a move to the character who already has it', () {
+      final gam = twoWithItems(['BOOT01']);
+      expect(
+        () => applyEdit(
+          gam,
+          const MoveItem(from: 0, to: 0, itemIndex: 0, resref: 'BOOT01'),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('says what it did', () {
+      expect(
+        const MoveItem(
+          from: 0,
+          to: 1,
+          itemIndex: 0,
+          resref: 'BOOT01',
+        ).label,
+        contains('BOOT01'),
+      );
+    });
+  });
 }

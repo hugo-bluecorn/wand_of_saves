@@ -180,6 +180,7 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
                     ?.selected ??
                 selected,
             onAdd: _addItem,
+            partyPosition: state.selectedIndex,
             isDirty: state.isDirty,
             onSave: ref
                 .read(partyProvider(widget.slotDirectoryName).notifier)
@@ -191,6 +192,20 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
             rail: PortraitRail(
               state: state,
               slotDirectoryName: widget.slotDirectoryName,
+              // ⚠️ One command, not a remove followed by an add: the removal
+              // moves every record after the source, so the destination's
+              // offset does not exist until the first half has been applied.
+              // It is also one undo step, which is what a move should be.
+              onItemDropped: (drag, to) => ref
+                  .read(partyProvider(widget.slotDirectoryName).notifier)
+                  .edit(
+                    MoveItem(
+                      from: drag.from,
+                      to: to,
+                      itemIndex: drag.itemIndex,
+                      resref: drag.resref,
+                    ),
+                  ),
             ),
           );
         },

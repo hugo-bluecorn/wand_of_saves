@@ -27,8 +27,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
+import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/ui/character/character_screen.dart';
+import 'package:wand_of_saves/ui/character/portrait_tile.dart';
 
 import '../../support/fakes.dart';
 import '../../support/synthetic_save.dart';
@@ -77,6 +79,15 @@ void main() {
         ),
         characterFileRepositoryProvider.overrideWithValue(
           FakeCharacterFileRepository(),
+        ),
+        itemCatalogueProvider.overrideWith(
+          (ref) async => const ItemCatalogue({
+            'RING01': ItemEntry(
+              resref: 'RING01',
+              itemType: 10,
+              identifiedName: 'Ring of Protection +1',
+            ),
+          }),
         ),
       ],
     );
@@ -168,6 +179,50 @@ void main() {
 
       expect(find.text('Member 3 · Inventory'), findsOneWidget);
       expect(find.text('Member 0 · Inventory'), findsNothing);
+    });
+  });
+
+  group('handing an item to another character', () {
+    testWidgets('⚠️ dragging onto a portrait moves it, in one undo step', (
+      tester,
+    ) async {
+      await open(tester, size: 6, height: 700);
+      // Give member 0 something to hand over.
+      await tester.tap(find.byTooltip('Inventory'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'RING01');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add'));
+      await tester.pumpAndSettle();
+      expect(find.text('RING01'), findsOneWidget, reason: 'member 0 has it');
+
+      // Drag it onto member 3's portrait. Horizontal first, because the
+      // draggable only claims the gesture on that axis.
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('RING01')),
+      );
+      await gesture.moveBy(const Offset(-60, 0));
+      await tester.pump();
+      // ⚠️ The drop target is the PORTRAIT, not the label beneath it — the
+      // DragTarget is the destination's `icon`. `NavigationRail` builds either
+      // `icon` or `selectedIcon` per destination, never both, so these are one
+      // per member in party order.
+      await gesture.moveTo(
+        tester.getCenter(find.byType(PortraitTile).at(3)),
+      );
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // Member 0 no longer carries it.
+      expect(find.text('RING01'), findsNothing);
+
+      // And member 3 does.
+      await tester.tap(find.byType(PortraitTile).at(3));
+      await tester.pumpAndSettle();
+      expect(find.text('RING01'), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
     });
   });
 }

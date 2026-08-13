@@ -347,4 +347,69 @@ Gam applyEdit(Gam gam, EditCommand command) => switch (command) {
     }
     return gam.withPartyGold(value);
   }(),
+  MoveItem(:final from, :final to, :final itemIndex, :final resref) => () {
+    if (from == to) {
+      throw ArgumentError.value(to, 'to', 'already holds it');
+    }
+    RangeError.checkValidIndex(from, gam.partyMembers, 'from');
+    RangeError.checkValidIndex(to, gam.partyMembers, 'to');
+
+    final sourceOffset = gam.partyMembers[from].creOffset;
+    final source = CreCodec.decode(gam.creatureAt(sourceOffset));
+    RangeError.checkValidIndex(itemIndex, source.items, 'itemIndex');
+
+    final item = source.items[itemIndex];
+    // ⚠️ The index is positional and shifts under any earlier removal, so the
+    // resref is what catches a command built from a list that has moved on.
+    if (item.resref != resref) {
+      throw ArgumentError.value(
+        itemIndex,
+        'itemIndex',
+        'holds ${item.resref}, not $resref',
+      );
+    }
+
+    // ⚠️ Backpack only. Equipment is not modelled, and unequipping would change
+    // a stored armour class the engine reads rather than recomputes.
+    final held = source.itemSlots.entries
+        .where((slot) => slot.value == itemIndex)
+        .map((slot) => slot.key)
+        .firstOrNull;
+    if (held == null || !held.isPack) {
+      throw ArgumentError.value(
+        itemIndex,
+        'itemIndex',
+        'is not in a backpack slot',
+      );
+    }
+
+    // ⚠️ **The entry's own bytes, copied.** Rebuilding it through `itemEntry`
+    // would quietly drop the second and third charge counts and the expiration
+    // — and preserving what this project does not model is a rule, not a
+    // nicety.
+    final entry = Uint8List.fromList(
+      source.bytes.sublist(item.start, item.start + creItemLength),
+    );
+
+    final shrunk = gam.withCreature(
+      creOffset: sourceOffset,
+      creature: source.withItemRemoved(itemIndex),
+    );
+
+    // ⚠️ **Re-read, and this line is why the command takes positions.** The
+    // removal above moved every record after the source, so the offset this
+    // needs did not exist when the command was built.
+    final destinationOffset = shrunk.partyMembers[to].creOffset;
+    final destination = CreCodec.decode(shrunk.creatureAt(destinationOffset));
+
+    final free = destination.firstFreePackSlot;
+    if (free == null) {
+      throw ArgumentError.value(to, 'to', 'has no free backpack slot');
+    }
+
+    return shrunk.withCreature(
+      creOffset: destinationOffset,
+      creature: destination.withItemAdded(entry: entry, slot: free),
+    );
+  }(),
 };

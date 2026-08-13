@@ -21,6 +21,7 @@ import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
+import 'package:wand_of_saves/ui/inventory/item_drag.dart';
 
 import '../../support/fakes.dart';
 
@@ -51,6 +52,8 @@ Future<void> pump(
   bool isDirty = false,
   VoidCallback? onSave,
   Widget? rail,
+  int partyPosition = 0,
+  bool draggable = false,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -64,6 +67,7 @@ Future<void> pump(
           isDirty: isDirty,
           onSave: onSave,
           rail: rail,
+          partyPosition: draggable ? partyPosition : null,
         ),
       ),
     ),
@@ -264,6 +268,105 @@ void main() {
       expect(find.text('Imoen'), findsOneWidget);
       // Still the inventory, not a rail that replaced it.
       expect(find.textContaining('Inventory'), findsWidgets);
+    });
+  });
+
+  group('dragging an item out of the backpack', () {
+    testWidgets('a backpack row is draggable when the caller allows it', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+        draggable: true,
+      );
+      expect(find.byType(Draggable<ItemDrag>), findsOneWidget);
+    });
+
+    testWidgets('⚠️ an EQUIPPED row is not draggable', (tester) async {
+      // Equipment is not modelled, and unequipping would change a stored
+      // armour class the engine reads rather than recomputes. Slot 8 is boots.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 8),
+        ]),
+        onAdd: (_, _) {},
+        draggable: true,
+      );
+      expect(find.byType(Draggable<ItemDrag>), findsNothing);
+      expect(find.text('BOOT01'), findsOneWidget, reason: 'still listed');
+    });
+
+    testWidgets('nothing is draggable on a document with no party', (
+      tester,
+    ) async {
+      // A `.chr` has nobody to hand an item to.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+      );
+      expect(find.byType(Draggable<ItemDrag>), findsNothing);
+    });
+
+    testWidgets('⚠️ a VERTICAL pull scrolls the list, it does not drag', (
+      tester,
+    ) async {
+      // ⚠️ **The hazard the research found.** Flutter's own `affinity` doc: a
+      // draggable with null or vertical affinity "will out-compete the
+      // Scrollable for vertical gestures" — which would make the inventory
+      // unscrollable. Horizontal affinity is what keeps both gestures alive,
+      // and it matches the geometry: the portraits are to the LEFT.
+      await pump(
+        tester,
+        character: characterWith([
+          for (var i = 0; i < 16; i++)
+            CarriedItem(resref: 'ITEM$i', index: i, slotIndex: 21 + i),
+        ]),
+        onAdd: (_, _) {},
+        draggable: true,
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('ITEM0')),
+      );
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+
+      expect(
+        find.byType(ItemDragFeedback),
+        findsNothing,
+        reason: 'a vertical pull must not have started a drag',
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('a HORIZONTAL pull starts the drag', (tester) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+        draggable: true,
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('BOOT01')),
+      );
+      await gesture.moveBy(const Offset(-80, 0));
+      await tester.pump();
+
+      expect(find.byType(ItemDragFeedback), findsOneWidget);
+      await gesture.up();
+      await tester.pumpAndSettle();
     });
   });
 }

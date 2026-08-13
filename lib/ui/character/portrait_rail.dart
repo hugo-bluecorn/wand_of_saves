@@ -14,7 +14,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:infinity_formats/infinity_formats.dart';
+import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/ui/character/portrait_tile.dart';
+import 'package:wand_of_saves/ui/inventory/item_drag.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
 
 /// The party down the left-hand side, as portraits you can select between.
@@ -27,6 +30,7 @@ class PortraitRail extends ConsumerWidget {
   const PortraitRail({
     required this.state,
     required this.slotDirectoryName,
+    this.onItemDropped,
     super.key,
   });
 
@@ -35,6 +39,25 @@ class PortraitRail extends ConsumerWidget {
 
   /// The save slot whose provider owns the selection.
   final String slotDirectoryName;
+
+  /// Called when an item is dropped on the member at that party position.
+  ///
+  /// `null` on the character sheet, where there is nothing to drag — and a
+  /// portrait that lit up for a drag that cannot happen would be a lie.
+  final void Function(ItemDrag drag, int to)? onItemDropped;
+
+  /// Whether the member at [position] has room for one more item.
+  ///
+  /// ⚠️ **Scans rather than counts**, for the same reason the inventory does:
+  /// holes in the backpack are ordinary, so the item count is not the index of
+  /// the next free slot.
+  bool _hasRoom(int position) {
+    final taken = {
+      for (final CarriedItem item in state.members[position].items)
+        if (item.isInASlot) item.slotIndex,
+    };
+    return CreItemSlot.pack.any((slot) => !taken.contains(slot.index));
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -57,17 +80,24 @@ class PortraitRail extends ConsumerWidget {
         borderRadius: BorderRadius.all(Radius.circular(10)),
       ),
       destinations: [
-        for (final member in state.members)
+        for (final (position, member) in state.members.indexed)
           NavigationRailDestination(
             // ⚠️ **`portraitBaseName`, never `PORTRT<n>`.** The first is the
             // resref the record itself names; the second is a file beside the
             // save holding a stale snapshot the engine drew, kept only as an
             // oracle. Passing the filename here resolved nothing and drew a
             // generic icon for every member.
-            icon: PortraitTile(baseName: member.portraitBaseName),
+            icon: _target(
+              position: position,
+              baseName: member.portraitBaseName,
+            ),
             // ⚠️ **Not decoration.** A portrait is opaque and fills the rail's
             // M3 indicator exactly, hiding it — so selection had no visible
             // effect at all until the frame moved onto the portrait itself.
+            //
+            // Deliberately NOT a drop target: the inventory always shows the
+            // *selected* member, so the selected portrait is always the one the
+            // item is leaving, and a self-drop is refused anyway.
             selectedIcon: PortraitTile(
               baseName: member.portraitBaseName,
               selected: true,
@@ -85,6 +115,29 @@ class PortraitRail extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+
+  /// The portrait at [position], as a drop target when items can be moved.
+  ///
+  /// ⚠️ **Refuses the character it came from and one with a full backpack**,
+  /// so the portrait simply does not light up rather than accepting a drop that
+  /// would then throw. Refusal is visual and silent — undo already covers a
+  /// mistaken drop, and a dialog on every drag would be worse than the mistake.
+  Widget _target({required int position, required String baseName}) {
+    final onDropped = onItemDropped;
+    if (onDropped == null) return PortraitTile(baseName: baseName);
+    return DragTarget<ItemDrag>(
+      onWillAcceptWithDetails: (details) =>
+          details.data.from != position && _hasRoom(position),
+      onAcceptWithDetails: (details) => onDropped(details.data, position),
+      builder: (context, candidates, _) => PortraitTile(
+        baseName: baseName,
+        // The border the tile already draws for selection, reused to say the
+        // target is live. A separate treatment would be a second vocabulary
+        // for the same idea.
+        selected: candidates.isNotEmpty,
+      ),
     );
   }
 }

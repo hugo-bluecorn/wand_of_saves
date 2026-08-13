@@ -22,6 +22,7 @@ import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/ui/core/panel_card.dart';
 import 'package:wand_of_saves/ui/core/save_button.dart';
 import 'package:wand_of_saves/ui/core/tag.dart';
+import 'package:wand_of_saves/ui/inventory/item_drag.dart';
 
 /// A character's inventory: what they carry, and a search that adds to it.
 ///
@@ -40,6 +41,7 @@ class InventoryScreen extends ConsumerStatefulWidget {
     this.isDirty = false,
     this.onSave,
     this.rail,
+    this.partyPosition,
     super.key,
   });
 
@@ -71,6 +73,14 @@ class InventoryScreen extends ConsumerStatefulWidget {
   /// one-member rail would be decoration, and a control that does nothing is a
   /// defect in this application rather than a nicety.
   final Widget? rail;
+
+  /// Where this character sits in the party, or `null` when there is no party.
+  ///
+  /// ⚠️ **What makes a row draggable, and a position rather than an offset.**
+  /// Handing an item over shrinks this character's record and moves every
+  /// record after it, so an offset captured when the drag began would be stale
+  /// by the time the drop lands. `null` for a `.chr`: nobody to give it to.
+  final int? partyPosition;
 
   @override
   ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
@@ -171,7 +181,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     ),
                   if (_query.text.trim().isNotEmpty)
                     _Results(results: results, onAdd: _add),
-                  _Carried(items: _items),
+                  _Carried(items: _items, from: widget.partyPosition),
                 ],
               ),
             ),
@@ -277,9 +287,23 @@ class _Results extends StatelessWidget {
 /// **"Backpack" appears nowhere in it** — that word is this project's, and so
 /// is "pack" in `CreItemSlot.pack`.
 class _Carried extends StatelessWidget {
-  const _Carried({required this.items});
+  const _Carried({required this.items, this.from});
 
   final List<CarriedItem> items;
+
+  /// The owner's party position, when there is somebody to hand items to.
+  final int? from;
+
+  /// Whether [item] can be dragged to another character.
+  ///
+  /// ⚠️ **Backpack only.** Equipment is not modelled, and taking a worn item
+  /// off would change a *stored* effective armour class the engine reads rather
+  /// than recomputes — so the sheet would disagree with the game with nothing
+  /// on screen to say why.
+  bool _movable(CarriedItem item) =>
+      from != null &&
+      item.isInASlot &&
+      CreItemSlot.values[item.slotIndex].isPack;
 
   @override
   Widget build(BuildContext context) => PanelCard(
@@ -288,25 +312,51 @@ class _Carried extends StatelessWidget {
     trailing: Tag('${items.length}', caption: 'items'),
     children: [
       for (final item in items)
-        ListTile(
-          dense: true,
-          title: Text(item.resref),
-          subtitle: Text(_where(item)),
-          trailing: Wrap(
-            spacing: 8,
-            children: [
-              if (item.quantity > 1)
-                Tag('${item.quantity}', caption: 'quantity'),
-              // ⚠️ Stated, not hidden: with the flag clear the game draws the
-              // item's plain name, so a reader who sees only a resref here
-              // should know why the game will not call it what they expect.
-              if (!item.isIdentified)
-                const Tag('unidentified', tone: TagTone.muted),
-            ],
+        _row(
+          item,
+          ListTile(
+            dense: true,
+            title: Text(item.resref),
+            subtitle: Text(_where(item)),
+            trailing: Wrap(
+              spacing: 8,
+              children: [
+                if (item.quantity > 1)
+                  Tag('${item.quantity}', caption: 'quantity'),
+                // ⚠️ Stated, not hidden: with the flag clear the game draws the
+                // item's plain name, so a reader who sees only a resref here
+                // should know why the game will not call it what they expect.
+                if (!item.isIdentified)
+                  const Tag('unidentified', tone: TagTone.muted),
+              ],
+            ),
           ),
         ),
     ],
   );
+
+  /// [row] made draggable, when the item may be handed to somebody else.
+  ///
+  /// ⚠️ **`affinity: Axis.horizontal`, and the suite would not have caught
+  /// this.** Flutter's own documentation on the parameter: a draggable with
+  /// null or vertical affinity "will out-compete the Scrollable for vertical
+  /// gestures" — which would leave this list unscrollable, with every attempt
+  /// to scroll picking an item up instead. Horizontal keeps both alive, and it
+  /// is the natural direction anyway: the portraits are to the LEFT of here.
+  Widget _row(CarriedItem item, Widget row) {
+    if (!_movable(item)) return row;
+    return Draggable<ItemDrag>(
+      affinity: Axis.horizontal,
+      data: ItemDrag(
+        from: from!,
+        itemIndex: item.index,
+        resref: item.resref,
+      ),
+      feedback: ItemDragFeedback(resref: item.resref),
+      childWhenDragging: Opacity(opacity: 0.4, child: row),
+      child: row,
+    );
+  }
 
   static String _where(CarriedItem item) {
     if (!item.isInASlot) return 'in no slot — the game will not show it';

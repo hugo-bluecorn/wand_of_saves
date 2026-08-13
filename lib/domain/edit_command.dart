@@ -454,6 +454,51 @@ final class SetPartyGold extends EditCommand {
   String get label => 'Set party gold to $value';
 }
 
+/// Hands an item from one party member's backpack to another's.
+///
+/// ⚠️ **Outside [CharacterEditCommand] for the same reason [SetPartyGold] is.**
+/// A move needs two creature records and only a savegame has two, so the type
+/// system refuses it against an exported character rather than a run-time check
+/// discovering it later.
+///
+/// ⚠️ **[from] and [to] are party POSITIONS, never creature offsets.** Taking
+/// the item out of the source shrinks that record by one entry, which moves
+/// every record after it — so an offset read before the removal is stale by the
+/// time the second half of the move needs it. Position survives a relocation.
+///
+/// ⚠️ **Backpack slots only.** Equipment is not modelled, and unequipping would
+/// change a *stored* effective armour class the engine reads rather than
+/// recomputes — so a worn item is refused instead of silently making the sheet
+/// disagree with the game.
+final class MoveItem extends EditCommand {
+  /// Moves entry [itemIndex] of party member [from] to member [to].
+  const MoveItem({
+    required this.from,
+    required this.to,
+    required this.itemIndex,
+    required this.resref,
+  });
+
+  /// Party position of the character giving the item up.
+  final int from;
+
+  /// Party position of the character receiving it.
+  final int to;
+
+  /// Which entry of [from]'s items section to move.
+  final int itemIndex;
+
+  /// What [itemIndex] is expected to name.
+  ///
+  /// ⚠️ **A check field, not a lookup.** An item's index is positional and any
+  /// earlier removal renumbers it, so a command built from a stale list would
+  /// otherwise move whatever happened to land at that index.
+  final String resref;
+
+  @override
+  String get label => 'Move $resref';
+}
+
 /// Thrown when a command carries a value the field it targets will not accept.
 ///
 /// A domain failure rather than a codec one: the bytes are fine, the *request*
