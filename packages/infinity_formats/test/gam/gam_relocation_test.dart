@@ -233,6 +233,43 @@ void main() {
       );
     });
 
+    test('⚠️ refuses a shifted pointer that would not fit', () {
+      // `setUint32` truncates: 0xFFFFFFFF + 20 reads back as **19**, a live
+      // pointer 19 bytes into the save's own header. Every other writer here
+      // goes through `patchedField`, whose contract is explicit — "a wrapped
+      // number written into a savegame is silent corruption, which is
+      // precisely the failure this project is shaped around". The relocation
+      // is the riskiest writer in the package and was the one bypassing it.
+      final bytes = Uint8List.fromList(
+        buildGam(
+          party: const [
+            SyntheticNpc(resref: 'AARD', displayName: 'Aard'),
+            SyntheticNpc(resref: 'IMOEN', displayName: 'Imoen'),
+          ],
+          nonParty: const [SyntheticNpc(resref: 'TIAX', displayName: 'Tiax')],
+        ),
+      );
+      // A section offset that is neither an absence marker this section knows
+      // nor a position that can survive a shift.
+      ByteData.sublistView(bytes).setUint32(
+        GamHeaderField.familiarInfoOffset.offset,
+        0xFFFFFFFF,
+        Endian.little,
+      );
+      final gam = GamCodec.decode(bytes);
+      final first = gam.partyMembers.first;
+      final grown = Uint8List(first.creLength + 20)
+        ..setRange(0, first.creLength, first.creBytes);
+
+      expect(
+        () => gam.withCreature(
+          creOffset: first.creOffset,
+          creature: Cre.trusted(grown),
+        ),
+        throwsA(isA<InfinityFormatException>()),
+      );
+    });
+
     test('refuses a creature nobody in the party owns', () {
       final gam = buildRelocatable();
       expect(

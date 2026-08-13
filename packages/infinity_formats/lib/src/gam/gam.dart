@@ -248,7 +248,7 @@ final class Gam implements CreatureDocument<Gam> {
         view.setUint32(
           _shift(npc.structOffset, splice, delta) +
               GamNpcField.creOffset.offset,
-          npc.creOffset + delta,
+          _shifted(npc.creOffset, delta, out.length, npc.creResref),
           Endian.little,
         );
       }
@@ -258,7 +258,7 @@ final class Gam implements CreatureDocument<Gam> {
         if (section.isAbsent(where) || where < splice) continue;
         view.setUint32(
           section.offsetField.offset,
-          where + delta,
+          _shifted(where, delta, out.length, '$section'),
           Endian.little,
         );
       }
@@ -267,9 +267,33 @@ final class Gam implements CreatureDocument<Gam> {
     return Gam.trusted(out.asUnmodifiableView());
   }
 
-  /// Where [position] lands once [delta] bytes are inserted at [splice].
+  /// Where [position] lands once the record at [splice] changes by [delta].
+  ///
+  /// Sign-agnostic: [delta] is negative when the record shrank.
   static int _shift(int position, int splice, int delta) =>
       position >= splice ? position + delta : position;
+
+  /// [where] moved by [delta], refused if it would not land inside the file.
+  ///
+  /// ⚠️ **`setUint32` truncates rather than throwing**, so `0xFFFFFFFF + 20`
+  /// is written as **19** — a live pointer nineteen bytes into the save's own
+  /// header, in a file that still parses. Every other writer in this package
+  /// goes through `patchedField`, whose contract says it plainly: *"a wrapped
+  /// number written into a savegame is silent corruption, which is precisely
+  /// the failure this project is shaped around."* The relocation is the
+  /// riskiest writer here and was the one bypassing that.
+  static int _shifted(int where, int delta, int length, String what) {
+    final moved = where + delta;
+    if (moved < 0 || moved > length) {
+      throw InfinityFormatException.truncated(
+        what: 'relocating $what to $moved',
+        expected: moved,
+        actual: length,
+        offset: where,
+      );
+    }
+    return moved;
+  }
 
   GamNpc _npcOwning(int creOffset) {
     for (final npc in [...partyMembers, ...nonPartyMembers]) {
