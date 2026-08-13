@@ -112,25 +112,41 @@ void main() {
       );
     });
 
-    test('⚠️ adding an item changes exactly one item entry and one slot', () {
-      final grown = cre
-          .withEntryAppended(
-            section: CreSection.items,
-            entry: itemEntry(resref: 'RING01'),
-          )
-          .withItemSlot(CreItemSlot.pack8, 11);
+    test('⚠️ adding into the HOLE inserts in slot order, not at the end', () {
+      // ⚠️ **This test used to assert the bug.** It appended and expected the
+      // entry at index 11, which on this record leaves `pack8=[11] pack9=[10]`
+      // — an inversion occurring in none of the 41 engine-written records.
+      //
+      // pack8 is the hole and pack9 is occupied above it, so the entry belongs
+      // at 10: the number of occupied slots that precede pack8 (shield, boots,
+      // weapon1, packs 1-7). Everything from 10 up shifts by one.
+      final grown = cre.withItemAdded(
+        entry: itemEntry(resref: 'RING01'),
+        slot: CreItemSlot.pack8,
+      );
 
       expect(grown.bytes, hasLength(cre.bytes.length + creItemLength));
       expect(grown.items, hasLength(12));
-      expect(grown.items.last.resref, 'RING01');
-      expect(grown.itemIndexAt(CreItemSlot.pack8), 11);
-      expect(grown.orphanedItems, isEmpty);
-      // Everything that was already there still reads the same.
       expect(
-        grown.items.take(11).map((i) => i.resref),
-        cre.items.map((i) => i.resref),
+        grown.itemIndexAt(CreItemSlot.pack8),
+        10,
+        reason: 'ordered, not 11',
       );
-      expect(grown.itemSlots..remove(CreItemSlot.pack8), cre.itemSlots);
+      expect(grown.items[10].resref, 'RING01');
+      expect(grown.itemIndexAt(CreItemSlot.pack9), 11, reason: 'was 10');
+      expect(
+        grown.items[11].resref,
+        cre.items[10].resref,
+        reason: 'follows it',
+      );
+      expect(grown.orphanedItems, isEmpty);
+      // Everything below the splice is untouched, entries and slots alike.
+      expect(
+        grown.items.take(10).map((i) => i.resref),
+        cre.items.take(10).map((i) => i.resref),
+      );
+      expect(grown.itemIndexAt(CreItemSlot.shield), 0);
+      expect(grown.itemIndexAt(CreItemSlot.pack7), 9);
     });
 
     test('⚠️ removing an item renumbers the slots on real data', () {
@@ -148,12 +164,10 @@ void main() {
     test('the section chain still closes after both edits', () {
       // The strongest single check on a CRE: one comparison reconciles every
       // section pointer, every entry size and the effect-version flag.
-      final grown = cre
-          .withEntryAppended(
-            section: CreSection.items,
-            entry: itemEntry(resref: 'RING01'),
-          )
-          .withItemSlot(CreItemSlot.pack8, 11);
+      final grown = cre.withItemAdded(
+        entry: itemEntry(resref: 'RING01'),
+        slot: CreItemSlot.pack8,
+      );
       expect(grown.contentEnd, grown.bytes.length);
       expect(
         cre.withItemRemoved(1).contentEnd,
@@ -161,4 +175,146 @@ void main() {
       );
     });
   }, skip: skip);
+
+  group('⚠️ the slot-order invariant, across every engine-written record', () {
+    /// Every party member of every fixture save, plus every exported `.chr`.
+    ///
+    /// Deliberately enumerated rather than named: the set grows whenever a save
+    /// is synced, and a gate that only ever sees the records someone typed in
+    /// is a gate with a blind spot.
+    List<(String, Cre)> engineWritten() {
+      final found = <(String, Cre)>[];
+      final saves = Directory(defaultFixtureSaveRoot);
+      if (saves.existsSync()) {
+        for (final dir in saves.listSync().whereType<Directory>()) {
+          final slot = dir.path.split(Platform.pathSeparator).last;
+          final gam = fixtureGam(slot);
+          if (gam == null) continue;
+          for (final npc in GamCodec.decode(
+            File(gam).readAsBytesSync(),
+            source: slot,
+          ).partyMembers) {
+            found.add((
+              '$slot/${npc.creResref}',
+              CreCodec.decode(npc.creBytes, source: slot),
+            ));
+          }
+        }
+      }
+      for (final name in fixtureChrNames()) {
+        final chr = ChrCodec.decode(
+          File(fixtureChr(name)!).readAsBytesSync(),
+          source: name,
+        );
+        found.add((name, CreCodec.decode(chr.creBytes, source: name)));
+      }
+      return found;
+    }
+
+    test('every record walks 0…n−1 in slot order', () {
+      // The measurement that found the append bug, promoted to a gate. Sparse
+      // slots, dense indices: holes in the backpack are ordinary and do not put
+      // holes in the items array.
+      final all = engineWritten();
+      expect(all, isNotEmpty, reason: 'no fixtures — the check never ran');
+      for (final (where, cre) in all) {
+        final walked = [
+          for (final slot in CreItemSlot.values)
+            if (cre.itemSlots[slot] case final int at) at,
+        ];
+        expect(
+          walked,
+          List.generate(walked.length, (i) => i),
+          reason: '$where — ascending and dense in slot order',
+        );
+        expect(cre.orphanedItems, isEmpty, reason: where);
+      }
+    });
+
+    test('and it survives an add into a hole', () {
+      // Adding must not be the one thing that breaks what every record holds.
+      for (final (where, cre) in engineWritten()) {
+        final free = cre.firstFreePackSlot;
+        if (free == null || !cre.hasItemSlots) continue;
+        final grown = cre.withItemAdded(
+          entry: itemEntry(resref: 'RING01'),
+          slot: free,
+        );
+        final walked = [
+          for (final slot in CreItemSlot.values)
+            if (grown.itemSlots[slot] case final int at) at,
+        ];
+        expect(
+          walked,
+          List.generate(walked.length, (i) => i),
+          reason: '$where — after adding into ${free.name}',
+        );
+        expect(grown.contentEnd, grown.bytes.length, reason: where);
+      }
+    });
+  });
+
+  group('⚠️ the engine as the oracle for where an entry goes', () {
+    // `000000022-Conan Full Party` and `000000023-Conan Inventory Move` are one
+    // in-game inventory transfer apart, so the second is the answer key for the
+    // first. Imoen received three scrolls: SCRL68 into her empty `pack1`, then
+    // SCRL77 and SCRL67 into `pack7` and `pack8`.
+    final before = fixtureGam('000000022-Conan Full Party');
+    final after = fixtureGam('000000023-Conan Inventory Move');
+
+    Cre imoenIn(String? gam) => CreCodec.decode(
+      GamCodec.decode(
+        File(gam!).readAsBytesSync(),
+      ).partyMembers.firstWhere((npc) => npc.creResref == '*MOEN1').creBytes,
+    );
+
+    test('filling her empty pack1 lands at index 6, as the engine did', () {
+      final start = imoenIn(before);
+      expect(
+        start.itemIndexAt(CreItemSlot.pack1),
+        isNull,
+        reason: 'the premise: pack1 is the hole',
+      );
+
+      final grown = start.withItemAdded(
+        entry: itemEntry(resref: 'SCRL68'),
+        slot: CreItemSlot.pack1,
+      );
+      expect(grown.itemIndexAt(CreItemSlot.pack1), 6);
+      expect(
+        imoenIn(after).itemIndexAt(CreItemSlot.pack1),
+        6,
+        reason: 'which is what the engine itself wrote',
+      );
+    });
+
+    test('⚠️ all three adds reproduce the record the engine wrote', () {
+      var built = imoenIn(before);
+      for (final (resref, slot) in [
+        ('SCRL68', CreItemSlot.pack1),
+        ('SCRL77', CreItemSlot.pack7),
+        ('SCRL67', CreItemSlot.pack8),
+      ]) {
+        built = built.withItemAdded(
+          entry: itemEntry(resref: resref),
+          slot: slot,
+        );
+      }
+
+      final engine = imoenIn(after);
+      expect(built.itemSlots, engine.itemSlots, reason: 'every slot word');
+      expect(
+        built.items.map((i) => i.resref),
+        engine.items.map((i) => i.resref),
+        reason: 'every entry, in the engine’s own order',
+      );
+    });
+  }, skip: missingPair());
 }
+
+/// Why the oracle group cannot run, or `null` when it can.
+String? missingPair() =>
+    fixtureGam('000000022-Conan Full Party') == null ||
+        fixtureGam('000000023-Conan Inventory Move') == null
+    ? 'needs the Conan transfer pair: run tool/dev/sync_fixtures.dart'
+    : null;

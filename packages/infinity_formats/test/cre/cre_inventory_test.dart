@@ -222,32 +222,175 @@ void main() {
     });
   });
 
-  group('adding an item composes from what already exists', () {
-    test('append the entry, then point a slot at it', () {
-      final before = creature(items: 1, slots: {CreItemSlot.pack1: 0});
-      final after = before
-          .withEntryAppended(
-            section: CreSection.items,
-            entry: itemEntry(resref: 'BOOT01'),
-          )
-          .withItemSlot(CreItemSlot.pack2, 1);
+  group('Cre.withItemAdded', () {
+    test('⚠️ inserts in slot order rather than appending', () {
+      // The measured invariant: walking the slot table in slot order yields
+      // item indices 0…n−1. `pack3` sits between two occupied slots, so the
+      // entry belongs at index 2 — NOT at the end, which is what an append
+      // gives and what the engine never writes.
+      final before = creature(
+        items: 4,
+        slots: {
+          CreItemSlot.pack1: 0,
+          CreItemSlot.pack2: 1,
+          CreItemSlot.pack4: 2,
+          CreItemSlot.pack5: 3,
+        },
+      );
+      final after = before.withItemAdded(
+        entry: itemEntry(resref: 'BOOT01'),
+        slot: CreItemSlot.pack3,
+      );
 
-      expect(after.items.map((i) => i.resref), ['ITEM0', 'BOOT01']);
-      expect(after.itemIndexAt(CreItemSlot.pack2), 1);
-      expect(after.bytes, hasLength(before.bytes.length + creItemLength));
+      expect(after.itemIndexAt(CreItemSlot.pack3), 2, reason: 'ordered, not 4');
+      expect(after.items.map((i) => i.resref), [
+        'ITEM0',
+        'ITEM1',
+        'BOOT01',
+        'ITEM2',
+        'ITEM3',
+      ]);
     });
 
-    test('⚠️ an item nothing points at is invisible in game', () {
-      // Not a failure this can assert against the engine, but it can assert
-      // the shape: every fixture references every item from a slot, so an
-      // append without a slot write leaves an orphan.
-      final orphaned = creature(items: 1).withEntryAppended(
-        section: CreSection.items,
-        entry: itemEntry(resref: 'BOOT01'),
+    test('⚠️ renumbers the slots above it and leaves those below alone', () {
+      final after =
+          creature(
+            items: 4,
+            slots: {
+              CreItemSlot.pack1: 0,
+              CreItemSlot.pack2: 1,
+              CreItemSlot.pack4: 2,
+              CreItemSlot.pack5: 3,
+            },
+          ).withItemAdded(
+            entry: itemEntry(resref: 'BOOT01'),
+            slot: CreItemSlot.pack3,
+          );
+
+      expect(after.itemIndexAt(CreItemSlot.pack1), 0, reason: 'below, unmoved');
+      expect(after.itemIndexAt(CreItemSlot.pack2), 1, reason: 'below, unmoved');
+      expect(after.itemIndexAt(CreItemSlot.pack4), 3, reason: 'was 2');
+      expect(after.itemIndexAt(CreItemSlot.pack5), 4, reason: 'was 3');
+      // Each slot still points at the item it always did.
+      expect(
+        after.items[after.itemIndexAt(CreItemSlot.pack4)!].resref,
+        'ITEM2',
       );
-      expect(orphaned.items, hasLength(2));
-      expect(orphaned.itemSlots, isEmpty);
-      expect(orphaned.orphanedItems, [0, 1]);
+      expect(
+        after.items[after.itemIndexAt(CreItemSlot.pack5)!].resref,
+        'ITEM3',
+      );
+    });
+
+    test(
+      'a slot above every occupied one appends, which is the same thing',
+      () {
+        final before = creature(
+          items: 2,
+          slots: {CreItemSlot.pack1: 0, CreItemSlot.pack2: 1},
+        );
+        final after = before.withItemAdded(
+          entry: itemEntry(resref: 'BOOT01'),
+          slot: CreItemSlot.pack3,
+        );
+
+        expect(after.itemIndexAt(CreItemSlot.pack3), 2);
+        expect(after.items.last.resref, 'BOOT01');
+        expect(after.bytes, hasLength(before.bytes.length + creItemLength));
+      },
+    );
+
+    test('an equipment slot orders before the backpack, as the table does', () {
+      // `boots` is slot 8 and the backpack starts at 21, so an item equipped
+      // onto a character who already carries things belongs at index 0.
+      final after =
+          creature(
+            items: 2,
+            slots: {CreItemSlot.pack1: 0, CreItemSlot.pack2: 1},
+          ).withItemAdded(
+            entry: itemEntry(resref: 'BOOT01'),
+            slot: CreItemSlot.boots,
+          );
+
+      expect(after.itemIndexAt(CreItemSlot.boots), 0);
+      expect(after.itemIndexAt(CreItemSlot.pack1), 1);
+      expect(after.itemIndexAt(CreItemSlot.pack2), 2);
+      expect(after.items.first.resref, 'BOOT01');
+    });
+
+    test('leaves no orphan — the entry and the slot are written together', () {
+      final after =
+          creature(
+            items: 1,
+            slots: {CreItemSlot.pack1: 0},
+          ).withItemAdded(
+            entry: itemEntry(resref: 'BOOT01'),
+            slot: CreItemSlot.pack2,
+          );
+      expect(after.orphanedItems, isEmpty);
+    });
+
+    test('the section chain still closes', () {
+      // The strongest single check on a CRE: one comparison reconciles every
+      // section pointer, every entry size and the effect-version flag.
+      final after =
+          creature(
+            items: 3,
+            slots: {
+              CreItemSlot.pack1: 0,
+              CreItemSlot.pack3: 1,
+              CreItemSlot.pack4: 2,
+            },
+          ).withItemAdded(
+            entry: itemEntry(resref: 'BOOT01'),
+            slot: CreItemSlot.pack2,
+          );
+      expect(after.contentEnd, after.bytes.length);
+    });
+
+    test('refuses a slot that already holds something', () {
+      // Writing the word would orphan whatever it displaced, and an item
+      // nothing points at exists in the file and nowhere in the game. A caller
+      // wanting to replace composes `withItemRemoved` and then this.
+      expect(
+        () => creature(items: 1, slots: {CreItemSlot.pack1: 0}).withItemAdded(
+          entry: itemEntry(resref: 'BOOT01'),
+          slot: CreItemSlot.pack1,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('refuses to add when there is no slot table', () {
+      final noTable = CreCodec.decode(
+        Uint8List(CreHeaderField.headerSize)
+          ..setRange(0, 4, latin1.encode('CRE '))
+          ..setRange(4, 8, latin1.encode('V1.0')),
+      );
+      expect(
+        () => noTable.withItemAdded(
+          entry: itemEntry(resref: 'BOOT01'),
+          slot: CreItemSlot.pack1,
+        ),
+        throwsA(isA<InfinityFormatException>()),
+      );
+    });
+
+    test('⚠️ appends instead when the record already carries an orphan', () {
+      // Dense indices are what make "the ordered position" well defined. A
+      // record that already has an entry no slot points at has no unique
+      // answer, so the old behaviour is kept rather than guessed at. Cannot
+      // arise on anything this app edits — engine-written records have zero —
+      // but 618 items across 220 SHIPPED creatures are orphans.
+      final before = creature(items: 3, slots: {CreItemSlot.pack4: 0});
+      expect(before.orphanedItems, isNotEmpty, reason: 'the premise');
+
+      final after = before.withItemAdded(
+        entry: itemEntry(resref: 'BOOT01'),
+        slot: CreItemSlot.pack1,
+      );
+      expect(after.itemIndexAt(CreItemSlot.pack1), 3, reason: 'appended');
+      expect(after.itemIndexAt(CreItemSlot.pack4), 0, reason: 'not renumbered');
     });
   });
 

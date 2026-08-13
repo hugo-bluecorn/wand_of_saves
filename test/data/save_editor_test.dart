@@ -1001,6 +1001,57 @@ void main() {
       expect(cre.orphanedItems, isEmpty);
     });
 
+    test('⚠️ an item added into a HOLE inserts in slot order', () {
+      // ⚠️ **The shape the synthetic record does not have, and whose absence
+      // let the append bug ship.** `buildSave()` makes a creature with no items
+      // at all, and on an empty record appending and inserting agree — so the
+      // whole group above passes either way. Build the shape first: five items
+      // with pack4 deliberately left empty.
+      var gam = openSave();
+      for (final (resref, slot) in [
+        ('BOOT01', CreItemSlot.pack1),
+        ('RING01', CreItemSlot.pack2),
+        ('STAF01', CreItemSlot.pack3),
+        ('DAGG01', CreItemSlot.pack5),
+        ('HAMM03', CreItemSlot.pack6),
+      ]) {
+        gam = applyEdit(
+          gam,
+          AddItem(creOffset: creOffsetOf(gam), resref: resref, slot: slot),
+        );
+      }
+
+      final filled = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'SW1H06',
+          slot: CreItemSlot.pack4,
+        ),
+      );
+      final cre = CreCodec.decode(filled.creatureAt(creOffsetOf(filled)));
+
+      expect(
+        cre.itemIndexAt(CreItemSlot.pack4),
+        3,
+        reason: 'ordered, not appended at 5',
+      );
+      expect(cre.items[3].resref, 'SW1H06');
+      expect(cre.itemIndexAt(CreItemSlot.pack5), 4, reason: 'was 3');
+      expect(cre.itemIndexAt(CreItemSlot.pack6), 5, reason: 'was 4');
+      // And each slot still points at the item it always did.
+      expect(cre.items[4].resref, 'DAGG01');
+      expect(cre.items[5].resref, 'HAMM03');
+      // The invariant itself: dense and ascending in slot order.
+      expect(
+        [
+          for (final slot in CreItemSlot.values)
+            if (cre.itemIndexAt(slot) case final int at) at,
+        ],
+        [0, 1, 2, 3, 4, 5],
+      );
+    });
+
     test('refuses a resref too long for the field', () {
       final gam = openSave();
       expect(

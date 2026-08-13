@@ -761,11 +761,15 @@ final class Cre {
 
   /// Items no slot points at.
   ///
-  /// ⚠️ **Always empty on real data**, and that is the finding: every item in
-  /// every fixture is referenced by a slot, so the engine keeps the table
-  /// tight. Writing an orphan would be novel behaviour rather than something
-  /// the engine is known to tolerate — an item nothing points at exists in the
-  /// file and nowhere in the game.
+  /// ⚠️ **Empty on everything the *engine* writes, and common in what BioWare
+  /// authored.** Across all 2,253 shipped creature records, **618 items in 220
+  /// records** are referenced by no slot — `APPAR` orphans all five of its —
+  /// while every engine-written record measured has none. So a reader must
+  /// tolerate orphans, and a writer should still not create one: an item
+  /// nothing points at exists in the file and nowhere in the game.
+  ///
+  /// It is also what makes an added entry's ordered position well defined —
+  /// see [withItemAdded], which falls back to appending when this is not empty.
   List<int> get orphanedItems {
     final referenced = itemSlots.values.toSet();
     return [
@@ -801,6 +805,83 @@ final class Cre {
       itemIndex ?? CreItemSlot.empty,
       Endian.little,
     );
+    return Cre.trusted(copy.asUnmodifiableView());
+  }
+
+  /// A copy carrying [entry], with [slot] pointing at it.
+  ///
+  /// ⚠️ **The entry goes where slot order puts it, which is not the end.**
+  /// Measured across 41 engine-written records — the party of every fixture
+  /// savegame and every `.chr` — the engine keeps the items array in ascending
+  /// slot order with **dense** indices: walking the slot table in slot order
+  /// yields `0, 1, 2, … n−1`, exactly, with no inversions and no orphans.
+  ///
+  /// ⚠️ **Sparse slots, dense indices — two sequences, and only one has gaps.**
+  /// A hole in the backpack is ordinary and stays a hole; it does not put a
+  /// hole in the items array. So the entry's home is *the number of occupied
+  /// slots that precede [slot]*, and everything from there up shifts by one.
+  ///
+  /// That rule is the engine's own, not an inference from one file: in the
+  /// `Conan Full Party` → `Conan Inventory Move` pair, one in-game inventory
+  /// transfer apart, the engine filled Imoen's empty `pack1` by splicing the
+  /// entry in at index 6 and renumbering above it — and the rule reproduces
+  /// that, and its two siblings, exactly.
+  ///
+  /// The counterpart of [withItemRemoved], which has always owned this
+  /// renumbering on the way out. Composing [withEntryAppended] with
+  /// [withItemSlot] is right **only** when [slot] is above every occupied one;
+  /// into a hole it writes an inversion the engine never produces.
+  ///
+  /// Throws [InfinityFormatException] if there is no slot table, and
+  /// [ArgumentError] if [slot] already holds something — writing the word would
+  /// orphan whatever it displaced, and an item nothing points at exists in the
+  /// file and nowhere in the game. Replacing is [withItemRemoved] then this.
+  Cre withItemAdded({required Uint8List entry, required CreItemSlot slot}) {
+    if (!hasItemSlots) {
+      throw InfinityFormatException.truncated(
+        what: 'no item-slot table to add an item to',
+        expected: creItemSlotsLength,
+        actual: 0,
+      );
+    }
+    final occupied = itemSlots;
+    if (occupied[slot] case final int held) {
+      throw ArgumentError.value(
+        slot.name,
+        'slot',
+        'already holds item $held; remove it before adding',
+      );
+    }
+
+    // ⚠️ Dense indices are what make "the ordered position" well defined, so a
+    // record already carrying an orphan has no unique answer and keeps the
+    // append. Nothing this app edits can be in that state — engine-written
+    // records have zero orphans — but 618 items across 220 *shipped* creatures
+    // are orphaned, so the case is stated rather than assumed away.
+    final index = orphanedItems.isNotEmpty
+        ? itemsCount
+        : occupied.keys.where((each) => each.index < slot.index).length;
+
+    final grown = withEntryInserted(
+      section: CreSection.items,
+      at: index,
+      entry: entry,
+    );
+
+    // One pass, reading this record's slots and writing the grown one's table —
+    // which `withEntryInserted` may have relocated. The mirror of what
+    // `withItemRemoved` does below.
+    final copy = Uint8List.fromList(grown.bytes);
+    final view = ByteData.sublistView(copy);
+    final table = grown.itemSlotsOffset;
+    for (final entry in occupied.entries) {
+      view.setUint16(
+        table + entry.key.byteOffset,
+        entry.value >= index ? entry.value + 1 : entry.value,
+        Endian.little,
+      );
+    }
+    view.setUint16(table + slot.byteOffset, index, Endian.little);
     return Cre.trusted(copy.asUnmodifiableView());
   }
 
