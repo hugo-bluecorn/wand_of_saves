@@ -15,6 +15,7 @@
 import 'package:dart_mappable/dart_mappable.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
+import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/domain/proficiency.dart';
 import 'package:wand_of_saves/domain/resistances.dart';
 import 'package:wand_of_saves/domain/saving_throws.dart';
@@ -76,6 +77,7 @@ class Character with CharacterMappable {
     required this.turnUndeadLevel,
     required this.trackingSkill,
     this.proficiencies = const [],
+    this.items = const [],
     this.portraitPath,
     this.portraitBaseName = '',
   });
@@ -230,6 +232,13 @@ class Character with CharacterMappable {
   /// granting a proficiency from nothing adds a 264-byte effect and moves
   /// every offset after it. The second is the layout pass, and it is deferred.
   final List<Proficiency> proficiencies;
+
+  /// What the character is carrying, in the order the record stores them.
+  ///
+  /// ⚠️ **The index into this list is what a slot word holds**, so it shifts
+  /// when an earlier item is removed. Empty is an ordinary state: `CHARBASE`
+  /// carries nothing, and a created character starts with nothing.
+  final List<CarriedItem> items;
 
   /// Path to the portrait the *game* baked beside this save, or `null`.
   ///

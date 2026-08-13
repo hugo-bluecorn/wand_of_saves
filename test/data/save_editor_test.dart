@@ -910,6 +910,124 @@ void main() {
     );
   });
 
+  group('AddItem', () {
+    test('puts the item in the record and points the slot at it', () {
+      final gam = openSave();
+      final after = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+
+      final cre = CreCodec.decode(after.creatureAt(creOffsetOf(after)));
+      expect(cre.items.map((i) => i.resref), contains('BOOT01'));
+      expect(cre.itemIndexAt(CreItemSlot.pack1), cre.items.length - 1);
+    });
+
+    test('⚠️ leaves no orphan — the slot is written, not just the entry', () {
+      // An item nothing points at exists in the file and nowhere in the game.
+      // Engine-written records never contain one; this must not be the first.
+      final gam = openSave();
+      final after = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      final cre = CreCodec.decode(after.creatureAt(creOffsetOf(after)));
+      expect(cre.orphanedItems, isEmpty);
+    });
+
+    test('⚠️ grows the SAVEGAME by exactly one item entry', () {
+      // Only possible since the relocation shipped. Before it, this threw.
+      final gam = openSave();
+      final after = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      expect(after.bytes.length, gam.bytes.length + creItemLength);
+      expect(
+        after.partyMembers.single.creLength,
+        gam.partyMembers.single.creLength + creItemLength,
+      );
+    });
+
+    test('the same command works on an exported character', () {
+      final chr = ChrCodec.decode(buildCharacterFile());
+      final after = applyCharacterEdit(
+        chr,
+        AddItem(
+          creOffset: chr.creOffset,
+          resref: 'RING01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      final cre = CreCodec.decode(after.creatureAt(after.creOffset));
+      expect(cre.items.single.resref, 'RING01');
+      expect(cre.itemIndexAt(CreItemSlot.pack1), 0);
+    });
+
+    test('the second item lands in its own slot, not on top of the first', () {
+      var chr = ChrCodec.decode(buildCharacterFile());
+      chr = applyCharacterEdit(
+        chr,
+        AddItem(
+          creOffset: chr.creOffset,
+          resref: 'RING01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      chr = applyCharacterEdit(
+        chr,
+        AddItem(
+          creOffset: chr.creOffset,
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack2,
+        ),
+      );
+      final cre = CreCodec.decode(chr.creatureAt(chr.creOffset));
+      expect(cre.items.map((i) => i.resref), ['RING01', 'BOOT01']);
+      expect(cre.itemIndexAt(CreItemSlot.pack1), 0);
+      expect(cre.itemIndexAt(CreItemSlot.pack2), 1);
+      expect(cre.orphanedItems, isEmpty);
+    });
+
+    test('refuses a resref too long for the field', () {
+      final gam = openSave();
+      expect(
+        () => applyEdit(
+          gam,
+          AddItem(
+            creOffset: creOffsetOf(gam),
+            resref: 'FARTOOLONGRESREF',
+            slot: CreItemSlot.pack1,
+          ),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('says what it did, naming the item', () {
+      expect(
+        const AddItem(
+          creOffset: 0,
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack1,
+        ).label,
+        contains('BOOT01'),
+      );
+    });
+  });
+
   group('SetClassLevels', () {
     test('writes one level per class and clears the slots past them', () {
       // ⚠️ The clearing is the part that matters. `CHARBASE` carries its own

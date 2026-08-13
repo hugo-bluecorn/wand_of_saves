@@ -16,7 +16,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/config/providers.dart';
+import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
@@ -29,6 +31,7 @@ import 'package:wand_of_saves/ui/character/rules_toggle.dart';
 import 'package:wand_of_saves/ui/character/sheet_projection.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
 import 'package:wand_of_saves/ui/character/side_sheet.dart';
+import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 import 'package:wand_of_saves/ui/party/export_button.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
 
@@ -128,22 +131,37 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
 
   void _applyPips(SheetProficiency proficiency, int pips) {
     final effectOffset = proficiency.effectOffset;
-    // ⚠️ **A proficiency the record has no effect for cannot be raised here.**
-    // Granting one appends a 264-byte opcode 233 effect, which resizes the
-    // record — thirty-nine pointers in a savegame against one in a `.chr`. The
-    // sheet says so rather than writing a file that loads and is subtly wrong.
-    if (effectOffset == null) return;
+    // ⚠️ **A proficiency the record has no effect for is GRANTED**, which
+    // appends a 264-byte opcode 233 effect and resizes the record. That used
+    // to be refused here — a savegame moves 43 pointers against a `.chr`'s
+    // one — and the relocation is why it no longer is.
     ref
         .read(partyProvider(widget.slotDirectoryName).notifier)
         .edit(
-          SetProficiency(
-            creOffset: _creOffset,
-            effectOffset: effectOffset,
-            proficiencyId: proficiency.id,
-            pips: pips,
-          ),
+          effectOffset == null
+              ? GrantProficiency(
+                  creOffset: _creOffset,
+                  proficiencyId: proficiency.id,
+                  pips: pips,
+                )
+              : SetProficiency(
+                  creOffset: _creOffset,
+                  effectOffset: effectOffset,
+                  proficiencyId: proficiency.id,
+                  pips: pips,
+                ),
         );
   }
+
+  void _addItem(String resref, CreItemSlot slot) => ref
+      .read(partyProvider(widget.slotDirectoryName).notifier)
+      .edit(AddItem(creOffset: _creOffset, resref: resref, slot: slot));
+
+  void _openInventory(Character character) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => InventoryScreen(character: character, onAdd: _addItem),
+    ),
+  );
 
   /// Where the selected character's record starts in the savegame.
   ///
@@ -222,6 +240,12 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
               onChanged: (value) => setState(() => _rulesBind = value),
             ),
             const SizedBox(width: 8),
+            if (selected != null)
+              IconButton(
+                onPressed: () => _openInventory(selected),
+                icon: const Icon(Icons.backpack_outlined),
+                tooltip: 'Inventory',
+              ),
             ExportButton(
               character: selected,
               slotDirectoryName: widget.slotDirectoryName,

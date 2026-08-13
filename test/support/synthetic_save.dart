@@ -409,9 +409,17 @@ String writeCharacterFile(
   return path;
 }
 
-/// Bytes one synthetic creature occupies: the header, then its effects.
+/// Bytes one synthetic creature occupies: header, slot table, then effects.
+///
+/// ⚠️ **The slot table is not optional, and leaving it out was a fixture that
+/// did not have the installation's shape.** `CHARBASE` is 804 bytes — a
+/// 724-byte header plus the 80-byte table — with every word empty and no items
+/// section, and every record the engine writes carries one. A creature built
+/// without it cannot take an item, and the test that found this failed for the
+/// right reason.
 int _creLength(SyntheticCharacter character) =>
     CreHeaderField.headerSize +
+    creItemSlotsLength +
     character.proficiencies.length * creEffectV2Length;
 
 /// Writes a savegame slot directory under [root] and returns its path.
@@ -510,9 +518,39 @@ void _writeCre(Uint8List out, int base, SyntheticCharacter character) {
 
   // Proficiencies live here, in the effects section, exactly as BG:EE stores
   // them. The offset is relative to the creature, not to the savegame.
-  i32(CreHeaderField.effectsOffset, CreHeaderField.headerSize);
+  // The slot table sits between the header and the effects, which is the
+  // order every real `.chr` uses — slots before items, items before effects.
+  i32(CreHeaderField.itemSlotsOffset, CreHeaderField.headerSize);
+  for (var i = 0; i < 40; i++) {
+    data.setUint16(
+      base + CreHeaderField.headerSize + i * 2,
+      CreItemSlot.empty,
+      Endian.little,
+    );
+  }
+  // ⚠️ The two trailing words are selection state, not slots. The engine
+  // writes 0 there, and a reader that treated them as item indices would say
+  // "item 0 is equipped here" twice.
+  data
+    ..setUint16(
+      base + CreHeaderField.headerSize + CreItemSlot.selectedWeaponOffset,
+      0,
+      Endian.little,
+    )
+    ..setUint16(
+      base +
+          CreHeaderField.headerSize +
+          CreItemSlot.selectedWeaponAbilityOffset,
+      0,
+      Endian.little,
+    );
+
+  i32(
+    CreHeaderField.effectsOffset,
+    CreHeaderField.headerSize + creItemSlotsLength,
+  );
   i32(CreHeaderField.effectsCount, character.proficiencies.length);
-  var effect = base + CreHeaderField.headerSize;
+  var effect = base + CreHeaderField.headerSize + creItemSlotsLength;
   for (final entry in character.proficiencies.entries) {
     void field(EffectV2Field f, int value) =>
         data.setUint32(effect + f.offset, value, Endian.little);

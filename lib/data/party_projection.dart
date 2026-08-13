@@ -28,6 +28,7 @@ import 'dart:io';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
+import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/proficiency.dart';
 import 'package:wand_of_saves/domain/resistances.dart';
@@ -196,6 +197,24 @@ Character characterFrom(
             effectOffset: effect.start,
           ),
     ],
+    // ⚠️ The slot is looked up per item rather than iterated from the slot
+    // table, because an item nothing points at is a real shape — 220 of the
+    // shipped creature records carry one — and it must still be listed.
+    items: () {
+      final slotOf = {
+        for (final entry in cre.itemSlots.entries) entry.value: entry.key.index,
+      };
+      return [
+        for (var i = 0; i < cre.items.length; i++)
+          CarriedItem(
+            resref: cre.items[i].resref,
+            index: i,
+            slotIndex: slotOf[i] ?? -1,
+            quantity: cre.items[i].quantity,
+            isIdentified: cre.items[i].isIdentified,
+          ),
+      ];
+    }(),
     portraitPath: portraitPath,
     portraitBaseName: _baseNameOf(cre.portraitMedium),
   );

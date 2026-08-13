@@ -31,9 +31,11 @@ import 'package:wand_of_saves/data/services/game_profile_service.dart';
 import 'package:wand_of_saves/data/services/recycle_service.dart';
 import 'package:wand_of_saves/domain/ability_scores.dart';
 import 'package:wand_of_saves/domain/armor_class_modifiers.dart';
+import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/character_file.dart';
 import 'package:wand_of_saves/domain/creation_catalogue.dart';
+import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/domain/proficiency.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/resistances.dart';
@@ -317,6 +319,14 @@ class FakeResourceRepository implements ResourceRepository {
   Future<List<SpellChoice>> wizardSpells({required int level}) async =>
       creation.wizardSpells;
 
+  /// The items this fake answers with, names left as strrefs.
+  ///
+  /// Empty, because a screen that never opens the picker should not have to
+  /// describe an inventory it does not show. A test that needs items overrides
+  /// the provider with its own fake rather than mutating this.
+  @override
+  Future<List<ItemEntry>> items() async => const [];
+
   /// Nothing read, so `GameRules` falls back to the written-out dice — which is
   /// what every test written before D13 expects.
   @override
@@ -417,6 +427,7 @@ Character fakeCharacter({
   int lore = 3,
   int pickPockets = 0,
   int numberOfAttacks = 1,
+  List<CarriedItem> items = const [],
   List<Proficiency> proficiencies = const [
     // Two-Weapon Style and Flail/Morning Star, at the offsets the fixture
     // holds them: Aard dual-wields a Battle Axe and a Flail +1.
@@ -490,5 +501,6 @@ Character fakeCharacter({
   turnUndeadLevel: 0,
   trackingSkill: 0,
   proficiencies: proficiencies,
+  items: items,
   portraitPath: portraitPath,
 );

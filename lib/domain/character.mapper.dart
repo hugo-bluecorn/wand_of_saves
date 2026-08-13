@@ -21,6 +21,7 @@ class CharacterMapper extends ClassMapperBase<Character> {
       ThiefSkillsMapper.ensureInitialized();
       ArmorClassModifiersMapper.ensureInitialized();
       ProficiencyMapper.ensureInitialized();
+      CarriedItemMapper.ensureInitialized();
     }
     return _instance!;
   }
@@ -187,6 +188,13 @@ class CharacterMapper extends ClassMapperBase<Character> {
     opt: true,
     def: const [],
   );
+  static List<CarriedItem> _$items(Character v) => v.items;
+  static const Field<Character, List<CarriedItem>> _f$items = Field(
+    'items',
+    _$items,
+    opt: true,
+    def: const [],
+  );
   static String? _$portraitPath(Character v) => v.portraitPath;
   static const Field<Character, String> _f$portraitPath = Field(
     'portraitPath',
@@ -240,6 +248,7 @@ class CharacterMapper extends ClassMapperBase<Character> {
     #turnUndeadLevel: _f$turnUndeadLevel,
     #trackingSkill: _f$trackingSkill,
     #proficiencies: _f$proficiencies,
+    #items: _f$items,
     #portraitPath: _f$portraitPath,
     #portraitBaseName: _f$portraitBaseName,
   };
@@ -283,6 +292,7 @@ class CharacterMapper extends ClassMapperBase<Character> {
       turnUndeadLevel: data.dec(_f$turnUndeadLevel),
       trackingSkill: data.dec(_f$trackingSkill),
       proficiencies: data.dec(_f$proficiencies),
+      items: data.dec(_f$items),
       portraitPath: data.dec(_f$portraitPath),
       portraitBaseName: data.dec(_f$portraitBaseName),
     );
@@ -359,6 +369,12 @@ abstract class CharacterCopyWith<$R, $In extends Character, $Out>
     ProficiencyCopyWith<$R, Proficiency, Proficiency>
   >
   get proficiencies;
+  ListCopyWith<
+    $R,
+    CarriedItem,
+    CarriedItemCopyWith<$R, CarriedItem, CarriedItem>
+  >
+  get items;
   $R call({
     String? name,
     int? nameStrref,
@@ -397,6 +413,7 @@ abstract class CharacterCopyWith<$R, $In extends Character, $Out>
     int? turnUndeadLevel,
     int? trackingSkill,
     List<Proficiency>? proficiencies,
+    List<CarriedItem>? items,
     String? portraitPath,
     String? portraitBaseName,
   });
@@ -440,6 +457,17 @@ class _CharacterCopyWithImpl<$R, $Out>
     (v) => call(proficiencies: v),
   );
   @override
+  ListCopyWith<
+    $R,
+    CarriedItem,
+    CarriedItemCopyWith<$R, CarriedItem, CarriedItem>
+  >
+  get items => ListCopyWith(
+    $value.items,
+    (v, t) => v.copyWith.$chain(t),
+    (v) => call(items: v),
+  );
+  @override
   $R call({
     String? name,
     int? nameStrref,
@@ -478,6 +506,7 @@ class _CharacterCopyWithImpl<$R, $Out>
     int? turnUndeadLevel,
     int? trackingSkill,
     List<Proficiency>? proficiencies,
+    List<CarriedItem>? items,
     Object? portraitPath = $none,
     String? portraitBaseName,
   }) => $apply(
@@ -520,6 +549,7 @@ class _CharacterCopyWithImpl<$R, $Out>
       if (turnUndeadLevel != null) #turnUndeadLevel: turnUndeadLevel,
       if (trackingSkill != null) #trackingSkill: trackingSkill,
       if (proficiencies != null) #proficiencies: proficiencies,
+      if (items != null) #items: items,
       if (portraitPath != $none) #portraitPath: portraitPath,
       if (portraitBaseName != null) #portraitBaseName: portraitBaseName,
     }),
@@ -569,6 +599,7 @@ class _CharacterCopyWithImpl<$R, $Out>
     turnUndeadLevel: data.get(#turnUndeadLevel, or: $value.turnUndeadLevel),
     trackingSkill: data.get(#trackingSkill, or: $value.trackingSkill),
     proficiencies: data.get(#proficiencies, or: $value.proficiencies),
+    items: data.get(#items, or: $value.items),
     portraitPath: data.get(#portraitPath, or: $value.portraitPath),
     portraitBaseName: data.get(#portraitBaseName, or: $value.portraitBaseName),
   );

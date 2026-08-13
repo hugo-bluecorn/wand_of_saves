@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/domain/character_identity.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 
@@ -382,6 +383,55 @@ final class MemoriseSpell extends CharacterEditCommand {
 
   @override
   String get label => 'Memorise $resref';
+}
+
+/// Puts an item the game ships into a character's inventory.
+///
+/// ⚠️ **Two writes, and the second is what makes it visible.** Appending the
+/// 20-byte entry puts the item in the file; writing [slot] is what puts it in
+/// the game. Every engine-written record references every item from a slot —
+/// measured across 18 of them — so an item nothing points at would be this
+/// application inventing a shape the engine has never produced.
+///
+/// ⚠️ **[slot] is resolved by the caller**, not chosen here. Finding the first
+/// free backpack slot means reading the record, and a command that reads the
+/// file it is about to change is no longer a description of an edit — the same
+/// line [SetProficiency] draws around `effectOffset` and [MemoriseSpell] around
+/// `memorisable`.
+///
+/// This resizes, so before the GAM relocation shipped it would have been a
+/// `.chr`-only edit. It is not any more.
+final class AddItem extends CharacterEditCommand {
+  /// Gives the creature at [creOffset] the item [resref], in [slot].
+  const AddItem({
+    required this.creOffset,
+    required this.resref,
+    required this.slot,
+    this.quantity = 1,
+  });
+
+  @override
+  final int creOffset;
+
+  /// The `ITM` resource, e.g. `BOOT01`.
+  ///
+  /// ⚠️ **The key, and the only one.** Four items resolve to the name "The Paws
+  /// of the Cheetah"; nothing but the resref tells them apart.
+  final String resref;
+
+  /// Where it goes.
+  final CreItemSlot slot;
+
+  /// How many, for something that stacks.
+  final int quantity;
+
+  /// What this edit did.
+  ///
+  /// Names the item by resref, because naming it properly needs the archives
+  /// and the player's own talk table — which a domain command must not reach
+  /// for.
+  @override
+  String get label => 'Add $resref';
 }
 
 /// Sets the shared party purse.

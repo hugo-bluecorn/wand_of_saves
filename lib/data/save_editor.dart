@@ -105,6 +105,31 @@ T applyCharacterEdit<T extends CreatureDocument<T>>(
           .withEntryAppended(section: CreSection.effects, entry: effect),
     );
   }(),
+  // ⚠️ **The only edit that writes twice**, and the second write is the point:
+  // the append puts the item in the file, the slot puts it in the game. The
+  // index is knowable only after the append — the same shape `MemoriseSpell`
+  // uses below, where the row index comes off the returned creature.
+  AddItem(
+    :final creOffset,
+    :final resref,
+    :final slot,
+    :final quantity,
+  ) =>
+    () {
+      final creature =
+          CreCodec.decode(
+            document.creatureAt(creOffset),
+          ).withEntryAppended(
+            section: CreSection.items,
+            entry: itemEntry(resref: resref, quantity: quantity),
+          );
+
+      return document.withCreature(
+        creOffset: creOffset,
+        creature: creature.withItemSlot(slot, creature.itemsCount - 1),
+      );
+    }(),
+
   LearnSpell(:final creOffset, :final resref, :final level, :final type) => () {
     final creature = CreCodec.decode(document.creatureAt(creOffset));
 

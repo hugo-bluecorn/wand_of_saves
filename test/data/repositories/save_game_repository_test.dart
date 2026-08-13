@@ -284,7 +284,15 @@ void main() {
 
       expect(character.structOffset, syntheticPartyOffset);
       expect(character.creOffset, greaterThan(character.structOffset));
-      expect(character.creLength, 724);
+      // ⚠️ **804, not 724** — the 724-byte header plus the 80-byte item-slot
+      // table, which is exactly what `CHARBASE` is. The fixture used to omit
+      // the table, which is a shape no record the engine writes has; a
+      // creature without one cannot be given an item at all.
+      expect(
+        character.creLength,
+        CreHeaderField.headerSize + creItemSlotsLength,
+      );
+      expect(character.creLength, 804);
     });
 
     test('leaves the name empty when the save carries none', () async {

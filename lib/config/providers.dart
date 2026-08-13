@@ -31,6 +31,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // naming this one, so the import is the honest way to satisfy it (D8).
 import 'package:flutter_riverpod/misc.dart';
 import 'package:wand_of_saves/data/creation_catalogue_loading.dart';
+import 'package:wand_of_saves/data/item_catalogue_loading.dart';
 import 'package:wand_of_saves/data/name_tables_loading.dart';
 import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
@@ -43,6 +44,7 @@ import 'package:wand_of_saves/data/services/recycle_service.dart';
 import 'package:wand_of_saves/domain/character_file.dart';
 import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/document_ref.dart';
+import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/rules/name_tables.dart';
@@ -339,6 +341,28 @@ final creationCatalogueProvider = FutureProvider<CreationCatalogue>(
     rules: ref.watch(gameRulesProvider),
   ),
 );
+
+/// Every item the installation ships, named.
+///
+/// **Keep-alive, which is the hand-declared default** — no `isAutoDispose`,
+/// because this is shared business state that many widgets read and it costs a
+/// measured ~146 ms to build. `retry: neverRetry` on the provider itself, not
+/// only on the scope, for the reason D12 records: a test container does not
+/// inherit the app's scope.
+///
+/// ⚠️ **The search query does NOT live here.** Riverpod's own `do_dont.mdx`
+/// classifies a text field's contents as ephemeral, controller-backed state and
+/// says to keep it out of providers; `CommandPalette` already does that. This
+/// provider holds the corpus; the widget holds the query and filters
+/// synchronously.
+final FutureProvider<ItemCatalogue> itemCatalogueProvider =
+    FutureProvider<ItemCatalogue>(
+      retry: neverRetry,
+      (ref) => loadItemCatalogue(
+        resources: ref.watch(resourceRepositoryProvider),
+        strings: ref.watch(stringRepositoryProvider),
+      ),
+    );
 
 /// Base names of every portrait the player can choose.
 ///
