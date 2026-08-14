@@ -280,6 +280,41 @@ same motion or duplication triples; the item catalogue stays watched outside edi
 If capture 2 or a post-merge capture shows the single column genuinely unusable at inventory
 density, option B is the recorded fallback — taken then as its own decision, not by drift.
 
+### Amended the same day — the user set the direction: a grid, not columns
+
+Reviewing this document, the user chose differently: **the merged page is grid-based — fixed
+cells, and no widget that rearranges when the window resizes.** Options A and B are both declined
+("instead of columns"); C stays rejected. The no-reflow half was already doctrine and stands.
+
+What this supersedes and what it keeps:
+
+- **D15's single column is superseded for the merged page — by decision, not by drift**, which is
+  exactly the deliberate reopening §8c demanded. D15's other halves stand untouched: the
+  Starfleet palette, and **no breakpoint logic** — a fixed grid means a fixed column count with
+  no `MediaQuery`/`LayoutBuilder`, a raised minimum window size if the grid requires one
+  (`linux/runner/my_application.cc` already sets the floor A8 added), and vertical scrolling
+  only.
+- **The three-slice sequencing stands unchanged.** The prep slice is layout-agnostic.
+
+The two ways the *last* grid failed, recorded in `planning/ui-review.md` and D17, which the new
+one must answer by construction:
+
+1. **Dead space from uniform tiles** — the 222 px tile grid wasted 19.3 % of every row. Cells are
+   sized by their content's design, never by a shared tile module.
+2. **The zigzag from greedy balancing** — panel positions are a **named, fixed map** of what sits
+   where, never an algorithm balancing heights. The reading order is authored, as the column's
+   was.
+
+And the property that makes a grid *better* than the column for this page — the acceptance test
+the spike is judged on: **the character's numbers and the items are simultaneously visible.** An
+equip or a move must change a number the user can see without scrolling. The single column's
+recorded weakness was exactly that the numbers would sit several panels away from the grid being
+dragged over.
+
+**How D19 closes: the way D15 did — by looking.** The merge slice therefore opens with a small
+layout spike: two grid arrangements built with real data, captured, and put in front of the user.
+The chosen arrangement becomes D19 in `planning/decisions.md`, with this document as its input.
+
 ---
 
 *Not done here, deliberately: no code was changed; engine-side assertions inside recorded claims
