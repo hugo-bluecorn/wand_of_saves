@@ -376,6 +376,11 @@ class ResourceRepository {
         ItemEntry(
           resref: resref.toUpperCase(),
           itemType: item.itemType,
+          // ⚠️ Read here because the `Itm` is already decoded — asking the
+          // archives a second time for one bit would double the 28 ms this
+          // whole sweep costs.
+          isMovable: item.flags.contains(ItmFlag.movable),
+          isCursed: item.flags.contains(ItmFlag.cursed),
           identifiedNameStrref: item.identifiedNameStrref,
           unidentifiedNameStrref: item.unidentifiedNameStrref,
           descriptionStrref:

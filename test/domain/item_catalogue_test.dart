@@ -94,7 +94,7 @@ void main() {
     test('⚠️ "Boots of Speed" is found by DESCRIPTION, not by name', () {
       // The ask, exactly. BG:EE has no item called this; the phrase is in
       // BOOT01's own description text.
-      final found = catalogue().search('boots of speed');
+      final found = catalogue().search('boots of speed').results;
       expect(found, hasLength(1));
       expect(found.single.entry.resref, 'BOOT01');
       expect(
@@ -105,7 +105,7 @@ void main() {
     });
 
     test('an exact resref ranks first', () {
-      final found = catalogue().search('BOOT01');
+      final found = catalogue().search('BOOT01').results;
       expect(found.first.entry.resref, 'BOOT01');
       expect(found.first.how, ItemMatch.resref);
     });
@@ -113,7 +113,7 @@ void main() {
     test('searches BOTH names', () {
       // Ten of the fourteen "boot" items are called simply "Boots" when
       // unidentified, which is what a player who has not identified one sees.
-      final found = catalogue().search('boots');
+      final found = catalogue().search('boots').results;
       expect(
         found.map((f) => f.entry.resref),
         containsAll(<String>['BOOT01', 'TROLLBOO']),
@@ -124,7 +124,7 @@ void main() {
     test('⚠️ description matches sort AFTER name matches', () {
       // "speed" hits 238 descriptions in the real installation. Mixing them
       // into the name results is what makes the tier labelling necessary.
-      final found = catalogue().search('speed');
+      final found = catalogue().search('speed').results;
       expect(found.map((f) => f.how).toList(), [
         ItemMatch.description,
         ItemMatch.description,
@@ -132,11 +132,100 @@ void main() {
     });
 
     test('never returns the unofferable', () {
-      expect(catalogue().search('ghost'), isEmpty);
+      expect(catalogue().search('ghost').results, isEmpty);
     });
 
     test('an empty query returns nothing rather than everything', () {
-      expect(catalogue().search('   '), isEmpty);
+      expect(catalogue().search('   ').results, isEmpty);
+    });
+  });
+
+  group('⚠️ items the engine will never let go of', () {
+    // The defect that prompted this: BOW99 could be added to a character and
+    // then neither equipped nor moved, because its own ITM header has the
+    // Movable bit clear. 432 of the installation's 1,428 named items are like
+    // that, and searching "attack" returned sixty of them and nothing else.
+    ItemCatalogue stuckAnd(ItemEntry offered) => ItemCatalogue({
+      offered.resref: offered,
+      'BOW99': const ItemEntry(
+        resref: 'BOW99',
+        itemType: 15,
+        identifiedName: 'Protector of the Dryads +2',
+        unidentifiedName: 'Shortbow',
+        isMovable: false,
+      ),
+    });
+
+    test('an immovable item never appears, at any match tier', () {
+      final catalogue = stuckAnd(
+        const ItemEntry(
+          resref: 'BOW05',
+          itemType: 15,
+          identifiedName: 'Shortbow',
+        ),
+      );
+
+      // By resref, by name, and by the unidentified name.
+      expect(catalogue.search('BOW99').results, isEmpty);
+      expect(
+        catalogue.search('protector').results,
+        isEmpty,
+        reason: 'the identified name must not smuggle it in',
+      );
+      expect(
+        catalogue.search('shortbow').results.map((f) => f.entry.resref),
+        ['BOW05'],
+        reason: 'the movable twin survives, sharing its name',
+      );
+    });
+
+    test('withheld counts exactly what was hidden', () {
+      final catalogue = stuckAnd(
+        const ItemEntry(
+          resref: 'BOW05',
+          itemType: 15,
+          identifiedName: 'Shortbow',
+        ),
+      );
+      expect(catalogue.search('shortbow').withheld, 1);
+      expect(catalogue.search('BOW05').withheld, 0, reason: 'nothing hidden');
+      expect(catalogue.search('nothing at all').withheld, 0);
+    });
+
+    test('⚠️ a CURSED item is offered, because cursed is not stuck', () {
+      // IESDP bit 4 means "cannot be UNequipped" — the item moves perfectly
+      // well until somebody wears it, and the game's own shops sell them.
+      // Refusing it would be this application overruling the player.
+      const catalogue = ItemCatalogue({
+        'RING06': ItemEntry(
+          resref: 'RING06',
+          itemType: 10,
+          identifiedName: 'Ring of Clumsiness',
+          isCursed: true,
+        ),
+      });
+
+      final found = catalogue.search('clumsiness').results;
+      expect(found.single.entry.resref, 'RING06');
+      expect(found.single.entry.isCursed, isTrue);
+      expect(catalogue.search('clumsiness').withheld, 0);
+    });
+
+    test('offerable still answers the naming question, unchanged', () {
+      // ⚠️ Two different filters. `isOfferable` asks "does this name a string";
+      // withholding asks "can the game move it". Folding them together would
+      // lose the two-stage filter the catalogue documents.
+      final catalogue = stuckAnd(
+        const ItemEntry(
+          resref: 'BOW05',
+          itemType: 15,
+          identifiedName: 'Shortbow',
+        ),
+      );
+      expect(
+        catalogue.offerable.map((e) => e.resref),
+        containsAll(<String>['BOW05', 'BOW99']),
+      );
     });
   });
 }

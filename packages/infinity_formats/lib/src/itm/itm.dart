@@ -95,6 +95,14 @@ final class Itm {
   bool get hasName =>
       identifiedNameStrref != null || unidentifiedNameStrref != null;
 
+  /// What the header's flag word says about this item.
+  ///
+  /// ⚠️ **Ask this before offering an item to anybody.** Without
+  /// [ItmFlag.movable] the engine will never let it leave the slot it is put
+  /// in — not to be equipped, not to be dropped, not to be handed to another
+  /// character. A large minority of the shipped items are like that.
+  Set<ItmFlag> get flags => ItmFlag.setFrom(_read(ItmHeaderField.flags));
+
   /// What kind of item this is, as `ITEMCAT.IDS` numbers it.
   int get itemType => _read(ItmHeaderField.itemType);
 

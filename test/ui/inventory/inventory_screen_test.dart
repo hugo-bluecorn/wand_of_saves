@@ -29,6 +29,19 @@ import '../../support/fakes.dart';
 /// Speed" — the game calls it "The Paws of the Cheetah" — and the phrase lives
 /// only in its description. That is the whole reason the third tier exists.
 const _catalogue = ItemCatalogue({
+  'BOW99': ItemEntry(
+    resref: 'BOW99',
+    itemType: 15,
+    identifiedName: 'Protector of the Dryads +2',
+    unidentifiedName: 'Shortbow',
+    isMovable: false,
+  ),
+  'RING06': ItemEntry(
+    resref: 'RING06',
+    itemType: 10,
+    identifiedName: 'Ring of Clumsiness',
+    isCursed: true,
+  ),
   'BOOT01': ItemEntry(
     resref: 'BOOT01',
     itemType: 4,
@@ -465,6 +478,68 @@ void main() {
       // Two carried, one worn — not three and three.
       expect(find.text('2'), findsOneWidget);
       expect(find.text('1'), findsOneWidget);
+    });
+  });
+
+  group('⚠️ items the engine will never release', () {
+    testWidgets('a search that only matches immovable items says so', (
+      tester,
+    ) async {
+      await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
+
+      await tester.enterText(find.byType(TextField), 'protector');
+      await tester.pumpAndSettle();
+
+      expect(find.text('BOW99'), findsNothing, reason: 'never offered');
+      expect(find.textContaining('withheld'), findsOneWidget);
+      expect(find.textContaining('1'), findsWidgets);
+    });
+
+    testWidgets('nothing is said when nothing was withheld', (tester) async {
+      await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
+
+      await tester.enterText(find.byType(TextField), 'RING01');
+      await tester.pumpAndSettle();
+
+      // ⚠️ Not `find.text('RING01')` — the search box holds that text too.
+      expect(find.text('Ring of Protection +1'), findsOneWidget);
+      expect(find.textContaining('withheld'), findsNothing);
+    });
+
+    testWidgets('a CURSED item is offered, and marked', (tester) async {
+      // Cursed means "cannot be unequipped", not "cannot be moved" — so it is
+      // added like anything else, with the warning said rather than enforced.
+      await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
+
+      await tester.enterText(find.byType(TextField), 'clumsiness');
+      await tester.pumpAndSettle();
+
+      expect(find.text('RING06'), findsOneWidget);
+      expect(find.text('cursed'), findsOneWidget);
+    });
+
+    testWidgets('⚠️ an immovable item ALREADY carried is marked', (
+      tester,
+    ) async {
+      // The row that explains itself: BOW99 sitting in Imoen's pack, unable to
+      // be dragged when its neighbours can. Without this the difference in
+      // affordance has no visible cause.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOW99', index: 0, slotIndex: 21),
+          CarriedItem(resref: 'RING01', index: 1, slotIndex: 22),
+        ]),
+        onAdd: (_, _) {},
+        draggable: true,
+      );
+
+      expect(find.text('cannot be moved'), findsOneWidget);
+      expect(
+        find.byType(Draggable<ItemDrag>),
+        findsOneWidget,
+        reason: 'only the movable one may be dragged',
+      );
     });
   });
 }

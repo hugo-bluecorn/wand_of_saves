@@ -155,3 +155,71 @@ enum ItmHeaderField implements FormatField {
   @override
   final bool signed;
 }
+
+/// The bits of [ItmHeaderField.flags], as IESDP documents them.
+///
+/// ⚠️ **[movable] is the one that matters, and nothing read it for weeks.**
+/// An item with it clear can be neither dropped nor moved between slots, so
+/// giving one to a character produces a row the engine will never release —
+/// which is exactly what `BOW99` did on a real save. **432 of the 1,428 named
+/// items a BG:EE installation ships have it clear**, so this is a large
+/// minority rather than a curiosity.
+///
+/// ⚠️ **[cursed] is a different question and must not be conflated.** IESDP:
+/// the item "cannot be unequipped". It can still be carried, moved and handed
+/// over — the game's own shops sell cursed items — so it is worth *saying*, not
+/// worth refusing.
+///
+/// Only the first byte is modelled. IESDP documents bits well past these, and
+/// [setFrom] ignores what it does not name rather than refusing it, exactly as
+/// `CreItemFlag` does for the creature-side flags.
+enum ItmFlag {
+  /// A critical item; on EE only certain stores will buy it.
+  unsellable(1),
+
+  /// Forces the two-handed animation and disables the off-hand.
+  twoHanded(1 << 1),
+
+  /// ⚠️ **Whether the item can be dropped or moved between slots at all.**
+  ///
+  /// IESDP names this bit "Movable / Droppable" and notes it is overridden by
+  /// the `CRE`/`STO` `NONDROPABLE` flag — so a clear bit here is not the only
+  /// way an item becomes stuck, but it is the one BioWare authors into the item
+  /// itself.
+  movable(1 << 2),
+
+  /// Whether the engine draws it on the ground once dropped.
+  displayable(1 << 3),
+
+  /// It cannot be *unequipped* once worn.
+  ///
+  /// ⚠️ **Not the same as being unable to move it** — see [movable]. A cursed
+  /// item in a backpack behaves like any other until somebody equips it.
+  cursed(1 << 4),
+
+  /// A scroll that cannot be copied into a spellbook.
+  cannotScribe(1 << 5),
+
+  /// Magical, which decides how it interacts with opcode 120.
+  ///
+  /// ⚠️ Unrelated to the enchantment field; IESDP says both work independently.
+  magical(1 << 6),
+
+  /// Disables the off-hand, and with it the two-weapon style.
+  leftHanded(1 << 7);
+
+  const ItmFlag(this.mask);
+
+  /// The bit this flag occupies.
+  final int mask;
+
+  /// Which flags [stored] sets, ignoring bits this enum does not name.
+  static Set<ItmFlag> setFrom(int stored) => {
+    for (final flag in values)
+      if (stored & flag.mask != 0) flag,
+  };
+
+  /// The stored value for [flags].
+  static int maskOf(Iterable<ItmFlag> flags) =>
+      flags.fold(0, (mask, flag) => mask | flag.mask);
+}

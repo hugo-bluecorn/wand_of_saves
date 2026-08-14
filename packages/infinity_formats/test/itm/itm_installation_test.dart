@@ -175,6 +175,30 @@ void main() {
         expect(itm.extendedHeaderCount, greaterThan(0));
       }
     });
+
+    test('⚠️ BOW99 cannot be moved and BOW05 can — the reported defect', () {
+      // The item that could not be equipped or moved out of Imoen's pack. The
+      // cause is in BioWare's own file: IESDP names bit 2 "Movable /
+      // Droppable", and BOW99 has it clear where the ordinary shortbow has it
+      // set. Nothing this application writes is involved.
+      expect(byResref['BOW05']!.flags, contains(ItmFlag.movable));
+      expect(byResref['BOW99']!.flags, isNot(contains(ItmFlag.movable)));
+      // And it is NOT cursed — a different bit, meaning "cannot be unequipped".
+      expect(byResref['BOW99']!.flags, isNot(contains(ItmFlag.cursed)));
+    });
+
+    test('⚠️ immovable items are common, not a curiosity', () {
+      // Counted rather than pinned to a total: an exact number would be
+      // brittle against a modded installation and would say nothing about the
+      // rule. What matters is that this is a large minority rather than a
+      // handful, which is why the search has to withhold them.
+      final named = items.where((i) => i.hasName).toList();
+      final stuck = named.where((i) => !i.flags.contains(ItmFlag.movable));
+
+      expect(named, hasLength(greaterThan(1000)));
+      expect(stuck.length, greaterThan(100), reason: 'a large minority');
+      expect(stuck.length, lessThan(named.length), reason: 'not all of them');
+    });
   }, skip: skip);
 }
 

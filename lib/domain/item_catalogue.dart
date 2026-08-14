@@ -29,6 +29,8 @@ class ItemEntry {
     this.identifiedNameStrref,
     this.unidentifiedNameStrref,
     this.descriptionStrref,
+    this.isMovable = true,
+    this.isCursed = false,
   });
 
   /// The `ITM` resource, e.g. `BOOT01`. Upper case.
@@ -36,6 +38,26 @@ class ItemEntry {
 
   /// What kind of item, as `ITEMCAT.IDS` numbers it.
   final int itemType;
+
+  /// Whether the engine will let this item be moved at all.
+  ///
+  /// ⚠️ **Clear on 432 of the 1,428 named items an installation ships**, and
+  /// the reason this field exists: `BOW99` was added to a character who could
+  /// then neither equip it nor move it out. IESDP names ITM header bit 2
+  /// "Movable / Droppable"; BioWare authors it clear on plot items, on creature
+  /// attacks, and on a handful of ordinary-looking weapons.
+  ///
+  /// Defaults to `true` so a test fixture describes an ordinary item without
+  /// having to say so.
+  final bool isMovable;
+
+  /// Whether the engine will refuse to let it be taken off once worn.
+  ///
+  /// ⚠️ **Not the same as [isMovable], and deliberately not a reason to refuse
+  /// it.** IESDP's bit 4 means "cannot be unequipped": the item carries, moves
+  /// and changes hands perfectly well until somebody equips it, and the game's
+  /// own shops sell them. Worth saying; not worth overruling the player about.
+  final bool isCursed;
 
   /// The name once identified, or `null` before the talk table is merged.
   final String? identifiedName;
@@ -92,6 +114,8 @@ class ItemEntry {
     identifiedNameStrref: identifiedNameStrref,
     unidentifiedNameStrref: unidentifiedNameStrref,
     descriptionStrref: descriptionStrref,
+    isMovable: isMovable,
+    isCursed: isCursed,
   );
 
   static String? _firstNonEmpty(String? a, String? b) {
@@ -140,38 +164,60 @@ class ItemCatalogue {
     return found;
   }
 
-  /// Items matching [query], best tier first.
+  /// Items matching [query], best tier first, and how many were withheld.
   ///
-  /// Returns `(entry, how)` so the screen can label the description group
-  /// rather than leaving a reader wondering why a row appeared.
-  List<({ItemEntry entry, ItemMatch how})> search(
+  /// Returns `(entry, how)` per result so the screen can label the description
+  /// group rather than leaving a reader wondering why a row appeared.
+  ///
+  /// ⚠️ **An item the engine cannot move is never offered**, however well it
+  /// matches. Adding one produces a row that can be neither equipped nor handed
+  /// on — measured on `BOW99`, and true of 432 of the 1,428 named items. They
+  /// are *counted* rather than silently dropped: sixty greyed rows would be
+  /// wallpaper, but saying nothing would hide a third of the catalogue.
+  ({List<({ItemEntry entry, ItemMatch how})> results, int withheld}) search(
     String query, {
     int limit = 60,
   }) {
     final needle = query.trim().toLowerCase();
-    if (needle.isEmpty) return const [];
+    if (needle.isEmpty) return (results: const [], withheld: 0);
 
     final byResref = <ItemEntry>[];
     final byName = <ItemEntry>[];
     final byDescription = <ItemEntry>[];
+    var withheld = 0;
 
     for (final entry in offerable) {
+      final matches =
+          entry.resref.toLowerCase() == needle ||
+          entry.resref.toLowerCase().contains(needle) ||
+          _has(entry.identifiedName, needle) ||
+          _has(entry.unidentifiedName, needle) ||
+          _has(entry.description, needle);
+      if (matches && !entry.isMovable) {
+        withheld++;
+        continue;
+      }
+      if (!matches) continue;
+
       if (entry.resref.toLowerCase() == needle) {
         byResref.add(entry);
       } else if (entry.resref.toLowerCase().contains(needle) ||
           _has(entry.identifiedName, needle) ||
           _has(entry.unidentifiedName, needle)) {
         byName.add(entry);
-      } else if (_has(entry.description, needle)) {
+      } else {
         byDescription.add(entry);
       }
     }
 
-    return [
-      for (final e in byResref) (entry: e, how: ItemMatch.resref),
-      for (final e in byName) (entry: e, how: ItemMatch.name),
-      for (final e in byDescription) (entry: e, how: ItemMatch.description),
-    ].take(limit).toList();
+    return (
+      results: [
+        for (final e in byResref) (entry: e, how: ItemMatch.resref),
+        for (final e in byName) (entry: e, how: ItemMatch.name),
+        for (final e in byDescription) (entry: e, how: ItemMatch.description),
+      ].take(limit).toList(),
+      withheld: withheld,
+    );
   }
 
   static bool _has(String? text, String needle) =>

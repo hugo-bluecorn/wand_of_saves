@@ -180,8 +180,20 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   if (_query.text.trim().isNotEmpty)
-                    _Results(results: results, onAdd: _add),
-                  _Carried(items: _items, from: widget.partyPosition),
+                    _Results(
+                      results: results.results,
+                      withheld: results.withheld,
+                      onAdd: _add,
+                    ),
+                  _Carried(
+                    items: _items,
+                    from: widget.partyPosition,
+                    // ⚠️ Cross-referenced from the catalogue: the creature
+                    // record says nothing about droppability, so a carried row
+                    // can only explain itself by asking the item.
+                    isStuck: (resref) =>
+                        catalogue.entries[resref]?.isMovable == false,
+                  ),
                 ],
               ),
             ),
@@ -226,18 +238,40 @@ class _Search extends StatelessWidget {
 /// descriptions, so they are grouped under their own heading rather than mixed
 /// in, and a reader can always see why a row appeared.
 class _Results extends StatelessWidget {
-  const _Results({required this.results, required this.onAdd});
+  const _Results({
+    required this.results,
+    required this.withheld,
+    required this.onAdd,
+  });
 
   final List<({ItemEntry entry, ItemMatch how})> results;
+
+  /// How many matches the engine could never move, and so were not offered.
+  final int withheld;
+
   final void Function(ItemEntry) onAdd;
+
+  /// What to say about the matches that were not offered.
+  ///
+  /// ⚠️ **Said rather than shown.** Searching "attack" matches sixty items,
+  /// every one of them a thing the engine will not release — sixty greyed rows
+  /// is wallpaper, and the findings badge that read 13 is this project's
+  /// standing lesson about that. But dropping them silently would hide a third
+  /// of the catalogue, so the count is stated.
+  String get _withheldNote =>
+      '$withheld more ${withheld == 1 ? "match was" : "matches were"} '
+      'withheld: the game will not let ${withheld == 1 ? "it" : "them"} '
+      'be moved or equipped.';
 
   @override
   Widget build(BuildContext context) {
     if (results.isEmpty) {
-      return const PanelCard(
+      return PanelCard(
         title: 'Found nothing',
-        note: 'No item answers to that by name, by resref or by description.',
-        children: [],
+        note: withheld == 0
+            ? 'No item answers to that by name, by resref or by description.'
+            : _withheldNote,
+        children: const [],
       );
     }
 
@@ -266,13 +300,30 @@ class _Results extends StatelessWidget {
                   ListTile(
                     title: Text(entry.label),
                     subtitle: Text(entry.resref),
-                    trailing: FilledButton.tonal(
-                      onPressed: () => onAdd(entry),
-                      child: const Text('Add'),
+                    trailing: Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        // ⚠️ Said, not enforced. Cursed means the item cannot
+                        // be taken off once worn — it carries and changes hands
+                        // like any other until then, and the game's own shops
+                        // sell them.
+                        if (entry.isCursed)
+                          const Tag('cursed', tone: TagTone.muted),
+                        FilledButton.tonal(
+                          onPressed: () => onAdd(entry),
+                          child: const Text('Add'),
+                        ),
+                      ],
                     ),
                   ),
               ],
             ),
+        if (withheld > 0)
+          Text(
+            _withheldNote,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
       ],
     );
   }
@@ -285,9 +336,12 @@ class _Results extends StatelessWidget {
 /// rows drag and some do not — with nothing saying why — is an unexplained
 /// affordance. The grouping is what justifies the difference.
 class _Carried extends StatelessWidget {
-  const _Carried({required this.items, this.from});
+  const _Carried({required this.items, required this.isStuck, this.from});
 
   final List<CarriedItem> items;
+
+  /// Whether the engine refuses to move the item with that resref.
+  final bool Function(String resref) isStuck;
 
   /// The owner's party position, when there is somebody to hand items to.
   final int? from;
@@ -301,7 +355,13 @@ class _Carried extends StatelessWidget {
   bool _movable(CarriedItem item) =>
       from != null &&
       item.isInASlot &&
-      CreItemSlot.values[item.slotIndex].isPack;
+      CreItemSlot.values[item.slotIndex].isPack &&
+      // ⚠️ **An item the engine will not move must not be draggable either.**
+      // `MoveItem` would carry it out at the byte level perfectly happily and
+      // leave it stuck on somebody else instead. This gate lives here rather
+      // than in the command because the command works on bytes alone and has
+      // no way to reach the archives to ask.
+      !isStuck(item.resref);
 
   bool _isPack(CarriedItem item) =>
       item.isInASlot && CreItemSlot.values[item.slotIndex].isPack;
@@ -331,6 +391,7 @@ class _Carried extends StatelessWidget {
           title: 'Inventory',
           items: carried,
           row: _row,
+          isStuck: isStuck,
           empty: 'Nothing yet.',
         ),
         if (worn.isNotEmpty)
@@ -338,9 +399,14 @@ class _Carried extends StatelessWidget {
           // doll, not a list — but "equipped" is its word, running right
           // through the item descriptions ("when equipped", "cannot be
           // equipped"). Borrowed, not coined.
-          _Panel(title: 'Equipped', items: worn, row: _row),
+          _Panel(title: 'Equipped', items: worn, row: _row, isStuck: isStuck),
         if (loose.isNotEmpty)
-          _Panel(title: 'In no slot', items: loose, row: _row),
+          _Panel(
+            title: 'In no slot',
+            items: loose,
+            row: _row,
+            isStuck: isStuck,
+          ),
       ],
     );
   }
@@ -435,12 +501,14 @@ class _Panel extends StatelessWidget {
     required this.title,
     required this.items,
     required this.row,
+    required this.isStuck,
     this.empty,
   });
 
   final String title;
   final List<CarriedItem> items;
   final Widget Function(CarriedItem, Widget) row;
+  final bool Function(String resref) isStuck;
   final String? empty;
 
   @override
@@ -462,6 +530,11 @@ class _Panel extends StatelessWidget {
             trailing: Wrap(
               spacing: 8,
               children: [
+                // ⚠️ What explains the row that will not drag. The engine
+                // refuses to move it at all — measured on `BOW99`, whose own
+                // ITM header has IESDP's Movable bit clear.
+                if (isStuck(item.resref))
+                  const Tag('cannot be moved', tone: TagTone.muted),
                 if (item.quantity > 1)
                   Tag('${item.quantity}', caption: 'quantity'),
                 // ⚠️ Stated, not hidden: with the flag clear the game draws the
