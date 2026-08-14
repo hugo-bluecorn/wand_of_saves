@@ -369,4 +369,102 @@ void main() {
       await tester.pumpAndSettle();
     });
   });
+
+  group('what is carried and what is worn are different things', () {
+    testWidgets('a pack item sits under Inventory, a worn one under Equipped', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'RING01', index: 0, slotIndex: 21),
+          CarriedItem(resref: 'BOOT01', index: 1, slotIndex: 8),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      expect(find.text('Inventory'), findsOneWidget);
+      expect(find.text('Equipped'), findsOneWidget);
+      expect(find.text('RING01'), findsOneWidget);
+      expect(find.text('BOOT01'), findsOneWidget);
+    });
+
+    testWidgets('no Equipped panel when nothing is worn', (tester) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'RING01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+      );
+      expect(find.text('Equipped'), findsNothing);
+      expect(find.text('Inventory'), findsOneWidget);
+    });
+
+    testWidgets('⚠️ an item in NO slot is still shown', (tester) async {
+      // ⚠️ Legal and observed: 618 items across 220 shipped creature records
+      // are referenced by no slot. Rendering only the first two groups would
+      // make those rows silently vanish from a screen whose whole job is to
+      // show the record.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'GHOST1', index: 0, slotIndex: -1),
+        ]),
+        onAdd: (_, _) {},
+      );
+      expect(find.text('GHOST1'), findsOneWidget);
+      expect(find.textContaining('will not'), findsOneWidget);
+    });
+
+    testWidgets('⚠️ no enum identifier reaches the screen', (tester) async {
+      // `slot.name` used to be printed straight out, so a real character's
+      // inventory said `leftRing` and `quickItem` at them.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 8),
+          CarriedItem(resref: 'RING02', index: 1, slotIndex: 4),
+          CarriedItem(resref: 'SW1H06', index: 2, slotIndex: 9),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      for (final leaked in ['boots', 'leftRing', 'weapon1', 'quickItem']) {
+        expect(find.text(leaked), findsNothing, reason: leaked);
+      }
+      expect(find.text('Boots'), findsOneWidget);
+      expect(find.text('Ring'), findsOneWidget);
+      expect(find.text('Weapon 1'), findsOneWidget);
+    });
+
+    testWidgets('⚠️ the word "backpack" appears nowhere', (tester) async {
+      // The game says Inventory — strrefs 6671, 11292 and 24358 — and
+      // "Backpack" is in none of its 34,000 strings. The word was ours.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'RING01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+      );
+      expect(find.textContaining('backpack'), findsNothing);
+      expect(find.textContaining('Backpack'), findsNothing);
+    });
+
+    testWidgets('each panel counts its own section', (tester) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'A', index: 0, slotIndex: 21),
+          CarriedItem(resref: 'B', index: 1, slotIndex: 22),
+          CarriedItem(resref: 'C', index: 2, slotIndex: 8),
+        ]),
+        onAdd: (_, _) {},
+      );
+      // Two carried, one worn — not three and three.
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('1'), findsOneWidget);
+    });
+  });
 }

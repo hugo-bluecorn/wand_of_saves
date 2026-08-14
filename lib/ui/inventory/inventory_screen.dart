@@ -278,14 +278,12 @@ class _Results extends StatelessWidget {
   }
 }
 
-/// What the character is already carrying.
-/// What the character is carrying.
+/// What the character carries, wears, and holds in no slot at all.
 ///
-/// ⚠️ **Called *Inventory* because that is what the game calls it.** Asked of
-/// the talk table rather than agreed by ear: strrefs 6671, 11292 and 24358 are
-/// exactly "Inventory", and "Inventory Full" names the same container.
-/// **"Backpack" appears nowhere in it** — that word is this project's, and so
-/// is "pack" in `CreItemSlot.pack`.
+/// ⚠️ **Three panels, because the rows are three different kinds of thing.**
+/// Only backpack items can be handed to somebody else, and a list where some
+/// rows drag and some do not — with nothing saying why — is an unexplained
+/// affordance. The grouping is what justifies the difference.
 class _Carried extends StatelessWidget {
   const _Carried({required this.items, this.from});
 
@@ -305,35 +303,47 @@ class _Carried extends StatelessWidget {
       item.isInASlot &&
       CreItemSlot.values[item.slotIndex].isPack;
 
+  bool _isPack(CarriedItem item) =>
+      item.isInASlot && CreItemSlot.values[item.slotIndex].isPack;
+
   @override
-  Widget build(BuildContext context) => PanelCard(
-    title: 'Inventory',
-    note: items.isEmpty ? 'Nothing yet.' : null,
-    trailing: Tag('${items.length}', caption: 'items'),
-    children: [
-      for (final item in items)
-        _row(
-          item,
-          ListTile(
-            dense: true,
-            title: Text(item.resref),
-            subtitle: Text(_where(item)),
-            trailing: Wrap(
-              spacing: 8,
-              children: [
-                if (item.quantity > 1)
-                  Tag('${item.quantity}', caption: 'quantity'),
-                // ⚠️ Stated, not hidden: with the flag clear the game draws the
-                // item's plain name, so a reader who sees only a resref here
-                // should know why the game will not call it what they expect.
-                if (!item.isIdentified)
-                  const Tag('unidentified', tone: TagTone.muted),
-              ],
-            ),
-          ),
+  Widget build(BuildContext context) {
+    final carried = items.where(_isPack).toList();
+    final worn = items
+        .where((item) => item.isInASlot && !_isPack(item))
+        .toList();
+    // ⚠️ **Never dropped.** An item no slot points at is legal and observed —
+    // 618 across 220 shipped creature records — and this screen's job is to
+    // show the record, so it gets a panel of its own rather than vanishing.
+    final loose = items.where((item) => !item.isInASlot).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 20,
+      children: [
+        // ⚠️ **Called *Inventory* because that is what the game calls it.**
+        // Asked of the talk table rather than agreed by ear: strrefs 6671,
+        // 11292 and 24358 are exactly "Inventory", and "Inventory Full" names
+        // the same container. **"Backpack" appears in none of its 34,000
+        // strings** — that word was this project's, and so is "pack" in
+        // `CreItemSlot.pack`.
+        _Panel(
+          title: 'Inventory',
+          items: carried,
+          row: _row,
+          empty: 'Nothing yet.',
         ),
-    ],
-  );
+        if (worn.isNotEmpty)
+          // ⚠️ Not a heading the game itself uses — its own screen is a paper
+          // doll, not a list — but "equipped" is its word, running right
+          // through the item descriptions ("when equipped", "cannot be
+          // equipped"). Borrowed, not coined.
+          _Panel(title: 'Equipped', items: worn, row: _row),
+        if (loose.isNotEmpty)
+          _Panel(title: 'In no slot', items: loose, row: _row),
+      ],
+    );
+  }
 
   /// [row] made draggable, when the item may be handed to somebody else.
   ///
@@ -358,9 +368,111 @@ class _Carried extends StatelessWidget {
     );
   }
 
-  static String _where(CarriedItem item) {
-    if (!item.isInASlot) return 'in no slot — the game will not show it';
+  /// Which slot holds [item], or `null` when the panel title already says.
+  ///
+  /// ⚠️ **A backpack row gets nothing.** Under a panel headed *Inventory*, a
+  /// subtitle reading "Inventory" on every row is the grouping restating
+  /// itself — and this project has already shipped a findings badge whose every
+  /// entry repeated the two chips beside it.
+  static String? _where(CarriedItem item) {
+    if (!item.isInASlot) {
+      return 'no slot points at it — the game will not show it';
+    }
     final slot = CreItemSlot.values[item.slotIndex];
-    return slot.isPack ? 'backpack' : slot.name;
+    return slot.isPack ? null : slotLabel(slot);
   }
+}
+
+/// What BG:EE calls [slot], rather than what this codebase calls it.
+///
+/// ⚠️ **`slot.name` used to be printed straight at the reader**, so a real
+/// character's inventory said `leftRing`, `quickItem` and `magicWeapon` — enum
+/// identifiers, on screen, as user-facing text.
+///
+/// The words are the game's own, each with the strref it was read from so the
+/// source stays recoverable. ⚠️ **Two caveats worth stating rather than
+/// glossing:**
+///
+/// - **The numerals are ours.** The game has no standalone "Weapon" string, so
+///   the four weapon slots take its noun and our number.
+/// - **Hardcoded English, and that is a localisation gap.** D11 wants anything
+///   carrying a strref read from the player's own installation, and these do
+///   have strrefs — but **no BG:EE table maps a slot to one** (`itmslots.2da`
+///   is PSTEE-only), so the mapping would be this project's either way.
+///   Hardcoding is the smaller invention than a strref map that would look
+///   authoritative and would not be.
+String slotLabel(CreItemSlot slot) => switch (slot) {
+  CreItemSlot.helmet => 'Helmet', // 11999
+  CreItemSlot.armor => 'Armor', // 11997 — the game's spelling, so it wins here
+  CreItemSlot.shield => 'Shield', // 12006 — holds an off-hand weapon too
+  CreItemSlot.gloves => 'Gauntlets', // 11998
+  CreItemSlot.leftRing || CreItemSlot.rightRing => 'Ring', // 6348
+  CreItemSlot.amulet => 'Amulet', // 12000
+  CreItemSlot.belt => 'Belt', // 12001
+  CreItemSlot.boots => 'Boots', // 12005
+  CreItemSlot.cloak => 'Cloak', // 12004
+  CreItemSlot.weapon1 => 'Weapon 1',
+  CreItemSlot.weapon2 => 'Weapon 2',
+  CreItemSlot.weapon3 => 'Weapon 3',
+  CreItemSlot.weapon4 => 'Weapon 4',
+  CreItemSlot.quiver1 => 'Quiver 1', // 12009
+  CreItemSlot.quiver2 => 'Quiver 2',
+  CreItemSlot.quiver3 => 'Quiver 3',
+  // ⚠️ Real, and unreachable from the game's own interface.
+  CreItemSlot.quiver4 => 'Quiver 4',
+  CreItemSlot.quick1 => 'Quick item 1', // 12012
+  CreItemSlot.quick2 => 'Quick item 2',
+  CreItemSlot.quick3 => 'Quick item 3',
+  // IESDP's name for it, not a string the game shows: the engine fills this
+  // slot itself.
+  CreItemSlot.magicWeapon => 'Magic weapon',
+  _ => 'Inventory', // 6671 — the sixteen backpack slots
+};
+
+/// One titled group of rows.
+class _Panel extends StatelessWidget {
+  const _Panel({
+    required this.title,
+    required this.items,
+    required this.row,
+    this.empty,
+  });
+
+  final String title;
+  final List<CarriedItem> items;
+  final Widget Function(CarriedItem, Widget) row;
+  final String? empty;
+
+  @override
+  Widget build(BuildContext context) => PanelCard(
+    title: title,
+    note: items.isEmpty ? empty : null,
+    trailing: Tag('${items.length}', caption: 'items'),
+    children: [
+      for (final item in items)
+        row(
+          item,
+          ListTile(
+            dense: true,
+            title: Text(item.resref),
+            subtitle: switch (_Carried._where(item)) {
+              final String where => Text(where),
+              null => null,
+            },
+            trailing: Wrap(
+              spacing: 8,
+              children: [
+                if (item.quantity > 1)
+                  Tag('${item.quantity}', caption: 'quantity'),
+                // ⚠️ Stated, not hidden: with the flag clear the game draws the
+                // item's plain name, so a reader who sees only a resref here
+                // should know why the game will not call it what they expect.
+                if (!item.isIdentified)
+                  const Tag('unidentified', tone: TagTone.muted),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
 }
