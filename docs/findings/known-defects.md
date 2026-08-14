@@ -147,15 +147,22 @@ either way. It is the *label* that is uncertain.
 
 ---
 
-## 8 The inventory screen is a list where it should be slots — agreed 2026-08-13
+## 8 The inventory redesign — slots shipped 2026-08-14, three items still owed
 
 Inventory shipped narrow on purpose, and the user walked the app and named what is missing. **None
 of this is a bug; it is the screen not yet being what it should be.** Recorded so it is not
 rediscovered as a surprise.
 
+✅ **Slots shipped 2026-08-14** — the backpack is sixteen fixed cells, four across, addressed **by
+slot** so a hole at `pack4` draws as a hole. The entry leaves this table because it is fixed, not
+because it was re-read. Shipped with it: each cell carries the name the game would draw *and* the
+code, the search withholds items the engine cannot move, and every item has a menu with Remove and
+Move to.
+
+**What is still owed:**
+
 | | what it needs |
 |---|---|
-| **Slots, not a list** | Sixteen fixed cells. A list hides that capacity is finite, which is the one thing an inventory has to convey. |
 | **Weight and capacity** | ⚠️ **The table exists**: `strmod.2da` carries a `WEIGHT_ALLOWANCE` column keyed by Strength, and *"Weight Allowance"* is the game's own phrase (strref 10338). Item weight is ITM `0x4c` — measured zero negatives across all 1,530 items, so the unsigned read is safe. |
 | **Item properties in results** | Weight, price, type and description are already loaded by `ItemEntry` and simply not rendered. |
 | **Categories** | `itemType` → `ITEMCAT.IDS`. Swords, bows, helms. |

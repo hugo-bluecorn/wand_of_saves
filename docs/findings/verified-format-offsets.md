@@ -602,6 +602,72 @@ independent ways**, 30 entries before and after. The cumulative shift reaches **
 Jaheira, so the last two records never moved and both files are 107,588 bytes. That is the engine
 performing `Gam.withCreature`'s job with the answer published.
 
+
+### ⚠️ ITM header flags — bit 2 decides whether an item can be moved at all — 2026-08-14
+
+**The field sat in the spec table unread for weeks**, and an item the engine will never release
+reached a real character's inventory before anyone asked what it said. IESDP's names for the first
+byte of `ItmHeaderField.flags` (`0x18`):
+
+| bit | meaning |
+|---|---|
+| 0 | Unsellable (critical item) |
+| 1 | Two-handed |
+| **2** | **Movable / Droppable** — *"overridden by the `CRE`/`STO` item flag NONDROPABLE"* |
+| 3 | Displayable — whether the engine draws it on the ground |
+| 4 | **Cursed** — *"the item cannot be unequipped"* |
+| 5 | Cannot scribe to spellbook (scrolls) |
+| 6 | Magical |
+| 7 | Left-handed |
+
+**The case that found it.** `BOW99` — *Protector of the Dryads +2* — was added to Imoen and could
+then be neither equipped nor moved out. Its flags are `0xe2`; the ordinary `BOW05` shortbow's are
+`0xae`. The difference is bit 2, and BioWare authored it that way. Nothing this application writes
+was involved: the CRE entry we produced carried `identified` alone, and CRE flags bit 3
+(*Undroppable*) was clear throughout.
+
+⚠️ **It is a large minority, not a curiosity: 432 of the 1,428 named items have bit 2 clear.**
+Searching *"attack"* returned sixty results, every one of them immovable — and sixty is the search
+limit, so there were more.
+
+⚠️ **The two are different questions and must not be conflated.** *Cursed* (bit 4) means the item
+cannot be **un**equipped; it carries, moves and changes hands perfectly well until somebody wears it,
+and the game's own shops sell them. Only bit 2 makes an item permanently stuck.
+
+⚠️ **A trap this creates.** `MISC57` is a genuine, movable *"Broken Shield"* sharing its name with
+nine monster attacks; `BOOTDRIZ` shares *"The Paws of the Cheetah"* with `BOOT01` and is immovable.
+**Name search cannot distinguish them — only the resref can**, which is the fifth time this project
+has met "a name is not a key".
+
+**What a monster attack actually is**, since 224 of the immovable ones are that: a creature's claw,
+bite or gaze is an **ITM equipped in its weapon slot**. Confirmed across all 2,253 shipped creature
+records — `BASILG` carries `BASILG1` in `weapon1`, `CARRIO` carries `CARRIO1`, `RSDTROLL` carries
+`TROLL01`. ⚠️ **But the immovable set is not only those**: `ARROPHEO` (Short Sword +1, 800 gp) and
+`BOW99` itself sit in the same group, so there is no "monster attack" category to filter on — the
+single Movable bit is the whole rule.
+
+### The game's own name for every equipment slot — 2026-08-14
+
+Scanned the player's talk table, 34,000 strings. **The slot labels sit in one contiguous block**:
+
+| strref | slot | | strref | slot |
+|---|---|---|---|---|
+| 11997 | Armor | | 12005 | Boots |
+| 11998 | Gauntlets | | 12006 | Shield |
+| 11999 | Helmet | | 12009 | Quiver |
+| 12000 | Amulet | | 12010 | Quick Weapon |
+| 12001 | Belt | | 12012 | Quick Item |
+| 12004 | Cloak | | 6348 | Ring |
+
+⚠️ **What the game does NOT have a word for**, checked exhaustively: *Equipped*, *Equipment*, *Worn*,
+*Carried*, ***Backpack*** and *Pack* appear nowhere as standalone strings — the game's own screen is
+a paper doll, so it needs no heading. *Inventory* is 6671, 11292 and 24358. The word **"equipped"**
+does run through the item descriptions, so it is the game's vocabulary even though it is never a
+label.
+
+⚠️ **And no string distinguishes the left ring from the right, or numbers the weapon slots.** Those
+qualifiers are this project's, and the code says so where it writes them.
+
 ### ITM V1 — read 2026-08-12, header verified against real bytes
 
 **1,530 items** in a BG:EE install, across 7 archives (1,282 in `data/ITEMS.BIF`). Reading every

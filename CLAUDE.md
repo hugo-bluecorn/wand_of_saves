@@ -191,7 +191,15 @@ which replaced the shipped UI rather than repairing it.
 **The basic workflow is the product, and it works**: open a save or a character file, edit the
 record, write it back. ✅ **Inventory now works too** — see `planning/inventory-seed.md` for the
 researched brief and `~/.claude/plans/swirling-purring-aho.md` for the plan it was cut from.
-**Next is the inventory screen's redesign**, listed in `docs/findings/known-defects.md`.
+✅ **The inventory redesign is largely done** (2026-08-14): sixteen slot-addressed cells, three
+panels, a per-item menu, drag-to-portrait. Three items remain in `known-defects.md` §8 — weight and
+capacity, item properties in results, categories.
+
+⚠️ **Next, and it is an architectural decision rather than a slice: merging the character and
+inventory screens.** The reasoning is `known-defects.md` §8c — equip/unequip needs *Recalculate
+Stats*, and if items move the character's numbers then a screen showing the item while hiding the
+numbers makes the change invisible. That reopens the recorded pushed-route shape and **D15**'s single
+column, so reopen them deliberately.
 
 > ### 🔷 The UI is the Starfleet Workbench, single column
 >
@@ -214,58 +222,35 @@ researched brief and `~/.claude/plans/swirling-purring-aho.md` for the plan it w
 > assertion means anything. `planning/ui-review.md` is the critique; the widgets that answered it
 > are `lib/ui/core/` and `lib/ui/character/`.
 
-> ### 🔶 Where the last session stopped, 2026-08-12 (evening)
+> ### 🔶 Where the last session stopped, 2026-08-14
 >
-> **769 app tests, 374 format tests**, `analyze` clean, zero suppressions. On branch
-> **`feat/inventory-format-layer`**, six commits, tree clean, not pushed.
+> **842 app tests, 399 format tests**, `analyze` clean, `dart format` clean, zero suppressions, tree
+> clean. On branch **`feat/inventory-format-layer`**, **19 commits, not pushed, no PR**.
 >
-> ✅ **Inventory ships**: search an item by name or resref and add it, in a savegame *or* a `.chr`.
-> The GAM relocation, the `ITM` codec, the CRE item and slot layer, the catalogue, `AddItem` and a
-> screen on both editors.
+> ✅ **THE ENGINE OPENED A RELOCATED SAVE — the project's oldest gate, closed 2026-08-13.** BG:EE
+> loaded a **six-member** save this app had resized (`SCRL75` added to Xzar, fourth in the array on
+> purpose), drew all six party members, and showed the scroll in his pack. Both hazardous header
+> encodings were live in that file and both survived — `familiarInfo` at file-length − 400, and two
+> sections parked at the **old EOF** carried to the new one. ⚠️ **Residual:** the engine *loaded*, it
+> did not *re-save*, so a field it silently corrects is still invisible. **A load-then-save gives the
+> byte diff** and is the cheapest strengthening left.
 >
-> ⚠️ **Scope was cut deliberately to ship in a day**: **inventory slots only, add only.** No
-> equipment slots, no remove, no quantity, no armour class. That dropped the plan's Phases E and F
-> entirely.
+> ✅ **Inventory is now a real screen**: a 4 × 4 grid of sixteen cells addressed **by slot** (a hole
+> at `pack4` draws as a hole), each cell carrying the name the game would draw *and* the resref;
+> three panels — Inventory, Equipped, In no slot; the party rail and Save/undo/redo on its own app
+> bar; drag an item onto a portrait to hand it over; and a `…`/right-click menu per item with
+> **Remove** and **Move to**.
 >
-> ✅ **The engine has now opened one.** On 2026-08-13 BG:EE loaded a six-member save this app had
-> resized, with the party intact and the added item in the right pack slot — see §"The engine opened
-> a relocated save". Before that, every gate was a byte gate.
+> ⚠️ **The subject is Conan, and the fixtures are his.** Arduin was deleted entirely — his `.chr`
+> carried a `dialogFile` no code path explains, and his CRE resref was `*RDUIN` where an
+> engine-created character carries `*HARBASE`. Fixtures hold a **2/4/6-member progression** plus the
+> transfer pair, and `ConanEX.chr`. The old fixtures stay as regression data only.
 >
-> **The user walked the app with a checklist and reported nine items. Seven are fixed**, one turned
-> out to be correct behaviour, and two are recorded in `docs/findings/known-defects.md` — **read that
-> file before reporting a bug or picking up work.**
->
-> ⚠️ **Three defects were the app stating what the engine draws, wrongly**, and that is now the
-> sharpest recurring fault in this codebase:
->
-> - `in game 25` on a thief skill a Fighter/Mage cannot allocate. The engine draws **no such row** —
->   measured 2026-08-10 — but `skilldex`/`skillrac` answer for any character, so the sum was computed
->   and printed.
-> - `in game 499/2` on attacks per round, from a stored **255**. The encoding covers 0–10 and the
->   arithmetic extrapolated past it.
-> - A findings badge reading **13** on a healthy first-level character, every entry restating the two
->   chips beside it.
->
-> **The rule that came out of it: the `in game` value is the one thing on the sheet that speaks for
-> the engine, so absent always beats invented.**
->
-> ⚠️ **`weapprof.2da` holds three generations and only one is live.** Settled by reading **all 2,253
-> shipped creature records**: 24 distinct proficiency ids are in use and **none is below 89**. The
-> obsolete BG1 band (0–7, `Bow`, `Large Sword`) carries valid names and non-zero caps, so no column
-> in the table separates it — hence a measured constant, D18. `ProficiencyCatalogue.live` serves the
-> sheet and creation alike; creation had the same bug.
->
-> ⚠️ **`CHARBASE` itself stores `numberOfAttacks = 255`** where every shipped NPC stores `1`, so every
-> created character carries it. What it means is **unknown and not guessed at** — `known-defects.md`
-> §5b has the three readings and the one trip into the game that would settle it.
->
-> ⚠️ **Those two golden saves still exist ONLY as gitignored fixtures.** The user deleted every save
-> through the app and asked that they never be restored; `sync_fixtures.dart` cannot regenerate them.
-> Lose that directory and `000000102-Gnome Start` and `000000103-Halfling Start` must be remade.
->
-> **Still parked by the user, do not propose:** the stored-hit-point rule, a Gnome Mage's
-> Intelligence minimum, a Barbarian's bytes at `0x244`, the export half of the Phase 2 gate, and an
-> anime theme.
+> ⚠️ **The recurring fault of the day, four times over: a rule written twice, and the second copy
+> wrong.** The naming rule, the pack-slot rule, the movable rule, the identified-name rule — each
+> reached one surface correctly and another incorrectly. See
+> [[a-rule-with-two-copies-is-the-bug]]. Every fix was to make it **one** copy, not to correct the
+> second.
 
 ### What exists
 
