@@ -102,3 +102,130 @@ changes the derived requirements, so correct this before the variants are drawn.
 
 The prep slice (`planning/inventory-merge-review.md` §7, slice 1) is layout-agnostic and may run
 before or alongside all of this.
+
+---
+
+## The inventory as reviewed — and one refinement it forces
+
+**2026-08-14, later:** the user reviewed the draft and changed nothing, so the task inventory
+stands and the `???` frequencies become working assumptions: B1 high; A1/A2/A4/A5 and the C
+tasks regular; A3 low; A6/A7 future but layout-reserved.
+
+**R1 is refined before any drawing: the "always-visible numbers cell" must not be a summary
+strip.** A strip showing AC beside a Combat panel also showing AC is the two-copies disease at
+the layout level. R1 is satisfied by **placement** — the existing panels that hold the moving
+numbers (Combat, Resistances, Condition) are *positioned* adjacent to the inventory and pinned,
+so the number exists once and sits where the items are. This is what an authored position map is
+for.
+
+## Walkthrough scripts
+
+Four costs, counted identically across variants — **S** actions (one click or key gesture),
+**L** scrolls, **E** eye jumps between grid regions, **M** context losses (route push, dialog,
+tab — anything that hides what the task needs; the §8c failure is an M by definition):
+
+- **W-B1 quick edit** — open the save, set Imoen's Save vs. Spell 12 → 5, save.
+- **W-A2 give** — move a Potion of Healing from Imoen's pack to Jaheira; end knowing it landed
+  and that Jaheira had room.
+- **W-A6 equip-watch** *(future control, scored now for adjacency)* — unequip Jaheira's armour;
+  the armour-class change must be seen without any L or M.
+- **W-C1 audit** — read Imoen's whole record, stored vs in-game, ending with the findings count.
+- **W-X1 switch mid-task** — from Imoen's proficiencies, check Jaheira's, return; scroll
+  positions preserved.
+
+## The two variants, derived
+
+Both: fixed grid, authored positions, content-sized cells, no reflow, no `MediaQuery`/
+`LayoutBuilder`; scrolling confined to designated cells; minimum window raised (estimate
+≈ 1280 × 860 — the spike measures the truth). Every cell names its tasks.
+
+### G1 — "Two benches" · adjacency-biased
+
+```
+┌──────────────────────┬───────────────────────────┬──────────────┐
+│ SLOW BENCH  [scrolls]│ FAST BENCH                │ PARTY   [X1] │
+│                      │ ┌───────────────────────┐ │  ┌────┐      │
+│ Character      [C1]  │ │ Combat · Resistances  │ │  │Imon│      │
+│ Abilities   [B3,C1]  │ │ · Condition   PINNED  │ │  └────┘      │
+│ Skills      [B3,C1]  │ │ [A6,A7,B3,C3]  never  │ │  ┌────┐      │
+│ Proficiencies  [B2]  │ │        scrolls        │ │  │Jahe│      │
+│                      │ └───────────────────────┘ │  └────┘      │
+│ (field palette       │ item search        [A1]   │  identity    │
+│  Ctrl+K jumps here   │ Backpack 4×4     [A1-A4]  │  save·undo   │
+│  [B1])               │ Equipped           [A6]   │  findings    │
+│                      │ In no slot   [scrolls]    │  rules  [X4] │
+└──────────────────────┴───────────────────────────┴──────────────┘
+```
+
+- **The moving numbers are pinned at the top of the same column as the items** — W-A6 is E1/M0
+  by construction.
+- **The party column sits on the RIGHT, beside the inventory** — derived, not defaulted: the
+  dominant drag (W-A2, pack → member) travels one column, not the full window. The
+  left-rail convention lost to the task that actually uses the edge.
+- **Editing is inline**: a selected row expands beneath itself (interaction-driven expansion is
+  not resize reflow). Nothing ever overlays the fast bench. The side sheet retires.
+- **Finds stay split**: field palette (Ctrl+K) over the slow bench, item search atop the fast
+  bench.
+
+### G2 — "Ledger grid" · audit-biased
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ Imoen · Thief 5 · 343 XP   [Imon][Jahe][Mont]   ⌕ unified find │
+│ [C1]                        [X1]                [B1,A1]  chrome│
+├────────────────────┬─────────────────────┬─────────────────────┤
+│ COLUMN 1  [scrolls]│ COLUMN 2   [scrolls]│ COLUMN 3   [scrolls]│
+│ Character          │ Proficiencies  [B2] │ item results  [A1]  │
+│ Abilities  [B3,C1] │ Combat   [A6,C3]    │ Backpack 4×4 [A1-A4]│
+│ Skills     [B3,C1] │ Resistances         │ Equipped      [A6]  │
+│                    │ Condition [A7]      │ In no slot          │
+│ (side sheet slides │                     │                     │
+│  over THIS column  │  [the moving        │                     │
+│  only)       [R3]  │   numbers]          │                     │
+└────────────────────┴─────────────────────┴─────────────────────┘
+```
+
+- **Three record columns visible at once** — W-C1 with minimal scrolling; the page reads left to
+  right in the authored order.
+- **Adjacency by column order**: the moving numbers (column 2) sit beside the items (column 3).
+- **One unified find** in the top band, searching fields *and* items — the committed opposite of
+  G1's split (the R5 axis is what these two variants disagree about most).
+- **The side sheet survives** but is authored to slide over column 1 only — the slow column —
+  never over the numbers or the items.
+- **The switcher is horizontal in the top band** — X1 at constant cost from anywhere.
+
+## Paper scores
+
+Counted from the scripts; identical counting rules both sides. Not opinions — disagreements with
+these counts are corrections to make.
+
+| script | G1 | G2 | verdict on paper |
+|---|---|---|---|
+| W-B1 quick edit | S5 · L0 · E2 · M0 (palette → inline edit) | S5 · L0 · E2 · M0 (unified find → side sheet) | tie — the finds differ in kind, not cost |
+| W-A2 give | S2 drag · E1 (pack → adjacent party column) | S2 drag · E2 (column 3 → top band) | G1, narrowly — after its derived right-edge party column |
+| W-A6 equip-watch | E1 · M0 — number pinned in-column | E1–2 · M0 — number one column left | G1 |
+| W-C1 audit | L2–3 across two benches · E3 | L1 across three columns · E2 | G2 |
+| W-X1 switch | S1, positions kept | S1, positions kept | tie |
+
+**G1 wins the manipulation flow; G2 wins the audit flow; the quick-edit flow cannot separate
+them on paper.** Both proceed to build — which was always the method — with the scores telling
+each spike what it must not lose while being itself.
+
+## What paper cannot settle
+
+1. **Unified vs. split find** — muscle memory, result mixing (a search returning both a *field*
+   and an *item* named "Strength…"?), and whether one surface confuses more than it saves. The
+   built spikes decide this; it is the variants' deepest disagreement.
+2. **Inline editing vs. side sheet** — inline keeps context but grows the column; the sheet
+   keeps rows stable but occupies a column. Feel, not counts.
+3. **Whether the pinned fast-bench band leaves the backpack enough height** at the minimum
+   window — a measurement, made by the spike.
+4. **All eight capture questions from the review** remain open and several (fill visibility,
+   selection fills) will be judged on whichever variant is built.
+
+## Next
+
+Build both variants as real spikes with real data (Conan's six-member save), capture both, and
+the user's eyes close D19 into `planning/decisions.md`. That is implementation: **it opens in
+plan mode, as its own phase.** The prep slice may still run first — it deletes the duplication
+both variants would otherwise inherit.
