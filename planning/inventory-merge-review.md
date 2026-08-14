@@ -315,6 +315,13 @@ dragged over.
 layout spike: two grid arrangements built with real data, captured, and put in front of the user.
 The chosen arrangement becomes D19 in `planning/decisions.md`, with this document as its input.
 
+**Amended again the same day:** the user challenged the provenance of D15's option space itself —
+three same-model spikes are one prior sampled thrice, not a design space explored — and set the
+study's gates: **tool-first, breaking deliberately from BG:EE's and EE Keeper's forms**, optimized
+for inventory manipulation, quick edits and full audit, party-neutral. The grid arrangements are
+now derived from a corrected task inventory, not generated from pattern memory. The study is
+`planning/tool-first-study.md`, and it precedes the spike.
+
 ---
 
 *Not done here, deliberately: no code was changed; engine-side assertions inside recorded claims
