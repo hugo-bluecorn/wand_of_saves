@@ -129,6 +129,28 @@ T applyCharacterEdit<T extends CreatureDocument<T>>(
           ),
     ),
 
+  RemoveItem(:final creOffset, :final itemIndex, :final resref) => () {
+    final creature = CreCodec.decode(document.creatureAt(creOffset));
+    RangeError.checkValidIndex(itemIndex, creature.items, 'itemIndex');
+
+    final item = creature.items[itemIndex];
+    if (item.resref != resref) {
+      throw ArgumentError.value(
+        itemIndex,
+        'itemIndex',
+        'holds ${item.resref}, not $resref',
+      );
+    }
+
+    // ⚠️ No slot check: removing an EQUIPPED item is the point, not an edge
+    // case. `withItemRemoved` clears whatever slot held it and renumbers every
+    // index above.
+    return document.withCreature(
+      creOffset: creOffset,
+      creature: creature.withItemRemoved(itemIndex),
+    );
+  }(),
+
   LearnSpell(:final creOffset, :final resref, :final level, :final type) => () {
     final creature = CreCodec.decode(document.creatureAt(creOffset));
 

@@ -79,6 +79,9 @@ Future<void> pump(
   Widget? rail,
   int partyPosition = 0,
   bool draggable = false,
+  void Function(CarriedItem)? onRemove,
+  List<String> party = const [],
+  void Function(CarriedItem, int to)? onMoveTo,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -93,6 +96,9 @@ Future<void> pump(
           onSave: onSave,
           rail: rail,
           partyPosition: draggable ? partyPosition : null,
+          onRemove: onRemove,
+          party: party,
+          onMoveTo: onMoveTo,
         ),
       ),
     ),
@@ -768,6 +774,147 @@ void main() {
       );
       // Two rows, one explanation — not the sentence repeated per row.
       expect(find.textContaining('will not'), findsOneWidget);
+    });
+  });
+
+  group('every item carries a menu', () {
+    Future<void> openMenu(WidgetTester tester, {int at = 0}) async {
+      // ⚠️ The Equipped panel sits below sixteen grid cells, which puts it off
+      // the bottom of an 800x600 test viewport.
+      final button = find.byIcon(Icons.more_horiz).at(at);
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('an occupied cell has one; an empty cell does not', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: (_) {},
+      );
+      // One cell filled out of sixteen, one equipped row: one menu button.
+      expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+    });
+
+    testWidgets('no menu at all when the caller offers no actions', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+      );
+      expect(find.byIcon(Icons.more_horiz), findsNothing);
+    });
+
+    testWidgets('⚠️ Remove hands back the item it belongs to', (tester) async {
+      final removed = <CarriedItem>[];
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+          CarriedItem(resref: 'RING01', index: 1, slotIndex: 22),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: removed.add,
+      );
+
+      await openMenu(tester, at: 1);
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+
+      expect(removed.single.resref, 'RING01', reason: 'the second cell');
+    });
+
+    testWidgets('⚠️ an EQUIPPED row has a menu too, the best case there is', (
+      tester,
+    ) async {
+      // A cursed item already worn is one the game itself can never remove.
+      final removed = <CarriedItem>[];
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 8),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: removed.add,
+      );
+
+      await openMenu(tester);
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+
+      expect(removed.single.resref, 'BOOT01');
+    });
+
+    testWidgets('Move to lists the party and excludes the owner', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: (_) {},
+        party: const ['Conan', 'Imoen', 'Xzar'],
+        partyPosition: 1,
+        draggable: true,
+        onMoveTo: (_, _) {},
+      );
+
+      await openMenu(tester);
+      await tester.tap(find.text('Move to'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Conan'), findsOneWidget);
+      expect(find.text('Xzar'), findsOneWidget);
+      expect(find.text('Imoen'), findsNothing, reason: 'already has it');
+    });
+
+    testWidgets('Move to is absent with no party', (tester) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: (_) {},
+      );
+      await openMenu(tester);
+      expect(find.text('Move to'), findsNothing);
+    });
+
+    testWidgets('choosing a member hands back who was chosen', (tester) async {
+      final moved = <(String, int)>[];
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: (_) {},
+        party: const ['Conan', 'Imoen', 'Xzar'],
+        draggable: true,
+        onMoveTo: (item, to) => moved.add((item.resref, to)),
+      );
+
+      await openMenu(tester);
+      await tester.tap(find.text('Move to'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Xzar'));
+      await tester.pumpAndSettle();
+
+      expect(moved.single, ('BOOT01', 2));
     });
   });
 }

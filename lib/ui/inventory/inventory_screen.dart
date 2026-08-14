@@ -42,6 +42,11 @@ class InventoryScreen extends ConsumerStatefulWidget {
     this.onSave,
     this.rail,
     this.partyPosition,
+    this.onRemove,
+    this.party = const [],
+    this.onMoveTo,
+    this.onUndo,
+    this.onRedo,
     super.key,
   });
 
@@ -82,6 +87,30 @@ class InventoryScreen extends ConsumerStatefulWidget {
   /// by the time the drop lands. `null` for a `.chr`: nobody to give it to.
   final int? partyPosition;
 
+  /// Takes the item out of the record, or `null` where that is not offered.
+  ///
+  /// ⚠️ **The one thing this application can do that the game cannot.**
+  /// `CreItemFlag.undroppable` says so in its own words — an item so marked
+  /// "cannot be removed in game — only from an editor" — and a cursed item
+  /// already worn is the same case.
+  final void Function(CarriedItem item)? onRemove;
+
+  /// The party, in order, for the *Move to* submenu. Empty for a `.chr`.
+  final List<String> party;
+
+  /// Hands the item to the member at that party position.
+  ///
+  /// ⚠️ **Not redundant with dragging.** The rail cannot auto-scroll while a
+  /// drag is in flight, so a member below the fold cannot be reached by drag at
+  /// all; this path works whatever is scrolled where.
+  final void Function(CarriedItem item, int to)? onMoveTo;
+
+  /// Takes back the last edit, or `null` when there is nothing to take back.
+  final VoidCallback? onUndo;
+
+  /// Puts back the last undone edit, or `null` when there is none.
+  final VoidCallback? onRedo;
+
   @override
   ConsumerState<InventoryScreen> createState() => _InventoryScreenState();
 }
@@ -113,6 +142,28 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     return null;
   }
 
+  /// The menu for [item], or `null` when no action is on offer.
+  ///
+  /// Built here rather than in the widgets because it is the caller's
+  /// capability that decides what exists — the same rule `onSave` and `rail`
+  /// already follow.
+  Widget? _menuFor(CarriedItem item) {
+    final remove = widget.onRemove;
+    final moveTo = widget.onMoveTo;
+    final owner = widget.partyPosition;
+    final elsewhere = [
+      for (final (position, name) in widget.party.indexed)
+        if (position != owner) (position, name),
+    ];
+    if (remove == null && (moveTo == null || elsewhere.isEmpty)) return null;
+
+    return ItemMenu(
+      onRemove: remove == null ? null : () => remove(item),
+      destinations: moveTo == null ? const [] : elsewhere,
+      onMoveTo: moveTo == null ? null : (to) => moveTo(item, to),
+    );
+  }
+
   void _add(ItemEntry entry) {
     final slot = _firstFreePack;
     if (slot == null) return;
@@ -131,6 +182,23 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
           '${widget.isDirty ? ' •' : ''}',
         ),
         actions: [
+          // ⚠️ **Not decoration, and not optional.** Remove is one click and
+          // takes no confirmation, so undo is its only safety net — and a
+          // safety net on a *different screen* from the destructive action is
+          // not a design.
+          if (widget.onUndo != null || widget.onRedo != null) ...[
+            IconButton(
+              onPressed: widget.onUndo,
+              icon: const Icon(Icons.undo),
+              tooltip: 'Undo',
+            ),
+            IconButton(
+              onPressed: widget.onRedo,
+              icon: const Icon(Icons.redo),
+              tooltip: 'Redo',
+            ),
+            const SizedBox(width: 8),
+          ],
           if (widget.onSave != null) ...[
             SaveButton(isDirty: widget.isDirty, onSave: widget.onSave),
             const SizedBox(width: 12),
@@ -186,6 +254,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                       onAdd: _add,
                     ),
                   _Carried(
+                    menu: _menuFor,
                     items: _items,
                     from: widget.partyPosition,
                     // ⚠️ Cross-referenced from the catalogue: the creature
@@ -341,6 +410,7 @@ class _Carried extends StatelessWidget {
     required this.items,
     required this.isStuck,
     required this.describe,
+    required this.menu,
     this.from,
   });
 
@@ -351,6 +421,9 @@ class _Carried extends StatelessWidget {
 
   /// What the catalogue knows about that resref, or `null` with no game.
   final ItemEntry? Function(String resref) describe;
+
+  /// What can be done with an item, or `null` when nothing is on offer.
+  final Widget? Function(CarriedItem item) menu;
 
   /// The owner's party position, when there is somebody to hand items to.
   final int? from;
@@ -396,7 +469,7 @@ class _Carried extends StatelessWidget {
         // the same container. **"Backpack" appears in none of its 34,000
         // strings** — that word was this project's, and so is "pack" in
         // `CreItemSlot.pack`.
-        _Backpack(items: carried, row: _row, describe: describe),
+        _Backpack(items: carried, row: _row, describe: describe, menu: menu),
         if (worn.isNotEmpty)
           // ⚠️ Not a heading the game itself uses — its own screen is a paper
           // doll, not a list — but "equipped" is its word, running right
@@ -408,6 +481,7 @@ class _Carried extends StatelessWidget {
             row: _row,
             isStuck: isStuck,
             describe: describe,
+            menu: menu,
           ),
         if (loose.isNotEmpty)
           _Panel(
@@ -416,6 +490,7 @@ class _Carried extends StatelessWidget {
             row: _row,
             isStuck: isStuck,
             describe: describe,
+            menu: menu,
             note: 'No slot points at these, so the game will not show them.',
           ),
       ],
@@ -517,6 +592,7 @@ class _Panel extends StatelessWidget {
     required this.row,
     required this.isStuck,
     required this.describe,
+    required this.menu,
     this.note,
   });
 
@@ -525,6 +601,9 @@ class _Panel extends StatelessWidget {
   final Widget Function(CarriedItem, Widget) row;
   final bool Function(String resref) isStuck;
   final ItemEntry? Function(String resref) describe;
+
+  /// What can be done with an item, or `null` when nothing is on offer.
+  final Widget? Function(CarriedItem item) menu;
 
   /// The name the game would draw, or `null` when the catalogue cannot say.
   String? _named(CarriedItem item) =>
@@ -578,6 +657,7 @@ class _Panel extends StatelessWidget {
                 // should know why the game will not call it what they expect.
                 if (!item.isIdentified)
                   const Tag('unidentified', tone: TagTone.muted),
+                ?menu(item),
               ],
             ),
           ),
@@ -603,11 +683,13 @@ class _Backpack extends StatelessWidget {
     required this.items,
     required this.row,
     required this.describe,
+    required this.menu,
   });
 
   final List<CarriedItem> items;
   final Widget Function(CarriedItem, Widget) row;
   final ItemEntry? Function(String resref) describe;
+  final Widget? Function(CarriedItem item) menu;
 
   static const int _columns = 4;
 
@@ -641,6 +723,7 @@ class _Backpack extends StatelessWidget {
                         final cell = InventoryCell(
                           item: item,
                           entry: item == null ? null : describe(item.resref),
+                          menu: item == null ? null : menu(item),
                         );
                         return item == null ? cell : row(item, cell);
                       }(),
@@ -662,13 +745,21 @@ class _Backpack extends StatelessWidget {
 /// Paws of the Cheetah" and one of them is the immovable one.
 class InventoryCell extends StatelessWidget {
   /// Draws [item], or an empty slot when it is `null`.
-  const InventoryCell({required this.item, required this.entry, super.key});
+  const InventoryCell({
+    required this.item,
+    required this.entry,
+    this.menu,
+    super.key,
+  });
 
   /// What is in the slot, or `null` when nothing is.
   final CarriedItem? item;
 
   /// What the catalogue knows about it, or `null` with no game installed.
   final ItemEntry? entry;
+
+  /// What can be done with it, or `null` when nothing is on offer.
+  final Widget? menu;
 
   /// The name the *game* would draw for [item].
   ///
@@ -709,19 +800,27 @@ class InventoryCell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_name case final String name)
-                  Text(
-                    name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                Text(
-                  carried.resref,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _name ?? carried.resref,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                    ?menu,
+                  ],
                 ),
+                if (_name != null)
+                  Text(
+                    carried.resref,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
@@ -740,6 +839,80 @@ class InventoryCell extends StatelessWidget {
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// What can be done with one item.
+///
+/// ⚠️ **Two triggers on one menu, and both are needed.** The `…` is the only
+/// thing on screen saying the menu exists, so right-click alone would be
+/// undiscoverable; but right-click is the desktop gesture people will try, and
+/// wiring it costs one callback. `MenuController.open(position:)` driven from
+/// `onSecondaryTapDown` is the framework's own recipe.
+class ItemMenu extends StatefulWidget {
+  /// Offers [onRemove] and, where the party allows, a move to [destinations].
+  const ItemMenu({
+    required this.onRemove,
+    required this.destinations,
+    required this.onMoveTo,
+    super.key,
+  });
+
+  /// Takes the item out of the record, or `null` when that is not offered.
+  final VoidCallback? onRemove;
+
+  /// Party members it could go to, as `(position, name)`. Empty for a `.chr`.
+  final List<(int, String)> destinations;
+
+  /// Hands it to the member at that party position.
+  final void Function(int to)? onMoveTo;
+
+  @override
+  State<ItemMenu> createState() => _ItemMenuState();
+}
+
+class _ItemMenuState extends State<ItemMenu> {
+  final MenuController _controller = MenuController();
+
+  @override
+  Widget build(BuildContext context) {
+    final moveTo = widget.onMoveTo;
+    return MenuAnchor(
+      controller: _controller,
+      menuChildren: [
+        if (moveTo != null && widget.destinations.isNotEmpty)
+          SubmenuButton(
+            menuChildren: [
+              for (final (position, name) in widget.destinations)
+                MenuItemButton(
+                  onPressed: () => moveTo(position),
+                  child: Text(name),
+                ),
+            ],
+            child: const Text('Move to'),
+          ),
+        if (widget.onRemove case final VoidCallback remove)
+          MenuItemButton(
+            onPressed: remove,
+            leadingIcon: const Icon(Icons.delete_outline),
+            // No confirmation: undo is one click away, and a dialog on every
+            // item would be worse than the mistake it guards against.
+            child: const Text('Remove'),
+          ),
+      ],
+      builder: (context, controller, _) => GestureDetector(
+        onSecondaryTapDown: (details) =>
+            controller.open(position: details.localPosition),
+        child: IconButton(
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+          icon: const Icon(Icons.more_horiz),
+          iconSize: 18,
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Actions',
+        ),
+      ),
     );
   }
 }

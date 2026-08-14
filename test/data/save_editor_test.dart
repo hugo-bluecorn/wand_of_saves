@@ -1320,4 +1320,117 @@ void main() {
       );
     });
   });
+
+  group('RemoveItem', () {
+    Gam withItems(List<String> resrefs) {
+      var gam = openSave();
+      for (final (index, resref) in resrefs.indexed) {
+        gam = applyEdit(
+          gam,
+          AddItem(
+            creOffset: creOffsetOf(gam),
+            resref: resref,
+            slot: CreItemSlot.pack[index],
+          ),
+        );
+      }
+      return gam;
+    }
+
+    test('takes out that item and leaves the rest', () {
+      final before = withItems(['BOOT01', 'RING01', 'STAF01']);
+
+      final after = applyEdit(
+        before,
+        RemoveItem(
+          creOffset: creOffsetOf(before),
+          itemIndex: 1,
+          resref: 'RING01',
+        ),
+      );
+
+      final cre = creatureIn(after);
+      expect(cre.items.map((i) => i.resref), ['BOOT01', 'STAF01']);
+      expect(cre.orphanedItems, isEmpty);
+      // ⚠️ The slot that held it is cleared and the one above renumbers down.
+      expect(cre.itemIndexAt(CreItemSlot.pack1), 0);
+      expect(cre.itemIndexAt(CreItemSlot.pack2), isNull);
+      expect(cre.itemIndexAt(CreItemSlot.pack3), 1);
+      expect(after.bytes.length, before.bytes.length - creItemLength);
+    });
+
+    test('⚠️ refuses a resref that disagrees with the index', () {
+      // The index is positional and any earlier removal renumbers it, so a
+      // command built from a stale list would otherwise delete the wrong item.
+      final gam = withItems(['BOOT01', 'RING01']);
+      expect(
+        () => applyEdit(
+          gam,
+          RemoveItem(
+            creOffset: creOffsetOf(gam),
+            itemIndex: 0,
+            resref: 'RING01',
+          ),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('⚠️ removes an EQUIPPED item, which is the whole point', () {
+      // `CreItemFlag.undroppable`'s own doc: "cannot be removed in game — only
+      // from an editor". A cursed item already worn is exactly that case.
+      var gam = openSave();
+      gam = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'CHAN04',
+          slot: CreItemSlot.armor,
+        ),
+      );
+
+      final after = applyEdit(
+        gam,
+        RemoveItem(
+          creOffset: creOffsetOf(gam),
+          itemIndex: 0,
+          resref: 'CHAN04',
+        ),
+      );
+
+      expect(creatureIn(after).items, isEmpty);
+      expect(creatureIn(after).itemIndexAt(CreItemSlot.armor), isNull);
+    });
+
+    test('the same command works on an exported character', () {
+      // ⚠️ A `CharacterEditCommand`, unlike `MoveItem`: it touches one
+      // creature, so a `.chr` takes it and the type system says so.
+      var chr = ChrCodec.decode(buildCharacterFile());
+      chr = applyCharacterEdit(
+        chr,
+        AddItem(
+          creOffset: chr.creOffset,
+          resref: 'RING01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      final after = applyCharacterEdit(
+        chr,
+        RemoveItem(creOffset: chr.creOffset, itemIndex: 0, resref: 'RING01'),
+      );
+
+      expect(CreCodec.decode(after.creatureAt(after.creOffset)).items, isEmpty);
+    });
+
+    test('says what it did', () {
+      expect(
+        const RemoveItem(
+          creOffset: 0,
+          itemIndex: 0,
+          resref: 'BOOT01',
+        ).label,
+        contains('BOOT01'),
+      );
+    });
+  });
 }

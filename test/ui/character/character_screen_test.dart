@@ -225,4 +225,40 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  group('removing an item through the menu', () {
+    testWidgets('⚠️ Remove takes it out, and undo puts it back', (
+      tester,
+    ) async {
+      await open(tester, size: 6, height: 700);
+      await tester.tap(find.byTooltip('Inventory'));
+      await tester.pumpAndSettle();
+
+      // Give member 0 something to remove.
+      await tester.enterText(find.byType(TextField), 'RING01');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ring of Protection +1'), findsOneWidget);
+
+      final menu = find.byIcon(Icons.more_horiz).first;
+      await tester.ensureVisible(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ring of Protection +1'), findsNothing);
+
+      // ⚠️ The safety net has to be on THIS screen: Remove takes no
+      // confirmation, so undo is the only way back and it cannot live on the
+      // screen behind this one.
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ring of Protection +1'), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

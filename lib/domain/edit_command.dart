@@ -435,6 +435,43 @@ final class AddItem extends CharacterEditCommand {
   String get label => 'Add $resref';
 }
 
+/// Takes an item out of a creature's record entirely.
+///
+/// ⚠️ **This is the one thing this application can do that the game cannot**,
+/// and it is the feature's whole justification rather than a mirror of
+/// [AddItem]. `CreItemFlag.undroppable` says so in its own words: an item so
+/// marked "cannot be removed in game — only from an editor". A cursed item
+/// already equipped is the same case, and so is anything whose `ITM` header has
+/// the *Movable* bit clear.
+///
+/// A [CharacterEditCommand] rather than a bare [EditCommand], unlike
+/// [MoveItem]: it touches one creature, so an exported character takes it too
+/// and the type system says so instead of a run-time refusal.
+final class RemoveItem extends CharacterEditCommand {
+  /// Removes entry [itemIndex] from the creature at [creOffset].
+  const RemoveItem({
+    required this.creOffset,
+    required this.itemIndex,
+    required this.resref,
+  });
+
+  @override
+  final int creOffset;
+
+  /// Which entry of the items section to drop.
+  final int itemIndex;
+
+  /// What [itemIndex] is expected to name.
+  ///
+  /// ⚠️ **A check field, for the reason a carried item's own index documents:**
+  /// the index is positional and any earlier removal renumbers it, so a command
+  /// built from a list that has moved on would delete somebody else's item.
+  final String resref;
+
+  @override
+  String get label => 'Remove $resref';
+}
+
 /// Sets the shared party purse.
 ///
 /// Its own command rather than a [CharacterStat]: the purse lives in the GAM

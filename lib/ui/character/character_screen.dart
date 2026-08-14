@@ -181,6 +181,36 @@ class _CharacterScreenState extends ConsumerState<CharacterScreen> {
                 selected,
             onAdd: _addItem,
             partyPosition: state.selectedIndex,
+            onRemove: (item) => ref
+                .read(partyProvider(widget.slotDirectoryName).notifier)
+                .edit(
+                  RemoveItem(
+                    creOffset: _creOffset,
+                    itemIndex: item.index,
+                    resref: item.resref,
+                  ),
+                ),
+            party: [for (final member in state.members) member.name],
+            onMoveTo: (item, to) => ref
+                .read(partyProvider(widget.slotDirectoryName).notifier)
+                .edit(
+                  MoveItem(
+                    from: state.selectedIndex,
+                    to: to,
+                    itemIndex: item.index,
+                    resref: item.resref,
+                  ),
+                ),
+            onUndo: state.canUndo
+                ? ref
+                      .read(partyProvider(widget.slotDirectoryName).notifier)
+                      .undo
+                : null,
+            onRedo: state.canRedo
+                ? ref
+                      .read(partyProvider(widget.slotDirectoryName).notifier)
+                      .redo
+                : null,
             isDirty: state.isDirty,
             onSave: ref
                 .read(partyProvider(widget.slotDirectoryName).notifier)

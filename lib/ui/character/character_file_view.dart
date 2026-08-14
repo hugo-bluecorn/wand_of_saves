@@ -229,6 +229,22 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
                           ),
                           isDirty: file?.isDirty ?? false,
                           onSave: notifier.save,
+                          // ⚠️ No party, so no `Move to` — the same rule the
+                          // rail follows. Remove works here, and this is the
+                          // document where a resizing edit is cheapest.
+                          onRemove: (item) => notifier.edit(
+                            RemoveItem(
+                              creOffset: character.creOffset,
+                              itemIndex: item.index,
+                              resref: item.resref,
+                            ),
+                          ),
+                          onUndo: (file?.canUndo ?? false)
+                              ? notifier.undo
+                              : null,
+                          onRedo: (file?.canRedo ?? false)
+                              ? notifier.redo
+                              : null,
                         );
                       },
                     ),
