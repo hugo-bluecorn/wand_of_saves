@@ -20,6 +20,7 @@ import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/item_catalogue.dart';
+import 'package:wand_of_saves/ui/core/theme.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 import 'package:wand_of_saves/ui/inventory/item_drag.dart';
 
@@ -82,6 +83,7 @@ Future<void> pump(
   void Function(CarriedItem)? onRemove,
   List<String> party = const [],
   void Function(CarriedItem, int to)? onMoveTo,
+  ThemeData? theme,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -89,6 +91,7 @@ Future<void> pump(
         itemCatalogueProvider.overrideWith((ref) async => _catalogue),
       ],
       child: MaterialApp(
+        theme: theme,
         home: InventoryScreen(
           character: () => character,
           onAdd: onAdd,
@@ -107,6 +110,27 @@ Future<void> pump(
 }
 
 void main() {
+  testWidgets(
+    '⚠️ the scrollbar has a position on the platform the app ships on',
+    (tester) async {
+      // `flutter test` runs as Android, where a vertical scroll view attaches
+      // itself to the PrimaryScrollController and the Scrollbar finds it by
+      // accident. On desktop neither happens: unless the Scrollbar and the
+      // scroll view share one controller, the theme's always-visible thumb
+      // has nothing to measure and Flutter 3.47 asserts on the first frame.
+      // Pin both conditions, or this is the suite that shipped it.
+      await pump(
+        tester,
+        character: characterWith(const []),
+        onAdd: (_, _) {},
+        theme: AppTheme.light,
+      );
+
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
+
   testWidgets('mounts and names whose inventory it is', (tester) async {
     // ⚠️ The cheapest guard against the defect that shipped once already: a
     // clean analyze and a green suite are compatible with a screen that throws

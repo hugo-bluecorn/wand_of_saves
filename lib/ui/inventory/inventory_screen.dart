@@ -118,9 +118,16 @@ class InventoryScreen extends ConsumerStatefulWidget {
 class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   final TextEditingController _query = TextEditingController();
 
+  // ⚠️ On desktop a vertical scroll view does not attach itself to the
+  // PrimaryScrollController, so the theme's always-visible Scrollbar must
+  // share a controller with the scroll view it measures — without one it
+  // has no position and asserts on the first frame.
+  final ScrollController _scroll = ScrollController();
+
   @override
   void dispose() {
     _query.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -249,7 +256,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     final results = catalogue.search(_query.text);
 
     return Scrollbar(
+      controller: _scroll,
       child: SingleChildScrollView(
+        controller: _scroll,
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 900),
