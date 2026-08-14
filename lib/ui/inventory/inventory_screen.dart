@@ -193,6 +193,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     // can only explain itself by asking the item.
                     isStuck: (resref) =>
                         catalogue.entries[resref]?.isMovable == false,
+                    describe: (resref) => catalogue.entries[resref],
                   ),
                 ],
               ),
@@ -336,12 +337,20 @@ class _Results extends StatelessWidget {
 /// rows drag and some do not — with nothing saying why — is an unexplained
 /// affordance. The grouping is what justifies the difference.
 class _Carried extends StatelessWidget {
-  const _Carried({required this.items, required this.isStuck, this.from});
+  const _Carried({
+    required this.items,
+    required this.isStuck,
+    required this.describe,
+    this.from,
+  });
 
   final List<CarriedItem> items;
 
   /// Whether the engine refuses to move the item with that resref.
   final bool Function(String resref) isStuck;
+
+  /// What the catalogue knows about that resref, or `null` with no game.
+  final ItemEntry? Function(String resref) describe;
 
   /// The owner's party position, when there is somebody to hand items to.
   final int? from;
@@ -387,13 +396,7 @@ class _Carried extends StatelessWidget {
         // the same container. **"Backpack" appears in none of its 34,000
         // strings** — that word was this project's, and so is "pack" in
         // `CreItemSlot.pack`.
-        _Panel(
-          title: 'Inventory',
-          items: carried,
-          row: _row,
-          isStuck: isStuck,
-          empty: 'Nothing yet.',
-        ),
+        _Backpack(items: carried, row: _row, describe: describe),
         if (worn.isNotEmpty)
           // ⚠️ Not a heading the game itself uses — its own screen is a paper
           // doll, not a list — but "equipped" is its word, running right
@@ -502,19 +505,17 @@ class _Panel extends StatelessWidget {
     required this.items,
     required this.row,
     required this.isStuck,
-    this.empty,
   });
 
   final String title;
   final List<CarriedItem> items;
   final Widget Function(CarriedItem, Widget) row;
   final bool Function(String resref) isStuck;
-  final String? empty;
 
   @override
   Widget build(BuildContext context) => PanelCard(
     title: title,
-    note: items.isEmpty ? empty : null,
+
     trailing: Tag('${items.length}', caption: 'items'),
     children: [
       for (final item in items)
@@ -548,4 +549,166 @@ class _Panel extends StatelessWidget {
         ),
     ],
   );
+}
+
+/// The sixteen backpack slots, as cells rather than a list of what is there.
+///
+/// ⚠️ **Sixteen always, and addressed by SLOT rather than by list position.**
+/// An item in `pack10` draws in cell 10 with 7 to 9 left empty. Holes are
+/// ordinary — a real character fills packs 1–7 and 9 — so a grid that packed
+/// items leftward would be a prettier lie than the list it replaces, and would
+/// hide the one thing an inventory has to convey: that capacity is finite.
+///
+/// **Four `Row`s of four `Expanded` cells, not a `GridView`.** These land in a
+/// `Column` inside a `SingleChildScrollView`, where a `GridView` needs
+/// `shrinkWrap` and `NeverScrollableScrollPhysics` and behaves awkwardly.
+/// Sixteen is a fixed count, so rows are deterministic and carry none of that.
+class _Backpack extends StatelessWidget {
+  const _Backpack({
+    required this.items,
+    required this.row,
+    required this.describe,
+  });
+
+  final List<CarriedItem> items;
+  final Widget Function(CarriedItem, Widget) row;
+  final ItemEntry? Function(String resref) describe;
+
+  static const int _columns = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = CreItemSlot.pack;
+    final held = {
+      for (final item in items)
+        if (item.isInASlot) item.slotIndex: item,
+    };
+
+    return PanelCard(
+      title: 'Inventory',
+      trailing: Tag('${items.length}/${slots.length}', caption: 'slots'),
+      children: [
+        for (var start = 0; start < slots.length; start += _columns)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            // ⚠️ `IntrinsicHeight` rather than `CrossAxisAlignment.stretch`:
+            // this Row sits in an unbounded column, where stretch resolves to
+            // an infinite height and throws during layout. Four children make
+            // the intrinsic pass cheap.
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 8,
+                children: [
+                  for (final slot in slots.skip(start).take(_columns))
+                    Expanded(
+                      child: () {
+                        final item = held[slot.index];
+                        final cell = InventoryCell(
+                          item: item,
+                          entry: item == null ? null : describe(item.resref),
+                        );
+                        return item == null ? cell : row(item, cell);
+                      }(),
+                    ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// One backpack slot, filled or not.
+///
+/// ⚠️ **Both the name and the code, and both earn their place.** The name is
+/// what a person recognises; the code is the only thing that tells items apart,
+/// because `BOOT01`, `BOOTDRIZ`, `DASBOOT` and `TROLLBOO` all resolve to "The
+/// Paws of the Cheetah" and one of them is the immovable one.
+class InventoryCell extends StatelessWidget {
+  /// Draws [item], or an empty slot when it is `null`.
+  const InventoryCell({required this.item, required this.entry, super.key});
+
+  /// What is in the slot, or `null` when nothing is.
+  final CarriedItem? item;
+
+  /// What the catalogue knows about it, or `null` with no game installed.
+  final ItemEntry? entry;
+
+  /// The name the *game* would draw for [item].
+  ///
+  /// ⚠️ **`isIdentified` decides it, and getting this wrong states something
+  /// the game does not.** With the flag clear the engine shows the plain name —
+  /// "Belt", never "Belt of Antipode" — and `Aard1.chr` carries exactly that
+  /// case. Falls back to nothing rather than inventing a name when the
+  /// catalogue is empty; the code below is always there to read.
+  String? get _name {
+    final carried = item;
+    final known = entry;
+    if (carried == null || known == null) return null;
+    return carried.isIdentified
+        ? known.identifiedName ?? known.unidentifiedName
+        : known.unidentifiedName ?? known.identifiedName;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final carried = item;
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 84),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant,
+          // A filled slot is stated; an empty one is a quieter outline, so the
+          // remaining capacity reads as space rather than as missing content.
+          width: carried == null ? 1 : 1.5,
+        ),
+        color: carried == null
+            ? null
+            : theme.colorScheme.surfaceContainerHighest,
+      ),
+      child: carried == null
+          ? null
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_name case final String name)
+                  Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                Text(
+                  carried.resref,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    // ⚠️ What explains a cell that will not drag when its
+                    // neighbours will. `ItemEntry` already carries the answer,
+                    // read from the ITM header's Movable bit.
+                    if (entry?.isMovable == false)
+                      const Tag('cannot be moved', tone: TagTone.muted),
+                    if (carried.quantity > 1)
+                      Tag('${carried.quantity}', caption: 'quantity'),
+                    if (!carried.isIdentified)
+                      const Tag('unidentified', tone: TagTone.muted),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
 }

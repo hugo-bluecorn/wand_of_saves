@@ -36,6 +36,18 @@ const _catalogue = ItemCatalogue({
     unidentifiedName: 'Shortbow',
     isMovable: false,
   ),
+  'TROLLBOO': ItemEntry(
+    resref: 'TROLLBOO',
+    itemType: 4,
+    identifiedName: 'The Paws of the Cheetah',
+    unidentifiedName: 'Boots',
+  ),
+  'BELT16': ItemEntry(
+    resref: 'BELT16',
+    itemType: 8,
+    identifiedName: 'Belt of Antipode',
+    unidentifiedName: 'Belt',
+  ),
   'RING06': ItemEntry(
     resref: 'RING06',
     itemType: 10,
@@ -95,7 +107,11 @@ void main() {
     // on its first frame.
     await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
     expect(find.text('Aard · Inventory'), findsOneWidget);
-    expect(find.text('Nothing yet.'), findsOneWidget);
+    // ⚠️ No "Nothing yet." any more, and that is the point of the grid: an
+    // empty backpack shows sixteen empty slots, so the capacity is countable
+    // rather than merely asserted to be unused.
+    expect(find.byType(InventoryCell), findsNWidgets(16));
+    expect(find.text('0/16'), findsOneWidget);
   });
 
   testWidgets('lists what the character carries', (tester) async {
@@ -475,8 +491,9 @@ void main() {
         ]),
         onAdd: (_, _) {},
       );
-      // Two carried, one worn — not three and three.
-      expect(find.text('2'), findsOneWidget);
+      // Two carried, one worn — not three and three. The backpack counts
+      // against its capacity now; the Equipped list counts plainly.
+      expect(find.text('2/16'), findsOneWidget);
       expect(find.text('1'), findsOneWidget);
     });
   });
@@ -539,6 +556,124 @@ void main() {
         find.byType(Draggable<ItemDrag>),
         findsOneWidget,
         reason: 'only the movable one may be dragged',
+      );
+    });
+  });
+
+  group('the backpack is sixteen cells, not a list', () {
+    /// The cells of the Inventory grid, in slot order.
+    Finder cells() => find.byType(InventoryCell);
+
+    testWidgets('sixteen cells whatever is carried', (tester) async {
+      await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
+      expect(cells(), findsNWidgets(16), reason: 'empty pack');
+
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+      );
+      expect(cells(), findsNWidgets(16), reason: 'one item');
+    });
+
+    testWidgets('⚠️ an item in pack10 draws in cell 10, not cell 1', (
+      tester,
+    ) async {
+      // ⚠️ **The test that makes the grid honest.** Holes are ordinary — a real
+      // character fills packs 1-7 and 9 — so a grid that packed items leftward
+      // would be a prettier lie than the list it replaces. Slot 30 is pack10.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+          CarriedItem(resref: 'RING01', index: 1, slotIndex: 30),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      final drawn = tester.widgetList<InventoryCell>(cells()).toList();
+      expect(drawn[0].item?.resref, 'BOOT01', reason: 'pack1');
+      expect(drawn[9].item?.resref, 'RING01', reason: 'pack10');
+      for (final between in [1, 2, 3, 4, 5, 6, 7, 8]) {
+        expect(drawn[between].item, isNull, reason: 'cell ${between + 1}');
+      }
+    });
+
+    testWidgets('a cell carries the name AND the code', (tester) async {
+      // ⚠️ Both earn their place: four items resolve to "The Paws of the
+      // Cheetah", so the code is the only thing telling them apart — and one
+      // of the four is the immovable one.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+          CarriedItem(resref: 'TROLLBOO', index: 1, slotIndex: 22),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      expect(find.text('The Paws of the Cheetah'), findsNWidgets(2));
+      expect(find.text('BOOT01'), findsOneWidget);
+      expect(find.text('TROLLBOO'), findsOneWidget);
+    });
+
+    testWidgets('⚠️ an unidentified item shows the name the GAME draws', (
+      tester,
+    ) async {
+      // With the flag clear the engine shows "Belt", not "Belt of Antipode" —
+      // `Aard1.chr` carries exactly that case. Showing the identified name
+      // would be this app stating something the game does not.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(
+            resref: 'BELT16',
+            index: 0,
+            slotIndex: 21,
+            isIdentified: false,
+          ),
+          CarriedItem(resref: 'BOOT01', index: 1, slotIndex: 22),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      expect(find.text('Belt'), findsOneWidget);
+      expect(find.text('Belt of Antipode'), findsNothing);
+      // And the identified neighbour is unaffected.
+      expect(find.text('The Paws of the Cheetah'), findsOneWidget);
+    });
+
+    testWidgets('falls back to the code when there is no catalogue', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'XYZZY01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+      );
+      expect(find.text('XYZZY01'), findsWidgets);
+    });
+
+    testWidgets('an empty cell and an immovable one are not draggable', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOW99', index: 0, slotIndex: 21),
+          CarriedItem(resref: 'BOOT01', index: 1, slotIndex: 22),
+        ]),
+        onAdd: (_, _) {},
+        draggable: true,
+      );
+      expect(
+        find.byType(Draggable<ItemDrag>),
+        findsOneWidget,
+        reason: 'BOOT01 only — fourteen empties and BOW99 must not drag',
       );
     });
   });
