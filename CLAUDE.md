@@ -55,8 +55,9 @@ to undo.
 - **Never edit a real save in place.** Always write to a temp file and rename, and always keep a
   `.bak`. Test fixtures are *copies*; the originals under
   `~/.local/share/Baldur's Gate - Enhanced Edition/save/` are the user's actual game.
-- **Dart/Flutter are NOT on PATH** — use `fvm flutter …` / `fvm dart …`. SDK pinned to 3.44.8
-  in `.fvmrc`.
+- **Dart/Flutter are NOT on PATH** — use `fvm flutter …` / `fvm dart …`. SDK pinned to 3.47.0
+  (Dart 3.13.0) in `.fvmrc`; the `sdk: ^3.12.2` floor in both pubspecs is deliberate — raising it
+  forces `dart format`'s 3.13 whole-repo reformat, which is its own commit when it happens.
 - **`packages/infinity_formats` must never import `package:flutter`.** It is pure Dart so its suite runs
   under `dart test`, which makes the rule mechanical: a Flutter import fails to compile there and
   names the file. `packages/infinity_formats/dart_test.yaml` pins `platforms: [vm]` to keep that true,
@@ -224,8 +225,16 @@ column, so reopen them deliberately.
 
 > ### 🔶 Where the last session stopped, 2026-08-14
 >
-> **842 app tests, 399 format tests**, `analyze` clean, `dart format` clean, zero suppressions, tree
-> clean. On branch **`feat/inventory-format-layer`**, **19 commits, not pushed, no PR**.
+> **844 app tests, 399 format tests**, `analyze` clean, `dart format` clean, zero suppressions, tree
+> clean. On branch **`feat/inventory-format-layer`**, not pushed, no PR.
+>
+> ✅ **Flutter upgraded 3.44.8 → 3.47.0 (Dart 3.13.0), and Impeller is now the Linux renderer** —
+> the launch log prints `Using the Impeller rendering backend (OpenGLESSDF)`. The upgrade surfaced
+> one real defect: the home and inventory screens' `Scrollbar`s shared no controller with their
+> scroll views, which 3.47 turns into a first-frame assertion on desktop (the suite runs as
+> Android, where the primary controller hides it — the two new tests pin `TargetPlatform.linux`
+> with the real app theme). D8 gained an amendment: 3.47's `pub get` writes seven `exclude:` lines
+> into `analysis_options.yaml` itself, on every run.
 >
 > ✅ **THE ENGINE OPENED A RELOCATED SAVE — the project's oldest gate, closed 2026-08-13.** BG:EE
 > loaded a **six-member** save this app had resized (`SCRL75` added to Xzar, fourth in the array on
