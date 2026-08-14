@@ -23,6 +23,7 @@ import 'package:wand_of_saves/ui/core/panel_card.dart';
 import 'package:wand_of_saves/ui/core/save_button.dart';
 import 'package:wand_of_saves/ui/core/tag.dart';
 import 'package:wand_of_saves/ui/inventory/item_drag.dart';
+import 'package:wand_of_saves/ui/inventory/pack_slots.dart';
 
 /// A character's inventory: what they carry, and a search that adds to it.
 ///
@@ -116,8 +117,6 @@ class InventoryScreen extends ConsumerStatefulWidget {
 }
 
 class _InventoryScreenState extends ConsumerState<InventoryScreen> {
-  final TextEditingController _query = TextEditingController();
-
   // ⚠️ On desktop a vertical scroll view does not attach itself to the
   // PrimaryScrollController, so the theme's always-visible Scrollbar must
   // share a controller with the scroll view it measures — without one it
@@ -126,28 +125,164 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
   @override
   void dispose() {
-    _query.dispose();
     _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '${widget.character().name} · Inventory'
+          // The same marker both editors put beside the document's name.
+          '${widget.isDirty ? ' •' : ''}',
+        ),
+        actions: [
+          // ⚠️ **Not decoration, and not optional.** Remove is one click and
+          // takes no confirmation, so undo is its only safety net — and a
+          // safety net on a *different screen* from the destructive action is
+          // not a design.
+          if (widget.onUndo != null || widget.onRedo != null) ...[
+            IconButton(
+              onPressed: widget.onUndo,
+              icon: const Icon(Icons.undo),
+              tooltip: 'Undo',
+            ),
+            IconButton(
+              onPressed: widget.onRedo,
+              icon: const Icon(Icons.redo),
+              tooltip: 'Redo',
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (widget.onSave != null) ...[
+            SaveButton(isDirty: widget.isDirty, onSave: widget.onSave),
+            const SizedBox(width: 12),
+          ],
+        ],
+      ),
+      // ⚠️ **The same shape the character sheet uses**, so the two read as one
+      // editor rather than two screens: rail, divider, then the content.
+      body: Row(
+        children: [
+          if (widget.rail case final Widget rail) ...[
+            rail,
+            const VerticalDivider(width: 1),
+          ],
+          Expanded(child: _body(context)),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context) => Scrollbar(
+    controller: _scroll,
+    child: SingleChildScrollView(
+      controller: _scroll,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: InventoryPanels(
+              character: widget.character,
+              onAdd: widget.onAdd,
+              partyPosition: widget.partyPosition,
+              onRemove: widget.onRemove,
+              party: widget.party,
+              onMoveTo: widget.onMoveTo,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// The inventory itself: the search, what it found, and what is carried.
+///
+/// **Everything [InventoryScreen] holds except the Scaffold around it**, so an
+/// arrangement that puts the inventory in a cell of a grid rather than on a
+/// screen of its own reuses these panels instead of drawing new ones. Every
+/// rule about what may move, what menu an item gets and where the next item
+/// goes lives here, once.
+///
+/// It scrolls nothing and constrains nothing: whoever places it decides both.
+class InventoryPanels extends ConsumerStatefulWidget {
+  /// Shows [character]'s inventory, adding through [onAdd].
+  const InventoryPanels({
+    required this.character,
+    required this.onAdd,
+    this.partyPosition,
+    this.onRemove,
+    this.party = const [],
+    this.onMoveTo,
+    this.query,
+    this.showSearchField = true,
+    this.autofocusSearchField = true,
+    super.key,
+  });
+
+  /// Whose inventory this is, re-read on every build. See
+  /// [InventoryScreen.character] for why it is a callback.
+  final Character Function() character;
+
+  /// Called with the resref and the slot to put it in.
+  final void Function(String resref, CreItemSlot slot) onAdd;
+
+  /// Where this character sits in the party, or `null` when there is no party.
+  final int? partyPosition;
+
+  /// Takes the item out of the record, or `null` where that is not offered.
+  final void Function(CarriedItem item)? onRemove;
+
+  /// The party, in order, for the *Move to* submenu. Empty for a `.chr`.
+  final List<String> party;
+
+  /// Hands the item to the member at that party position.
+  final void Function(CarriedItem item, int to)? onMoveTo;
+
+  /// The query these panels answer to, when the box holding it is elsewhere.
+  ///
+  /// A surface with one search box serving both the record and the catalogue
+  /// owns the text itself; supplying it here is what keeps the results and the
+  /// box that produced them the same query rather than two.
+  final TextEditingController? query;
+
+  /// Whether to draw the item search box above the results.
+  final bool showSearchField;
+
+  /// Whether that box takes focus when it appears.
+  ///
+  /// ⚠️ **Two boxes on one surface cannot both have it.** A grid with a field
+  /// palette and an item search would otherwise start with the focus in
+  /// whichever built last, which is not a decision the layout should make by
+  /// accident.
+  final bool autofocusSearchField;
+
+  @override
+  ConsumerState<InventoryPanels> createState() => _InventoryPanelsState();
+}
+
+class _InventoryPanelsState extends ConsumerState<InventoryPanels> {
+  /// Used only when the caller supplies no controller of its own.
+  final TextEditingController _owned = TextEditingController();
+
+  TextEditingController get _query => widget.query ?? _owned;
+
+  @override
+  void dispose() {
+    _owned.dispose();
     super.dispose();
   }
 
   List<CarriedItem> get _items => widget.character().items;
 
-  /// The first backpack slot nothing points at.
-  ///
-  /// ⚠️ **Scans rather than counts.** Holes are legal — a real character fills
-  /// packs 1–7 and 9, leaving 8 empty — so the item count is not the index of
-  /// the next free slot, and using it would overwrite what is already there.
-  CreItemSlot? get _firstFreePack {
-    final taken = {
-      for (final item in _items)
-        if (item.isInASlot) item.slotIndex,
-    };
-    for (final slot in CreItemSlot.pack) {
-      if (!taken.contains(slot.index)) return slot;
-    }
-    return null;
-  }
+  ItemCatalogue get _catalogue =>
+      ref.read(itemCatalogueProvider).value ?? ItemCatalogue.empty;
+
+  CreItemSlot? get _firstFreePack => firstFreePackSlot(_items);
 
   /// Whether [item] may be handed to another character at all.
   ///
@@ -201,129 +336,79 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          '${widget.character().name} · Inventory'
-          // The same marker both editors put beside the document's name.
-          '${widget.isDirty ? ' •' : ''}',
-        ),
-        actions: [
-          // ⚠️ **Not decoration, and not optional.** Remove is one click and
-          // takes no confirmation, so undo is its only safety net — and a
-          // safety net on a *different screen* from the destructive action is
-          // not a design.
-          if (widget.onUndo != null || widget.onRedo != null) ...[
-            IconButton(
-              onPressed: widget.onUndo,
-              icon: const Icon(Icons.undo),
-              tooltip: 'Undo',
-            ),
-            IconButton(
-              onPressed: widget.onRedo,
-              icon: const Icon(Icons.redo),
-              tooltip: 'Redo',
-            ),
-            const SizedBox(width: 8),
-          ],
-          if (widget.onSave != null) ...[
-            SaveButton(isDirty: widget.isDirty, onSave: widget.onSave),
-            const SizedBox(width: 12),
-          ],
-        ],
-      ),
-      // ⚠️ **The same shape the character sheet uses**, so the two read as one
-      // editor rather than two screens: rail, divider, then the content.
-      body: Row(
-        children: [
-          if (widget.rail case final Widget rail) ...[
-            rail,
-            const VerticalDivider(width: 1),
-          ],
-          Expanded(child: _body(context)),
-        ],
-      ),
-    );
-  }
-
-  ItemCatalogue get _catalogue =>
-      ref.read(itemCatalogueProvider).value ?? ItemCatalogue.empty;
-
-  Widget _body(BuildContext context) {
     final catalogue =
         ref.watch(itemCatalogueProvider).value ?? ItemCatalogue.empty;
     final free = _firstFreePack;
     final results = catalogue.search(_query.text);
 
-    return Scrollbar(
-      controller: _scroll,
-      child: SingleChildScrollView(
-        controller: _scroll,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 20,
-                children: [
-                  _Search(
-                    controller: _query,
-                    onChanged: () => setState(() {}),
-                    enabled: free != null,
-                  ),
-                  if (free == null)
-                    Text(
-                      'The inventory is full. Nothing can be added until '
-                      'something is taken out in game.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  if (_query.text.trim().isNotEmpty)
-                    _Results(
-                      results: results.results,
-                      withheld: results.withheld,
-                      onAdd: _add,
-                    ),
-                  _Carried(
-                    menu: _menuFor,
-                    canMove: _movesBetweenCharacters,
-                    items: _items,
-                    from: widget.partyPosition,
-                    // ⚠️ Cross-referenced from the catalogue: the creature
-                    // record says nothing about droppability, so a carried row
-                    // can only explain itself by asking the item.
-                    isStuck: (resref) =>
-                        catalogue.entries[resref]?.isMovable == false,
-                    describe: (resref) => catalogue.entries[resref],
-                  ),
-                ],
-              ),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 20,
+      children: [
+        if (widget.showSearchField)
+          ItemSearchField(
+            controller: _query,
+            onChanged: () => setState(() {}),
+            enabled: free != null,
+            autofocus: widget.autofocusSearchField,
           ),
+        if (free == null)
+          Text(
+            'The inventory is full. Nothing can be added until '
+            'something is taken out in game.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        if (_query.text.trim().isNotEmpty)
+          ItemResults(
+            results: results.results,
+            withheld: results.withheld,
+            onAdd: _add,
+          ),
+        CarriedSections(
+          menu: _menuFor,
+          canMove: _movesBetweenCharacters,
+          items: _items,
+          from: widget.partyPosition,
+          // ⚠️ Cross-referenced from the catalogue: the creature record says
+          // nothing about droppability, so a carried row can only explain
+          // itself by asking the item.
+          isStuck: (resref) => catalogue.entries[resref]?.isMovable == false,
+          describe: (resref) => catalogue.entries[resref],
         ),
-      ),
+      ],
     );
   }
 }
 
-class _Search extends StatelessWidget {
-  const _Search({
+/// The box that finds an item in the installation's catalogue.
+class ItemSearchField extends StatelessWidget {
+  /// Searches through [controller], reporting keystrokes to [onChanged].
+  const ItemSearchField({
     required this.controller,
     required this.onChanged,
     required this.enabled,
+    this.autofocus = true,
+    super.key,
   });
 
+  /// The query being typed.
   final TextEditingController controller;
+
+  /// Called on every keystroke, so results follow the text.
   final VoidCallback onChanged;
+
+  /// Whether there is anywhere to put what it finds.
   final bool enabled;
+
+  /// Whether it takes focus when it appears.
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
     enabled: enabled,
     onChanged: (_) => onChanged(),
-    autofocus: true,
+    autofocus: autofocus,
     decoration: const InputDecoration(
       labelText: 'Find an item',
       hintText: 'a name, or a resref like BOOT01',
@@ -340,18 +425,22 @@ class _Search extends StatelessWidget {
 /// Cheetah" — and three item *descriptions*. But "speed" alone hits 238
 /// descriptions, so they are grouped under their own heading rather than mixed
 /// in, and a reader can always see why a row appeared.
-class _Results extends StatelessWidget {
-  const _Results({
+class ItemResults extends StatelessWidget {
+  /// Draws [results], noting how many were [withheld].
+  const ItemResults({
     required this.results,
     required this.withheld,
     required this.onAdd,
+    super.key,
   });
 
+  /// What matched, and how each one was reached.
   final List<({ItemEntry entry, ItemMatch how})> results;
 
   /// How many matches the engine could never move, and so were not offered.
   final int withheld;
 
+  /// Puts the chosen item in the first free backpack slot.
   final void Function(ItemEntry) onAdd;
 
   /// What to say about the matches that were not offered.
@@ -438,16 +527,19 @@ class _Results extends StatelessWidget {
 /// Only backpack items can be handed to somebody else, and a list where some
 /// rows drag and some do not — with nothing saying why — is an unexplained
 /// affordance. The grouping is what justifies the difference.
-class _Carried extends StatelessWidget {
-  const _Carried({
+class CarriedSections extends StatelessWidget {
+  /// Draws [items] in their three groups.
+  const CarriedSections({
     required this.items,
     required this.isStuck,
     required this.describe,
     required this.menu,
     required this.canMove,
     this.from,
+    super.key,
   });
 
+  /// Everything the record holds, in whatever slot.
   final List<CarriedItem> items;
 
   /// Whether the engine refuses to move the item with that resref.
@@ -501,13 +593,13 @@ class _Carried extends StatelessWidget {
         // the same container. **"Backpack" appears in none of its 34,000
         // strings** — that word was this project's, and so is "pack" in
         // `CreItemSlot.pack`.
-        _Backpack(items: carried, row: _row, describe: describe, menu: menu),
+        BackpackGrid(items: carried, row: _row, describe: describe, menu: menu),
         if (worn.isNotEmpty)
           // ⚠️ Not a heading the game itself uses — its own screen is a paper
           // doll, not a list — but "equipped" is its word, running right
           // through the item descriptions ("when equipped", "cannot be
           // equipped"). Borrowed, not coined.
-          _Panel(
+          CarriedPanel(
             title: 'Equipped',
             items: worn,
             row: _row,
@@ -516,7 +608,7 @@ class _Carried extends StatelessWidget {
             menu: menu,
           ),
         if (loose.isNotEmpty)
-          _Panel(
+          CarriedPanel(
             title: 'In no slot',
             items: loose,
             row: _row,
@@ -558,7 +650,7 @@ class _Carried extends StatelessWidget {
   /// subtitle reading "Inventory" on every row is the grouping restating
   /// itself — and this project has already shipped a findings badge whose every
   /// entry repeated the two chips beside it.
-  static String? _where(CarriedItem item) {
+  static String? slotTagFor(CarriedItem item) {
     if (!item.isInASlot) return null;
     final slot = CreItemSlot.values[item.slotIndex];
     return slot.isPack ? null : slotLabel(slot);
@@ -617,8 +709,9 @@ String slotLabel(CreItemSlot slot) => switch (slot) {
 };
 
 /// One titled group of rows.
-class _Panel extends StatelessWidget {
-  const _Panel({
+class CarriedPanel extends StatelessWidget {
+  /// Draws [items] under [title].
+  const CarriedPanel({
     required this.title,
     required this.items,
     required this.row,
@@ -626,12 +719,22 @@ class _Panel extends StatelessWidget {
     required this.describe,
     required this.menu,
     this.note,
+    super.key,
   });
 
+  /// The heading.
   final String title;
+
+  /// What to draw under it.
   final List<CarriedItem> items;
+
+  /// Wraps a row in whatever gesture it may take part in.
   final Widget Function(CarriedItem, Widget) row;
+
+  /// Whether the engine refuses to move the item with that resref.
   final bool Function(String resref) isStuck;
+
+  /// What the catalogue knows about that resref, or `null` with no game.
   final ItemEntry? Function(String resref) describe;
 
   /// What can be done with an item, or `null` when nothing is on offer.
@@ -662,7 +765,7 @@ class _Panel extends StatelessWidget {
             // identifier; "cannot be moved" is a caveat. Mixed together the eye
             // cannot tell what is describing the row from what is warning about
             // it.
-            leading: switch (_Carried._where(item)) {
+            leading: switch (CarriedSections.slotTagFor(item)) {
               final String where => Tag(where),
               null => null,
             },
@@ -710,17 +813,26 @@ class _Panel extends StatelessWidget {
 /// `Column` inside a `SingleChildScrollView`, where a `GridView` needs
 /// `shrinkWrap` and `NeverScrollableScrollPhysics` and behaves awkwardly.
 /// Sixteen is a fixed count, so rows are deterministic and carry none of that.
-class _Backpack extends StatelessWidget {
-  const _Backpack({
+class BackpackGrid extends StatelessWidget {
+  /// Draws the sixteen slots, filling them from [items].
+  const BackpackGrid({
     required this.items,
     required this.row,
     required this.describe,
     required this.menu,
+    super.key,
   });
 
+  /// What the character carries in a backpack slot.
   final List<CarriedItem> items;
+
+  /// Wraps a cell in whatever gesture it may take part in.
   final Widget Function(CarriedItem, Widget) row;
+
+  /// What the catalogue knows about that resref, or `null` with no game.
   final ItemEntry? Function(String resref) describe;
+
+  /// What can be done with an item, or `null` when nothing is on offer.
   final Widget? Function(CarriedItem item) menu;
 
   static const int _columns = 4;

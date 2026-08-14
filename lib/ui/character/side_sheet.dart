@@ -44,8 +44,13 @@ import 'package:wand_of_saves/ui/core/tag.dart';
 /// the rules" is a place the player may deliberately go.
 const int _beyondCeiling = 2;
 
-/// The editor for one [Subject].
-class SideSheet extends StatefulWidget {
+/// The editor for one [Subject], as a drawer.
+///
+/// **The drawer is all this adds.** Everything that decides what an edit means
+/// — the draft, the refusal, what Apply writes — lives in [SubjectEditor], so
+/// an arrangement that edits in place rather than in a drawer is the same
+/// editor in a different container and not a second copy of the rules.
+class SideSheet extends StatelessWidget {
   /// Opens [subject].
   const SideSheet({
     required this.subject,
@@ -77,10 +82,71 @@ class SideSheet extends StatefulWidget {
   final VoidCallback onClose;
 
   @override
-  State<SideSheet> createState() => _SideSheetState();
+  Widget build(BuildContext context) => Drawer(
+    child: SafeArea(
+      child: SubjectEditor(
+        subject: subject,
+        character: character,
+        rulesBind: rulesBind,
+        onApplyField: onApplyField,
+        onApplyPips: onApplyPips,
+        onClose: onClose,
+      ),
+    ),
+  );
 }
 
-class _SideSheetState extends State<SideSheet> {
+/// One subject, opened for editing — header, body and the two commands.
+///
+/// ⚠️ **Whatever contains it, the rules are these.** Refusing a value above the
+/// engine's ceiling, refusing one beyond the rules while the check binds, and
+/// resolving a stale subject against the live record are all decided here, once
+/// — see [SideSheet] for why that matters.
+class SubjectEditor extends StatefulWidget {
+  /// Opens [subject].
+  const SubjectEditor({
+    required this.subject,
+    required this.character,
+    required this.rulesBind,
+    required this.onApplyField,
+    required this.onApplyPips,
+    required this.onClose,
+    this.fillsHeight = true,
+    super.key,
+  });
+
+  /// What was opened.
+  final Subject subject;
+
+  /// The record it belongs to, read to keep [subject] from going stale.
+  final SheetCharacter character;
+
+  /// Whether the rules bind. Off, a value the rules would never produce is
+  /// written anyway and marked — which is the reason a save editor exists.
+  final bool rulesBind;
+
+  /// Writes a field edit straight through. There is no staging step.
+  final void Function(FieldEntry entry, String value) onApplyField;
+
+  /// Writes a new pip count straight through.
+  final void Function(SheetProficiency proficiency, int pips) onApplyPips;
+
+  /// Closes the editor.
+  final VoidCallback onClose;
+
+  /// Whether the editor fills the height it is given, or is only as tall as
+  /// what it holds.
+  ///
+  /// A drawer has a height to fill and a long body should scroll inside it;
+  /// an editor expanded beneath the row it belongs to has neither — a scroll
+  /// view there would need a height nothing can supply.
+  final bool fillsHeight;
+
+  @override
+  State<SubjectEditor> createState() => _SubjectEditorState();
+}
+
+class _SubjectEditorState extends State<SubjectEditor> {
   /// ⚠️ Built once and disposed. The panel this replaces built one inside
   /// `build()` and leaked one per rebuild — defect A7 of the UI review.
   late final TextEditingController _value;
@@ -96,7 +162,7 @@ class _SideSheetState extends State<SideSheet> {
   }
 
   @override
-  void didUpdateWidget(SideSheet oldWidget) {
+  void didUpdateWidget(SubjectEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     // ⚠️ A different subject in the same widget. A parent that keeps one sheet
     // and changes what it holds would otherwise aim the previous field's draft
@@ -114,7 +180,7 @@ class _SideSheetState extends State<SideSheet> {
     super.dispose();
   }
 
-  /// [SideSheet.subject], resolved against the record as it now stands.
+  /// [SubjectEditor.subject], resolved against the record as it now stands.
   ///
   /// ⚠️ **A subject is a snapshot and the document moves under it.** An apply
   /// writes immediately, so a parent holding the [Subject] it opened would
@@ -194,66 +260,71 @@ class _SideSheetState extends State<SideSheet> {
         refusal == null &&
         (field == null || field.enabledUnder(rulesBind: widget.rulesBind));
 
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SheetHeader(
-              subject: subject,
-              rulesBind: widget.rulesBind,
-              onClose: widget.onClose,
-            ),
-            const Divider(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                children: [
-                  switch (subject) {
-                    FieldSubject(:final entry) => _FieldBody(
-                      entry: entry,
-                      draft: _draft,
-                      controller: _value,
-                      rulesBind: widget.rulesBind,
-                      error: refusal,
-                      onChanged: (value) => setState(() => _draft = value),
-                      onSubmitted: () => _apply(subject),
-                    ),
-                    ProficiencySubject(:final proficiency) => _ProficiencyBody(
-                      proficiency: proficiency,
-                      pips: _pips,
-                      rulesBind: widget.rulesBind,
-                      onChanged: (pips) => setState(() => _pips = pips),
-                    ),
-                  },
-                ],
-              ),
-            ),
-            const Divider(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-              child: Row(
-                children: [
-                  TextButton(
-                    onPressed: widget.onClose,
-                    child: const Text('Discard'),
-                  ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: canApply ? () => _apply(subject) : null,
-                    child: const Text('Apply'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    final body = switch (subject) {
+      FieldSubject(:final entry) => _FieldBody(
+        entry: entry,
+        draft: _draft,
+        controller: _value,
+        rulesBind: widget.rulesBind,
+        error: refusal,
+        onChanged: (value) => setState(() => _draft = value),
+        onSubmitted: () => _apply(subject),
       ),
+      ProficiencySubject(:final proficiency) => _ProficiencyBody(
+        proficiency: proficiency,
+        pips: _pips,
+        rulesBind: widget.rulesBind,
+        onChanged: (pips) => setState(() => _pips = pips),
+      ),
+    };
+    const padding = EdgeInsets.fromLTRB(20, 18, 20, 18);
+
+    return Column(
+      mainAxisSize: widget.fillsHeight ? MainAxisSize.max : MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SheetHeader(
+          subject: subject,
+          rulesBind: widget.rulesBind,
+          onClose: widget.onClose,
+        ),
+        const Divider(),
+        if (widget.fillsHeight)
+          Expanded(
+            child: ListView(padding: padding, children: [body]),
+          )
+        else
+          Padding(padding: padding, child: body),
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+          child: Row(
+            children: [
+              TextButton(
+                onPressed: widget.onClose,
+                child: const Text('Discard'),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: canApply ? () => _apply(subject) : null,
+                child: const Text('Apply'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
 /// A key unique across the sheet, which a label is not.
+///
+/// Public because anything that has to decide *whether the thing on screen is
+/// still the thing that was opened* needs the same answer this editor uses —
+/// an arrangement that expands the editor beneath the selected row asks it on
+/// every row it draws.
+String subjectKey(Subject subject) => _identityOf(subject);
+
 String _identityOf(Subject subject) => switch (subject) {
   FieldSubject(:final entry) => entry.key,
   ProficiencySubject(:final proficiency) => 'proficiency ${proficiency.id}',

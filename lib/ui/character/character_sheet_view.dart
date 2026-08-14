@@ -55,72 +55,11 @@ class CharacterSheetView extends StatelessWidget {
   /// rather than something it works out.
   @override
   Widget build(BuildContext context) {
-    final index = indexOf(character);
-    final flagged = <String, Finding>{
-      for (final finding in findingsFor(character))
-        if (finding.subject case FieldSubject(:final entry)) entry.key: finding,
-    };
-
-    final built = <String, Widget>{};
-    for (final section in character.sections) {
-      if (section.title == 'Abilities') {
-        built['Abilities'] = _Abilities(
-          character: character,
-          rulesBind: rulesBind,
-          onOpen: onOpen,
-          flagged: flagged,
-        );
-        continue;
-      }
-      for (final group in section.groups) {
-        final rows = [
-          for (final entry in index)
-            if (entry.group == group) entry,
-        ];
-        if (rows.isEmpty) continue;
-        built[group.title] = PanelCard(
-          title: group.title,
-          note: group.note,
-          children: [
-            for (final entry in rows) ...[
-              if (entry != rows.first) const Divider(),
-              _ValueRow(
-                entry: entry,
-                finding: flagged[entry.key],
-                rulesBind: rulesBind,
-                onTap: () => onOpen(FieldSubject(entry)),
-              ),
-            ],
-          ],
-        );
-      }
-    }
-    if (character.proficiencies.isNotEmpty) {
-      built['Proficiencies'] = _Proficiencies(
-        character: character,
-        onOpen: onOpen,
-      );
-    }
-
-    // ⚠️ **Named, not inherited from the data's order**, because the order a
-    // record happens to store its groups in is not the order a person reads a
-    // character in. Anything the data holds that is not named here is appended
-    // rather than dropped — a hard-coded order that silently loses a new group
-    // is a defect waiting for the next character.
-    const order = [
-      'Character',
-      'Abilities',
-      'Skills',
-      'Proficiencies',
-      'Combat',
-      'Resistances',
-      'Condition',
-    ];
-    final panels = <Widget>[
-      for (final title in order)
-        if (built.remove(title) case final Widget panel) panel,
-      ...built.values,
-    ];
+    final panels = sheetPanelsOf(
+      character: character,
+      rulesBind: rulesBind,
+      onOpen: onOpen,
+    );
 
     // ⚠️ **Selection belongs here, not at the application root.** Every number
     // on this sheet is one somebody wants to quote — this project's own
@@ -135,13 +74,107 @@ class CharacterSheetView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _Identity(character: character),
+          SheetIdentity(character: character),
           const SizedBox(height: 20),
-          for (final panel in panels) ...[panel, const SizedBox(height: 20)],
+          for (final panel in panels.values) ...[
+            panel,
+            const SizedBox(height: 20),
+          ],
         ],
       ),
     );
   }
+}
+
+/// The order the panels are read in, whatever order the record stores them.
+///
+/// ⚠️ **Named, not inherited from the data's order**, because the order a
+/// record happens to store its groups in is not the order a person reads a
+/// character in. Anything the data holds that is not named here is appended
+/// rather than dropped — a hard-coded order that silently loses a new group is
+/// a defect waiting for the next character.
+const List<String> sheetPanelOrder = [
+  'Character',
+  'Abilities',
+  'Skills',
+  'Proficiencies',
+  'Combat',
+  'Resistances',
+  'Condition',
+];
+
+/// Every panel of [character]'s record, keyed by its heading and in
+/// [sheetPanelOrder].
+///
+/// **Extracted so more than one arrangement can place the same panels.** The
+/// single column above draws them in order; a grid puts named panels in named
+/// cells. Building them twice would be two answers to "what is on this sheet",
+/// which is this project's most expensive recurring bug.
+///
+/// [inlineEditor] is asked about every row as it is built, and whatever it
+/// returns is drawn directly beneath that row. `null` — the single column's
+/// answer, and the default — draws nothing extra, so the sheet is unchanged.
+Map<String, Widget> sheetPanelsOf({
+  required SheetCharacter character,
+  required bool rulesBind,
+  required ValueChanged<Subject> onOpen,
+  Widget? Function(Subject subject)? inlineEditor,
+}) {
+  final index = indexOf(character);
+  final flagged = <String, Finding>{
+    for (final finding in findingsFor(character))
+      if (finding.subject case FieldSubject(:final entry)) entry.key: finding,
+  };
+
+  final built = <String, Widget>{};
+  for (final section in character.sections) {
+    if (section.title == 'Abilities') {
+      built['Abilities'] = _Abilities(
+        character: character,
+        rulesBind: rulesBind,
+        onOpen: onOpen,
+        flagged: flagged,
+        inlineEditor: inlineEditor,
+      );
+      continue;
+    }
+    for (final group in section.groups) {
+      final rows = [
+        for (final entry in index)
+          if (entry.group == group) entry,
+      ];
+      if (rows.isEmpty) continue;
+      built[group.title] = PanelCard(
+        title: group.title,
+        note: group.note,
+        children: [
+          for (final entry in rows) ...[
+            if (entry != rows.first) const Divider(),
+            _ValueRow(
+              entry: entry,
+              finding: flagged[entry.key],
+              rulesBind: rulesBind,
+              onTap: () => onOpen(FieldSubject(entry)),
+            ),
+            ?inlineEditor?.call(FieldSubject(entry)),
+          ],
+        ],
+      );
+    }
+  }
+  if (character.proficiencies.isNotEmpty) {
+    built['Proficiencies'] = _Proficiencies(
+      character: character,
+      onOpen: onOpen,
+      inlineEditor: inlineEditor,
+    );
+  }
+
+  final ordered = <String, Widget>{};
+  for (final title in sheetPanelOrder) {
+    if (built.remove(title) case final Widget panel) ordered[title] = panel;
+  }
+  return ordered..addAll(built);
 }
 
 /// Who this record is, above the numbers.
@@ -153,9 +186,11 @@ class CharacterSheetView extends StatelessWidget {
 ///
 /// The facts stay separate because the engine prints them on separate lines,
 /// and one run-on sentence loses which of them is the class.
-class _Identity extends StatelessWidget {
-  const _Identity({required this.character});
+class SheetIdentity extends StatelessWidget {
+  /// Names [character] above their numbers.
+  const SheetIdentity({required this.character, super.key});
 
+  /// Whose record this is.
   final SheetCharacter character;
 
   @override
@@ -425,6 +460,7 @@ class _Abilities extends StatelessWidget {
     required this.rulesBind,
     required this.onOpen,
     required this.flagged,
+    this.inlineEditor,
   });
 
   final SheetCharacter character;
@@ -433,6 +469,9 @@ class _Abilities extends StatelessWidget {
 
   /// What this application noticed, by field key.
   final Map<String, Finding> flagged;
+
+  /// What to draw beneath a row, when an arrangement edits in place.
+  final Widget? Function(Subject subject)? inlineEditor;
 
   @override
   Widget build(BuildContext context) {
@@ -451,6 +490,7 @@ class _Abilities extends StatelessWidget {
             rulesBind: rulesBind,
             onTap: () => onOpen(FieldSubject(entry)),
           ),
+          ?inlineEditor?.call(FieldSubject(entry)),
         ],
       ],
     );
@@ -470,10 +510,14 @@ class _Proficiencies extends StatelessWidget {
   const _Proficiencies({
     required this.character,
     required this.onOpen,
+    this.inlineEditor,
   });
 
   final SheetCharacter character;
   final ValueChanged<Subject> onOpen;
+
+  /// What to draw beneath a row, when an arrangement edits in place.
+  final Widget? Function(Subject subject)? inlineEditor;
 
   /// Whether a proficiency the record does not hold can be taken up.
   @override
@@ -493,13 +537,15 @@ class _Proficiencies extends StatelessWidget {
       // defect this panel was fixed for once already.
       trailing: Tag('$total', caption: 'all editable'),
       children: [
-        for (final proficiency in character.proficiencies)
+        for (final proficiency in character.proficiencies) ...[
           PipMeter(
             proficiency: proficiency,
             // Every proficiency is open now: the record either holds the
             // effect already or grows one, and both documents can grow.
             onTap: () => onOpen(ProficiencySubject(proficiency)),
           ),
+          ?inlineEditor?.call(ProficiencySubject(proficiency)),
+        ],
       ],
     );
   }

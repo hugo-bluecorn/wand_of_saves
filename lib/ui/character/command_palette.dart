@@ -85,15 +85,17 @@ class CommandPalette extends StatelessWidget {
     SearchController anchor,
   ) {
     final query = anchor.text.trim().toLowerCase();
-    final subjects = query.isEmpty ? _startHere() : _matches(query);
+    final subjects = query.isEmpty
+        ? _startHere()
+        : subjectsMatching(character, query);
     if (subjects.isEmpty) {
-      return const [_PaletteEmpty()];
+      return const [PaletteEmpty()];
     }
     return [
       for (final subject in subjects)
-        _PaletteRow(
+        PaletteRow(
           subject: subject,
-          onTap: _canOpen(subject)
+          onTap: canOpenSubject(subject)
               ? () {
                   anchor.closeView(subject.title);
                   onSelected(subject);
@@ -129,18 +131,25 @@ class CommandPalette extends StatelessWidget {
     ];
     return [...flagged.values, ...rest];
   }
+}
 
-  List<Subject> _matches(String query) {
-    final corpus = <Subject>[
-      for (final entry in indexOf(character)) FieldSubject(entry),
-      for (final proficiency in character.proficiencies)
-        ProficiencySubject(proficiency),
-    ];
-    return [
-      for (final subject in corpus)
-        if (_matchesQuery(subject, query)) subject,
-    ];
-  }
+/// Everything on [character]'s record that answers to [query], already
+/// lower-cased.
+///
+/// **Extracted so a surface with one search box instead of two can compose
+/// it.** Merging fields and items into a single find is a variant question the
+/// grid spikes exist to settle, and a second matcher written for that surface
+/// would answer the same question differently the first time either changed.
+List<Subject> subjectsMatching(SheetCharacter character, String query) {
+  final corpus = <Subject>[
+    for (final entry in indexOf(character)) FieldSubject(entry),
+    for (final proficiency in character.proficiencies)
+      ProficiencySubject(proficiency),
+  ];
+  return [
+    for (final subject in corpus)
+      if (_matchesQuery(subject, query)) subject,
+  ];
 }
 
 bool _matchesQuery(Subject subject, String query) {
@@ -170,15 +179,20 @@ String _acronymOf(String title) {
 /// A field the class cannot have and the record does not hold is inert. One
 /// the record holds anyway stays open, because a value you cannot reach is a
 /// value you cannot correct.
-bool _canOpen(Subject subject) => switch (subject) {
+bool canOpenSubject(Subject subject) => switch (subject) {
   FieldSubject(:final entry) => entry.field.available || entry.field.anomalous,
   ProficiencySubject() => true,
 };
 
-class _PaletteRow extends StatelessWidget {
-  const _PaletteRow({required this.subject, this.onTap});
+/// One result row: what it is, where it lives, and what it currently holds.
+class PaletteRow extends StatelessWidget {
+  /// Draws [subject], opening it through [onTap] when it can be opened.
+  const PaletteRow({required this.subject, this.onTap, super.key});
 
+  /// The field or proficiency this row stands for.
   final Subject subject;
+
+  /// What choosing it does, or `null` when it cannot be opened.
   final VoidCallback? onTap;
 
   @override
@@ -274,8 +288,10 @@ class _RowValues extends StatelessWidget {
   }
 }
 
-class _PaletteEmpty extends StatelessWidget {
-  const _PaletteEmpty();
+/// What a search says when the record answers to nothing typed.
+class PaletteEmpty extends StatelessWidget {
+  /// Creates the empty row.
+  const PaletteEmpty({super.key});
 
   @override
   Widget build(BuildContext context) {

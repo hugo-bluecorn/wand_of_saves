@@ -14,10 +14,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:infinity_formats/infinity_formats.dart';
-import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/ui/character/portrait_tile.dart';
 import 'package:wand_of_saves/ui/inventory/item_drag.dart';
+import 'package:wand_of_saves/ui/inventory/pack_slots.dart';
 import 'package:wand_of_saves/ui/party/party_viewmodel.dart';
 
 /// The party down the left-hand side, as portraits you can select between.
@@ -45,19 +44,6 @@ class PortraitRail extends ConsumerWidget {
   /// `null` on the character sheet, where there is nothing to drag — and a
   /// portrait that lit up for a drag that cannot happen would be a lie.
   final void Function(ItemDrag drag, int to)? onItemDropped;
-
-  /// Whether the member at [position] has room for one more item.
-  ///
-  /// ⚠️ **Scans rather than counts**, for the same reason the inventory does:
-  /// holes in the backpack are ordinary, so the item count is not the index of
-  /// the next free slot.
-  bool _hasRoom(int position) {
-    final taken = {
-      for (final CarriedItem item in state.members[position].items)
-        if (item.isInASlot) item.slotIndex,
-    };
-    return CreItemSlot.pack.any((slot) => !taken.contains(slot.index));
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -129,7 +115,8 @@ class PortraitRail extends ConsumerWidget {
     if (onDropped == null) return PortraitTile(baseName: baseName);
     return DragTarget<ItemDrag>(
       onWillAcceptWithDetails: (details) =>
-          details.data.from != position && _hasRoom(position),
+          details.data.from != position &&
+          hasPackRoom(state.members[position].items),
       onAcceptWithDetails: (details) => onDropped(details.data, position),
       builder: (context, candidates, _) => PortraitTile(
         baseName: baseName,
