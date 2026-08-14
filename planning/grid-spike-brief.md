@@ -422,3 +422,55 @@ the record rather than below it; **exactly one `Scrollbar` on the page**; a row 
 expands the editor beneath itself and `20 → 19` writes with Save going live; Ctrl+K reaches the
 palette; an added item still drags to the other five portraits. `analyze` clean, `dart format` a
 no-op, 844 + 399 green.
+
+### Balanced — Proficiencies moved right, the numbers and In-no-slot moved left
+
+**The user's fix for the unequal columns**, and it is the right kind of fix: rather than an
+algorithm balancing heights — which is D17's zigzag and this project has paid for it once — two
+named blocks swap sides in the authored map.
+
+```
+┌─PARTY─┬───────────────── ONE page, two columns ────────────────┐
+│ ┌───┐ │ ⌕ Ctrl+K                  │ Inventory                  │
+│ │Con│ │ Character                 │  ⌕ Find an item            │
+│ └───┘ │ Abilities                 │  ┌────┬────┬────┬────┐     │
+│ ┌───┐ │ Skills                    │  └────┴────┴────┴────┘     │
+│ │Imo│ │ In no slot                │ Equipped                   │
+│ └───┘ │ Combat                    │ Proficiencies              │
+│ ident │ Resistances               │  Long Sword     ●●○○○      │
+│ chrome│ Condition                 │  … twenty-four of them     │
+└───────┴───────────────────────────┴────────────────────────────┘
+```
+
+⚠️ **Measured with a real installation's twenty-four proficiencies** — every earlier figure in
+this report ran on an *empty* catalogue and so had no Proficiencies panel at all, which is exactly
+the block being moved:
+
+| | before the swap | after |
+|---|---|---|
+| left column | ≈ 2,340 | **2,183** |
+| right column | ≈ 1,120 | **1,472** |
+| ratio | 2.1 : 1 | **1.48 : 1** |
+| minimum window | 780 × 300 | **880 × 300** |
+
+**Better, and not yet balanced.** The blocks measure roughly: palette 56 · Character 289 ·
+Abilities 454 · Skills 555 · the numbers 780 · the inventory 460 · Proficiencies 990. An even
+split would be about 1,790 a side, so the left is ~390 long. ⚠️ **Moving `Character` (289) across
+would land it at 1,878 against 1,777** — one further named move, and the closest any single swap
+gets. Not made unasked.
+
+⚠️ **And the gap is smaller than it looks on paper.** These are `flutter test` figures, where every
+glyph is a full em square, so text wraps earlier than it will on screen — and the left column is
+almost all text while the right is a grid and a stack of pip meters. The inflation is not even
+between them.
+
+The split needed one parameter in production code: `CarriedGroup` and `CarriedSections.groups`, so
+a surface can draw the backpack and Equipped in one place and In-no-slot in another. Everything
+defaults to all three, so `InventoryScreen` is unchanged. **In-no-slot went left with the record
+deliberately** — those items are not a place anything can be put and the game will not draw them
+at all, so they read as something wrong with the record rather than as inventory.
+
+Re-proved: Proficiencies really are in the right-hand column; one item search box on the page; the
+editor still opens under a number and writes; the added item is in a backpack cell with its
+`Draggable` and five portrait targets; Ctrl+K reaches the palette. `analyze` clean, `dart format` a
+no-op, 844 + 399 green.

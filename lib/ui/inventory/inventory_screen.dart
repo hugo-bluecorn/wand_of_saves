@@ -219,6 +219,7 @@ class InventoryPanels extends ConsumerStatefulWidget {
     this.party = const [],
     this.onMoveTo,
     this.query,
+    this.groups = CarriedGroup.values,
     this.showSearchField = true,
     this.autofocusSearchField = true,
     super.key,
@@ -249,6 +250,12 @@ class InventoryPanels extends ConsumerStatefulWidget {
   /// owns the text itself; supplying it here is what keeps the results and the
   /// box that produced them the same query rather than two.
   final TextEditingController? query;
+
+  /// Which of the three groups of carried items to draw.
+  ///
+  /// A page that balances two columns puts some of them on one side and the
+  /// rest on the other; everything else takes all three.
+  final List<CarriedGroup> groups;
 
   /// Whether to draw the item search box above the results.
   final bool showSearchField;
@@ -352,7 +359,10 @@ class _InventoryPanelsState extends ConsumerState<InventoryPanels> {
             enabled: free != null,
             autofocus: widget.autofocusSearchField,
           ),
-        if (free == null)
+        // ⚠️ Only where something could have been added. On a surface drawing
+        // one group with no search box, a note explaining why adding is
+        // refused explains a control that is not there.
+        if (widget.showSearchField && free == null)
           Text(
             'The inventory is full. Nothing can be added until '
             'something is taken out in game.',
@@ -368,6 +378,7 @@ class _InventoryPanelsState extends ConsumerState<InventoryPanels> {
           menu: _menuFor,
           canMove: _movesBetweenCharacters,
           items: _items,
+          groups: widget.groups,
           from: widget.partyPosition,
           // ⚠️ Cross-referenced from the catalogue: the creature record says
           // nothing about droppability, so a carried row can only explain
@@ -521,6 +532,21 @@ class ItemResults extends StatelessWidget {
   }
 }
 
+/// One of the three groups a character's items fall into.
+///
+/// Named so a surface can draw some of them here and the rest somewhere else —
+/// a two-column page balancing its halves has to be able to say which.
+enum CarriedGroup {
+  /// The sixteen backpack slots, drawn as a grid whether filled or not.
+  backpack,
+
+  /// What is worn or held.
+  equipped,
+
+  /// Items no slot points at. Legal, observed, and invisible in game.
+  inNoSlot,
+}
+
 /// What the character carries, wears, and holds in no slot at all.
 ///
 /// ⚠️ **Three panels, because the rows are three different kinds of thing.**
@@ -535,12 +561,17 @@ class CarriedSections extends StatelessWidget {
     required this.describe,
     required this.menu,
     required this.canMove,
+    this.groups = CarriedGroup.values,
     this.from,
     super.key,
   });
 
   /// Everything the record holds, in whatever slot.
   final List<CarriedItem> items;
+
+  /// Which of the three groups to draw. All of them, unless a surface splits
+  /// them across more than one place.
+  final List<CarriedGroup> groups;
 
   /// Whether the engine refuses to move the item with that resref.
   final bool Function(String resref) isStuck;
@@ -593,8 +624,14 @@ class CarriedSections extends StatelessWidget {
         // the same container. **"Backpack" appears in none of its 34,000
         // strings** — that word was this project's, and so is "pack" in
         // `CreItemSlot.pack`.
-        BackpackGrid(items: carried, row: _row, describe: describe, menu: menu),
-        if (worn.isNotEmpty)
+        if (groups.contains(CarriedGroup.backpack))
+          BackpackGrid(
+            items: carried,
+            row: _row,
+            describe: describe,
+            menu: menu,
+          ),
+        if (groups.contains(CarriedGroup.equipped) && worn.isNotEmpty)
           // ⚠️ Not a heading the game itself uses — its own screen is a paper
           // doll, not a list — but "equipped" is its word, running right
           // through the item descriptions ("when equipped", "cannot be
@@ -607,7 +644,7 @@ class CarriedSections extends StatelessWidget {
             describe: describe,
             menu: menu,
           ),
-        if (loose.isNotEmpty)
+        if (groups.contains(CarriedGroup.inNoSlot) && loose.isNotEmpty)
           CarriedPanel(
             title: 'In no slot',
             items: loose,

@@ -18,10 +18,16 @@
 ///
 /// - **Left, the party**: portraits that accept a dropped item, the identity,
 ///   and the chrome. Its own column, its own height.
-/// - **The page, in two columns**: the field palette and the read-once panels —
-///   Character, Abilities, Skills, Proficiencies — on the left; the
-///   **inventory** and then the numbers equipment moves — Combat, Resistances,
-///   Condition — on the right.
+/// - **The page, in two columns**: on the left the field palette, the read-once
+///   panels — Character, Abilities, Skills — anything in no slot, and the
+///   numbers equipment moves — Combat, Resistances, Condition. On the right the
+///   **backpack**, what is **Equipped**, and the **Proficiencies**.
+///
+/// ⚠️ **That split is a balance, chosen by measuring rather than by meaning.**
+/// The obvious division — record on the left, items on the right — left the
+/// left column about twice the height of the right. Twenty-four pip meters is
+/// the one block big enough to move the other way, and the numbers are the one
+/// block small enough to come back.
 ///
 /// ⚠️ **One page, not two panes.** The two columns share a single scroll, so
 /// the record and the items move together and the page reads as one document
@@ -75,13 +81,13 @@ const Map<String, CompactStyle> _numbers = {
   'Condition': CompactStyle.flowing,
 };
 
-/// The panels the left-hand column holds, in the sheet's own order.
-const List<String> _record = [
-  'Character',
-  'Abilities',
-  'Skills',
-  'Proficiencies',
-];
+/// The panels the left-hand column leads with, in the sheet's own order.
+///
+/// ⚠️ **Proficiencies is not among them, and that is the balance.** Four
+/// panels on the left against a backpack on the right left the left column
+/// twice the height of the right; twenty-four pip meters is the one block big
+/// enough to move the other way.
+const List<String> _record = ['Character', 'Abilities', 'Skills'];
 
 /// How wide the party column is. **Authored, not computed.**
 const double _partyColumnWidth = 232;
@@ -203,14 +209,14 @@ class _G1BodyState extends State<_G1Body> {
                               palette: _palette,
                               panels: panels,
                               onOpen: _open,
+                              inlineEditor: _editorFor,
                             ),
                           ),
                           const SizedBox(width: _columnGap),
                           Expanded(
                             child: _ItemsColumn(
                               model: model,
-                              onOpen: _open,
-                              inlineEditor: _editorFor,
+                              panels: panels,
                             ),
                           ),
                         ],
@@ -227,19 +233,24 @@ class _G1BodyState extends State<_G1Body> {
   }
 }
 
-/// The left-hand column of the page: the palette, then the read-once panels.
+/// The left-hand column: the palette, the read-once panels, whatever is in no
+/// slot, and the numbers equipment moves.
 class _RecordColumn extends StatelessWidget {
   const _RecordColumn({
     required this.model,
     required this.palette,
     required this.panels,
     required this.onOpen,
+    required this.inlineEditor,
   });
 
   final GridSpikeModel model;
   final SearchController palette;
   final Map<String, Widget> panels;
   final ValueChanged<Subject> onOpen;
+
+  /// What to draw beneath a number that is open for editing.
+  final Widget? Function(Subject subject) inlineEditor;
 
   @override
   Widget build(BuildContext context) {
@@ -270,54 +281,14 @@ class _RecordColumn extends StatelessWidget {
             ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-/// The right-hand column of the page: the items, then the numbers they move.
-///
-/// ⚠️ **The items lead, and that is what puts them above the fold.** Stacked
-/// under the record they began fourteen hundred points down; at the top of
-/// their own column they are the first thing in it.
-class _ItemsColumn extends StatelessWidget {
-  const _ItemsColumn({
-    required this.model,
-    required this.onOpen,
-    required this.inlineEditor,
-  });
-
-  final GridSpikeModel model;
-  final ValueChanged<Subject> onOpen;
-
-  /// What to draw beneath a number that is open for editing.
-  final Widget? Function(Subject subject) inlineEditor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        InventoryPanels(
-          character: () => model.character,
-          onAdd: model.addItem,
-          partyPosition: model.state.selectedIndex,
-          onRemove: model.removeItem,
-          party: [for (final member in model.state.members) member.name],
-          onMoveTo: (item, to) => model.moveItem(
-            from: model.state.selectedIndex,
-            to: to,
-            itemIndex: item.index,
-            resref: item.resref,
-          ),
-          // ⚠️ The palette holds the focus, so Ctrl+K works the moment the
-          // grid opens. Two boxes cannot both have it.
-          autofocusSearchField: false,
-        ),
+        // ⚠️ **Items no slot points at, over here with the record rather than
+        // with the backpack.** They are not a place anything can be put and
+        // the game will not draw them at all, so they read as something wrong
+        // with the record — which is what this column is about.
+        _Items(model: model, groups: const [CarriedGroup.inNoSlot]),
         const SizedBox(height: 20),
         // Selectable, because every number here is one somebody wants to quote
-        // — and unlike the items above it, nothing in this block drags.
+        // — and unlike the items opposite, nothing in this block drags.
         SelectionArea(
           child: CompactNumbers(
             character: model.sheet,
@@ -330,6 +301,78 @@ class _ItemsColumn extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The right-hand column: the backpack, what is worn, and the proficiencies.
+///
+/// ⚠️ **The items lead, and that is what puts them above the fold.** Stacked
+/// under the record they began fourteen hundred points down; at the top of
+/// their own column they are the first thing in it.
+class _ItemsColumn extends StatelessWidget {
+  const _ItemsColumn({required this.model, required this.panels});
+
+  final GridSpikeModel model;
+
+  /// The sheet's panels by name — this column takes exactly one of them.
+  final Map<String, Widget> panels;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Items(
+          model: model,
+          groups: const [CarriedGroup.backpack, CarriedGroup.equipped],
+          withSearch: true,
+        ),
+        const SizedBox(height: 20),
+        if (panels['Proficiencies'] case final Widget proficiencies)
+          SelectionArea(child: proficiencies),
+      ],
+    );
+  }
+}
+
+/// Some of the character's items, wired to the savegame.
+///
+/// **One place the wiring is written**, because the page draws two of these —
+/// the backpack and what is worn on the right, whatever is in no slot on the
+/// left — and two copies of the callbacks is two chances for one of them to
+/// refuse a move the other offers.
+class _Items extends StatelessWidget {
+  const _Items({
+    required this.model,
+    required this.groups,
+    this.withSearch = false,
+  });
+
+  final GridSpikeModel model;
+  final List<CarriedGroup> groups;
+
+  /// Whether this is the one that carries the item search.
+  final bool withSearch;
+
+  @override
+  Widget build(BuildContext context) => InventoryPanels(
+    character: () => model.character,
+    onAdd: model.addItem,
+    partyPosition: model.state.selectedIndex,
+    onRemove: model.removeItem,
+    party: [for (final member in model.state.members) member.name],
+    onMoveTo: (item, to) => model.moveItem(
+      from: model.state.selectedIndex,
+      to: to,
+      itemIndex: item.index,
+      resref: item.resref,
+    ),
+    groups: groups,
+    showSearchField: withSearch,
+    // ⚠️ The palette holds the focus, so Ctrl+K works the moment the grid
+    // opens. Two boxes cannot both have it.
+    autofocusSearchField: false,
+  );
 }
 
 /// The left column: who else is in the party, who this is, and the chrome.
