@@ -259,3 +259,60 @@ The captures. Per spike: the full window at the measured minimum and at a comfor
 mid-drag over the party tiles; the editor open (G1 inline / G2 sheet); and the find showing
 results for a query matching both a field and an item — `strength` is the one to type, and on G2
 it is the whole result-mixing question in one picture.
+
+---
+
+## Amended the same day — the user favours G1, and reshaped it
+
+**The user looked at the built spikes and is favouring G1**, with two changes. Both go against
+what the study derived on paper, and both are the user's to make — recorded here rather than
+quietly applied, because **the paper scores no longer describe what G1 is.**
+
+**1 — The party column moved from the right edge to the left.** The study put it on the right by
+derivation rather than by default: the dominant drag is pack → member, and a right-hand party
+column made that travel one column instead of the window. On the left it travels the full width,
+which is the margin that won G1 the **W-A2** script. The concern was raised and the change made
+as asked. The rest of the app puts its rail on the left, so this is also the conventional
+arrangement.
+
+**2 — The fast bench is one scroll, items first, and the numbers are no longer pinned.** It was a
+fixed band of numbers above a scrolling item region; it is now a single scrolling column with the
+inventory group at the top and the numbers directly beneath. This trades away **R1's pin** — the
+property G1 was built to demonstrate — and it is exactly the trade the measurement above argues
+for: the band cost ~750 points and left 78 for the backpack at 1280 × 860, so the pin was bought
+at the price of the thing it sat above.
+
+**What the change bought, measured the same way:**
+
+| | before | after |
+|---|---|---|
+| G1 minimum width | 940 | **720** |
+| G1 minimum height | 740 (a curve — ≈ 785 at 1280 wide) | **300** |
+
+⚠️ **G1 now fits inside the application's own 900 × 600 floor, at any window it allows** — and its
+minimum height stopped being a function of its width, because nothing has to fit any more. The
+brief's two measurement questions are answered and closed by this: the minimum is no longer
+≈1280 × 860, and the backpack has its full height at every size.
+
+**What it cost:** the numbers are ~500 points down the column, so at an ordinary window you scroll
+to see them. Watching an equip move an armour class — **W-A6**, and the §8c property that started
+the merge — is a scroll again rather than a glance. The numbers stay in the **compact** rendering
+for exactly that reason: 700 points of numbers rather than 1,700 keeps them one short scroll away
+instead of a long one.
+
+**Two consequences inside the code, both simplifications:**
+
+- **Every row on the page now edits beneath itself**, whichever bench it is on. The special case
+  where a band row opened *below* the band existed only because the band's height could not
+  change; with the fast bench scrolling as a whole, it is gone. `CompactNumbers` takes the same
+  `inlineEditor` hook `sheetPanelsOf` does. A *flowing* panel opens its editor under the whole run
+  of pills rather than under one — "beneath the row" has no meaning for a pill sharing its line
+  with five others.
+- The doc comments on `g1_two_benches.dart` and `compact_numbers.dart` were rewritten rather than
+  left describing a pin that no longer exists.
+
+**Re-proved after the change**, as throwaway widget tests, run green and deleted: the party is the
+leftmost column; the items and the numbers share a column with the items above; a number edits
+inside the numbers block and `20 → 19` writes with Save going live; a slow-bench row still edits
+inline; Ctrl+K still reaches the palette; an added item still drags to the other five portraits.
+`analyze` clean, `dart format` a no-op, 844 + 399 green.

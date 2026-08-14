@@ -14,13 +14,17 @@
 
 /// ⚠️ **THROWAWAY** — see `grid_spike_host.dart`.
 ///
-/// G1's pinned band, drawn compactly, and **the one thing in these spikes that
-/// was not in the brief.** The brief pinned the Combat, Resistances and
-/// Condition panels as the sheet already draws them; measured, those three come
-/// to about 1,700 points — roughly twice the whole window, before the item
-/// search and the backpack start. So the band could not exist as specified, and
-/// the user chose this: the same rows, one line each, without the sum line and
-/// the ⓘ.
+/// G1's numbers, drawn compactly, and **the one thing in these spikes that was
+/// not in the brief.** The brief pinned the Combat, Resistances and Condition
+/// panels as the sheet already draws them; measured, those three come to about
+/// 1,700 points — roughly twice the whole window, before the item search and
+/// the backpack start. So the band could not exist as specified, and the user
+/// chose this: the same rows, one line each, without the sum line and the ⓘ.
+///
+/// ⚠️ **The pin itself is gone now, and this is still what these panels
+/// want.** They sit directly beneath the items in one scrolling column, so
+/// density is what keeps them a short scroll away rather than a long one — 700
+/// points of numbers instead of 1,700.
 ///
 /// ⚠️ **A second rendering, and deliberately not a second copy.** R1 of the
 /// study forbids a summary strip, and the reason it gives is duplication — a
@@ -63,6 +67,7 @@ class CompactNumbers extends StatelessWidget {
     required this.panels,
     required this.rulesBind,
     required this.onOpen,
+    this.inlineEditor,
     super.key,
   });
 
@@ -78,6 +83,10 @@ class CompactNumbers extends StatelessWidget {
 
   /// Called when a row is opened for editing.
   final ValueChanged<Subject> onOpen;
+
+  /// What to draw beneath a row that is open, the same hook `sheetPanelsOf`
+  /// takes — so a number edits where it lives, exactly as a full row does.
+  final Widget? Function(Subject subject)? inlineEditor;
 
   @override
   Widget build(BuildContext context) {
@@ -101,13 +110,15 @@ class CompactNumbers extends StatelessWidget {
               title: title,
               children: switch (style) {
                 CompactStyle.lines => [
-                  for (final entry in rows)
+                  for (final entry in rows) ...[
                     _CompactRow(
                       entry: entry,
                       finding: flagged[entry.key],
                       rulesBind: rulesBind,
                       onTap: () => onOpen(FieldSubject(entry)),
                     ),
+                    ?inlineEditor?.call(FieldSubject(entry)),
+                  ],
                 ],
                 CompactStyle.flowing => [
                   Wrap(
@@ -122,6 +133,11 @@ class CompactNumbers extends StatelessWidget {
                         ),
                     ],
                   ),
+                  // ⚠️ Under the whole run rather than under one pill: these
+                  // flow across and wrap, so "beneath the row" has no meaning
+                  // for a pill that shares its line with five others.
+                  for (final entry in rows)
+                    ?inlineEditor?.call(FieldSubject(entry)),
                 ],
               },
             ),

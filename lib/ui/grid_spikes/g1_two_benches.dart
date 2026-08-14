@@ -18,19 +18,33 @@
 /// positions, no `MediaQuery` and no `LayoutBuilder`: nothing here rearranges
 /// when the window resizes.
 ///
-/// - **Left, the slow bench**: the panels you read once — Character, Abilities,
-///   Skills, Proficiencies — with the field palette above them. Scrolls.
-/// - **Centre, the fast bench**: the numbers that *move*, pinned at the top and
-///   never scrolling, with the items directly beneath them. This is the whole
-///   argument of G1: an equip changes a number you can already see.
-/// - **Right, the party**: portraits that accept a dropped item, the identity,
-///   and the chrome. ⚠️ **On the right on purpose** — the dominant drag is pack
-///   → member, and putting the party beside the items makes that one column's
-///   travel instead of the window's width.
+/// - **Left, the party**: portraits that accept a dropped item, the identity,
+///   and the chrome.
+/// - **Centre, the slow bench**: the panels you read once — Character,
+///   Abilities, Skills, Proficiencies — with the field palette above them.
+/// - **Right, the fast bench**: the items, and directly beneath them the
+///   numbers equipment moves, in one column that scrolls as a whole.
 ///
-/// Editing is **inline**: the selected row expands the editor beneath itself,
-/// and the side sheet does not appear. Finds stay **split**: Ctrl+K over the
-/// record, the item search over the catalogue.
+/// Editing is **inline** wherever a row lives: the selected row expands the
+/// editor beneath itself, and the side sheet does not appear. Finds stay
+/// **split**: Ctrl+K over the record, the item search over the catalogue.
+///
+/// ⚠️ **Two things here were changed by the user after looking at the built
+/// spike, and both go against what the study derived on paper.** Recorded
+/// rather than quietly applied, because the paper scores no longer describe
+/// what this is:
+///
+/// 1. **The party column moved from the right edge to the left.** The study put
+///    it on the right so the dominant drag — pack → member — travelled one
+///    column instead of the window; on the left it travels the whole width.
+///    That was G1's margin on the W-A2 script.
+/// 2. **The fast bench is no longer split, and the numbers are no longer
+///    pinned.** It was a fixed band of numbers above a scrolling item region;
+///    it is now one scroll with the items at the top. Measured, the band cost
+///    ~750 points and left 78 for the backpack at 1280 × 860 — so the pin was
+///    bought at the price of the thing it sat above. The numbers are still
+///    directly under the items and still compact, which is what keeps them
+///    within a short scroll rather than a long one.
 library;
 
 import 'package:flutter/material.dart';
@@ -44,10 +58,10 @@ import 'package:wand_of_saves/ui/grid_spikes/compact_numbers.dart';
 import 'package:wand_of_saves/ui/grid_spikes/grid_spike_host.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 
-/// The panels that stay pinned beside the items, because equipment moves them,
-/// and how dense each may be. ⚠️ **Combat keeps a line per number** — its rows
-/// carry what the engine draws instead, which is the comparison the pin is for.
-const Map<String, CompactStyle> _pinned = {
+/// The panels that sit beside the items because equipment moves them, and how
+/// dense each may be. ⚠️ **Combat keeps a line per number** — its rows carry
+/// what the engine draws instead, which is the comparison they are here for.
+const Map<String, CompactStyle> _numbers = {
   'Combat': CompactStyle.lines,
   'Resistances': CompactStyle.flowing,
   'Condition': CompactStyle.flowing,
@@ -110,23 +124,16 @@ class _G1BodyState extends State<_G1Body> {
 
   void _close() => setState(() => _editing = null);
 
-  /// Whether [subject] belongs to the pinned band rather than the slow bench.
-  bool _isPinned(Subject subject) => switch (subject) {
-    FieldSubject(:final entry) => _pinned.containsKey(entry.group.title),
-    ProficiencySubject() => false,
-  };
-
   /// The editor for [subject], when that is what is open.
   ///
-  /// ⚠️ **Never for a pinned row.** The band's promise is that its height does
-  /// not change, so an editor expanding inside it would be the one thing this
-  /// column may not do. Those open at the top of the scrolling region below
-  /// instead — still inline, still adjacent, and the numbers stay put.
+  /// **One answer for every row on the page**, whichever bench it is on: with
+  /// the fast bench scrolling as a whole there is no longer a cell whose height
+  /// may not change, so nothing has to open anywhere but under the row it
+  /// belongs to.
   Widget? _editorFor(Subject subject) {
     final editing = _editing;
     if (editing == null) return null;
     if (subjectKey(editing) != subjectKey(subject)) return null;
-    if (_isPinned(subject)) return null;
     return _InlineEditor(
       model: widget.model,
       subject: subject,
@@ -143,10 +150,14 @@ class _G1BodyState extends State<_G1Body> {
       onOpen: _open,
       inlineEditor: _editorFor,
     );
-    final editing = _editing;
 
     return Row(
       children: [
+        SizedBox(
+          width: _partyColumnWidth,
+          child: _PartyColumn(model: model, onFindings: _palette.openView),
+        ),
+        const VerticalDivider(width: 1),
         SizedBox(
           width: _slowBenchWidth,
           child: _SlowBench(
@@ -163,26 +174,15 @@ class _G1BodyState extends State<_G1Body> {
             model: model,
             scroll: _fastScroll,
             onOpen: _open,
-            editor: editing != null && _isPinned(editing)
-                ? _InlineEditor(
-                    model: model,
-                    subject: editing,
-                    onClose: _close,
-                  )
-                : null,
+            inlineEditor: _editorFor,
           ),
-        ),
-        const VerticalDivider(width: 1),
-        SizedBox(
-          width: _partyColumnWidth,
-          child: _PartyColumn(model: model, onFindings: _palette.openView),
         ),
       ],
     );
   }
 }
 
-/// The left bench: the palette, then the panels nobody watches change.
+/// The middle bench: the palette, then the panels nobody watches change.
 class _SlowBench extends StatelessWidget {
   const _SlowBench({
     required this.model,
@@ -237,83 +237,68 @@ class _SlowBench extends StatelessWidget {
   }
 }
 
-/// The centre bench: the moving numbers pinned above the items.
+/// The right bench: the items, and the numbers they move directly beneath.
+///
+/// ⚠️ **One scroll region, not two.** The items lead because they are what this
+/// column is for; the numbers follow because an equip is only worth watching if
+/// the number it moves is the next thing down.
 class _FastBench extends StatelessWidget {
   const _FastBench({
     required this.model,
     required this.scroll,
     required this.onOpen,
-    this.editor,
+    required this.inlineEditor,
   });
 
   final GridSpikeModel model;
   final ScrollController scroll;
   final ValueChanged<Subject> onOpen;
 
-  /// The editor for a pinned row, drawn above the items rather than in the
-  /// band — see `_G1BodyState._editorFor`.
-  final Widget? editor;
+  /// What to draw beneath a number that is open for editing.
+  final Widget? Function(Subject subject) inlineEditor;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // ⚠️ **Content-sized and outside the scroll view.** This is the pin:
-        // whatever the window does, these numbers are on screen. The region
-        // below takes whatever is left, which is the measurement the spike
-        // exists to produce.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: CompactNumbers(
-            character: model.sheet,
-            panels: _pinned,
-            rulesBind: model.rulesBind,
-            onOpen: onOpen,
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: Scrollbar(
-            controller: scroll,
-            child: SingleChildScrollView(
-              controller: scroll,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (editor case final Widget open) ...[
-                    open,
-                    const SizedBox(height: 20),
-                  ],
-                  InventoryPanels(
-                    character: () => model.character,
-                    onAdd: model.addItem,
-                    partyPosition: model.state.selectedIndex,
-                    onRemove: model.removeItem,
-                    party: [
-                      for (final member in model.state.members) member.name,
-                    ],
-                    onMoveTo: (item, to) => model.moveItem(
-                      from: model.state.selectedIndex,
-                      to: to,
-                      itemIndex: item.index,
-                      resref: item.resref,
-                    ),
-                    // ⚠️ The slow bench holds the focus, so Ctrl+K works the
-                    // moment the grid opens. Two boxes cannot both have it.
-                    autofocusSearchField: false,
-                  ),
-                ],
+    return Scrollbar(
+      controller: scroll,
+      child: SingleChildScrollView(
+        controller: scroll,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InventoryPanels(
+              character: () => model.character,
+              onAdd: model.addItem,
+              partyPosition: model.state.selectedIndex,
+              onRemove: model.removeItem,
+              party: [for (final member in model.state.members) member.name],
+              onMoveTo: (item, to) => model.moveItem(
+                from: model.state.selectedIndex,
+                to: to,
+                itemIndex: item.index,
+                resref: item.resref,
               ),
+              // ⚠️ The slow bench holds the focus, so Ctrl+K works the moment
+              // the grid opens. Two boxes cannot both have it.
+              autofocusSearchField: false,
             ),
-          ),
+            const SizedBox(height: 20),
+            CompactNumbers(
+              character: model.sheet,
+              panels: _numbers,
+              rulesBind: model.rulesBind,
+              onOpen: onOpen,
+              inlineEditor: inlineEditor,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
 
-/// The right column: who else is in the party, who this is, and the chrome.
+/// The left column: who else is in the party, who this is, and the chrome.
 class _PartyColumn extends StatelessWidget {
   const _PartyColumn({required this.model, required this.onFindings});
 
@@ -370,19 +355,22 @@ class _InlineEditor extends StatelessWidget {
   final VoidCallback onClose;
 
   @override
-  Widget build(BuildContext context) => Card(
-    // The rung above a panel, so an open editor reads as something laid on
-    // top of the record rather than another part of it.
-    color: Theme.of(context).colorScheme.surfaceContainerHigh,
-    child: SubjectEditor(
-      key: ValueKey<String>(subjectKey(subject)),
-      subject: subject,
-      character: model.sheet,
-      rulesBind: model.rulesBind,
-      onApplyField: model.applyField,
-      onApplyPips: model.applyPips,
-      onClose: onClose,
-      fillsHeight: false,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Card(
+      // The rung above a panel, so an open editor reads as something laid on
+      // top of the record rather than another part of it.
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+      child: SubjectEditor(
+        key: ValueKey<String>(subjectKey(subject)),
+        subject: subject,
+        character: model.sheet,
+        rulesBind: model.rulesBind,
+        onApplyField: model.applyField,
+        onApplyPips: model.applyPips,
+        onClose: onClose,
+        fillsHeight: false,
+      ),
     ),
   );
 }
