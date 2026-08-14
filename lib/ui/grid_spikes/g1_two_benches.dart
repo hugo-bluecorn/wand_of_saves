@@ -40,8 +40,16 @@
 /// bench separately, which is the thing this replaced.
 ///
 /// Editing is **inline** wherever a row lives: the selected row expands the
-/// editor beneath itself, and the side sheet does not appear. Finds stay
-/// **split**: Ctrl+K over the record, the item search over the catalogue.
+/// editor beneath itself, and the side sheet does not appear.
+///
+/// ⚠️ **There is one find, and it is the item search.** The field-and-
+/// proficiency palette — the Ctrl+K box that used to head the left column —
+/// was removed at the user's asking. On a page that draws every field at once
+/// there is less for it to reach, and the record's own panels are the index.
+/// **This is the last axis the study had G1 and G2 disagreeing about**, so the
+/// paper's R5 question is no longer a question these two spikes put: G2 has one
+/// box over both corpora, G1 has one box over the items and no way to search
+/// the record at all.
 ///
 /// ⚠️ **The name is historical**, and so are the study's scores for this
 /// variant. Four changes, all the user's, all made after looking at the built
@@ -62,6 +70,9 @@
 /// 4. **The items lead their own column**, which is what puts the backpack back
 ///    above the fold: stacked under the record it began 1,438 points down, and
 ///    about 2,500 with a real installation's proficiencies.
+/// 5. **Condition stopped being a panel** and Combat became the page's footer.
+/// 6. **The field palette is gone**, and with it Ctrl+K and the findings
+///    badge's destination — see above.
 ///
 /// The one thing left over from the pin is the **compact** rendering of the
 /// last three panels: it was what made a pinned band possible at all, and the
@@ -70,9 +81,7 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:wand_of_saves/ui/character/character_sheet_view.dart';
-import 'package:wand_of_saves/ui/character/command_palette.dart';
 import 'package:wand_of_saves/ui/character/findings.dart';
 import 'package:wand_of_saves/ui/character/side_sheet.dart';
 import 'package:wand_of_saves/ui/grid_spikes/compact_numbers.dart';
@@ -143,8 +152,6 @@ class _G1Body extends StatefulWidget {
 }
 
 class _G1BodyState extends State<_G1Body> {
-  final SearchController _palette = SearchController();
-
   /// ⚠️ **One controller, because it is one page.** Two would be two
   /// scrollbars, which is exactly the two-panes reading this replaced.
   final ScrollController _scroll = ScrollController();
@@ -154,7 +161,6 @@ class _G1BodyState extends State<_G1Body> {
 
   @override
   void dispose() {
-    _palette.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -192,70 +198,65 @@ class _G1BodyState extends State<_G1Body> {
 
     return Column(
       children: [
-        _PartyBand(model: model, onFindings: _palette.openView),
+        // ⚠️ **The badge counts and does not navigate.** With the palette gone
+        // there is nowhere for it to send anybody, and `FindingsBadge` takes a
+        // null `onPressed` for exactly this — the count is still worth showing,
+        // and an enabled button that does nothing is the dead control this
+        // project keeps deleting.
+        _PartyBand(model: model),
         const Divider(height: 1),
         Expanded(
-          child: CallbackShortcuts(
-            bindings: <ShortcutActivator, VoidCallback>{
-              const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-                  _palette.openView,
-            },
-            child: Focus(
-              autofocus: true,
-              child: Scrollbar(
-                controller: _scroll,
-                child: SingleChildScrollView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: _pageWidth),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Scrollbar(
+            controller: _scroll,
+            child: SingleChildScrollView(
+              controller: _scroll,
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: _pageWidth),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ⚠️ **The two columns, and the reason this is a
+                      // `Row` inside the scroll view rather than two
+                      // scroll views in a `Row`.** The page is one
+                      // document: one scrollbar moves both.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ⚠️ **The two columns, and the reason this is a
-                          // `Row` inside the scroll view rather than two
-                          // scroll views in a `Row`.** The page is one
-                          // document: one scrollbar moves both.
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: _RecordColumn(
-                                  model: model,
-                                  palette: _palette,
-                                  panels: panels,
-                                  onOpen: _open,
-                                  inlineEditor: _editorFor,
-                                ),
-                              ),
-                              const SizedBox(width: _columnGap),
-                              Expanded(
-                                child: _ItemsColumn(
-                                  model: model,
-                                  panels: panels,
-                                ),
-                              ),
-                            ],
+                          Expanded(
+                            child: _RecordColumn(
+                              model: model,
+                              panels: panels,
+                              onOpen: _open,
+                              inlineEditor: _editorFor,
+                            ),
                           ),
-                          const SizedBox(height: 20),
-                          // ⚠️ **Combat is the page's footer**, under both
-                          // columns and the full width of them, split into
-                          // three. It is the one panel neither half owns: the
-                          // items move its numbers and the record explains
-                          // them.
-                          CompactNumbers(
-                            character: model.sheet,
-                            panels: _combat,
-                            rulesBind: model.rulesBind,
-                            onOpen: _open,
-                            inlineEditor: _editorFor,
-                            columns: 3,
+                          const SizedBox(width: _columnGap),
+                          Expanded(
+                            child: _ItemsColumn(
+                              model: model,
+                              panels: panels,
+                            ),
                           ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 20),
+                      // ⚠️ **Combat is the page's footer**, under both
+                      // columns and the full width of them, split into
+                      // three. It is the one panel neither half owns: the
+                      // items move its numbers and the record explains
+                      // them.
+                      CompactNumbers(
+                        character: model.sheet,
+                        panels: _combat,
+                        rulesBind: model.rulesBind,
+                        onOpen: _open,
+                        inlineEditor: _editorFor,
+                        columns: 3,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -272,14 +273,12 @@ class _G1BodyState extends State<_G1Body> {
 class _RecordColumn extends StatelessWidget {
   const _RecordColumn({
     required this.model,
-    required this.palette,
     required this.panels,
     required this.onOpen,
     required this.inlineEditor,
   });
 
   final GridSpikeModel model;
-  final SearchController palette;
   final Map<String, Widget> panels;
   final ValueChanged<Subject> onOpen;
 
@@ -294,14 +293,6 @@ class _RecordColumn extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ⚠️ **Outside the `SelectionArea`.** A search field wrapped in one
-        // gives the region its gestures instead of keeping its own.
-        CommandPalette(
-          controller: palette,
-          character: model.sheet,
-          onSelected: onOpen,
-        ),
-        const SizedBox(height: 20),
         SelectionArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -418,10 +409,9 @@ class _Items extends StatelessWidget {
 /// switcher for G1 would be two answers to "which portraits will take a drop",
 /// which is the bug this project keeps paying for.
 class _PartyBand extends StatelessWidget {
-  const _PartyBand({required this.model, required this.onFindings});
+  const _PartyBand({required this.model});
 
   final GridSpikeModel model;
-  final VoidCallback onFindings;
 
   /// How wide the identity gets. Stated, because the switcher beside it must
   /// not move when a character with a longer name is selected.
@@ -449,7 +439,7 @@ class _PartyBand extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          ...spikeChrome(context, model, onFindings: onFindings),
+          ...spikeChrome(context, model),
         ],
       ),
     );

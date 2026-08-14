@@ -220,10 +220,14 @@ class _GridSpikeHostState extends ConsumerState<GridSpikeHost> {
 /// **A list rather than a bar**, because the two grids put it in differently
 /// shaped cells — down the right-hand column on G1, across the top band on G2
 /// — and only the arrangement should differ between them.
+/// [onFindings] is `null` on a surface with nowhere to send the reader —
+/// `FindingsBadge` still shows the count and simply is not pressable, which is
+/// what it documents itself as doing rather than an enabled button that does
+/// nothing.
 List<Widget> spikeChrome(
   BuildContext context,
   GridSpikeModel model, {
-  required VoidCallback onFindings,
+  VoidCallback? onFindings,
 }) => [
   FindingsBadge(findings: model.findings, onPressed: onFindings),
   RulesToggle(

@@ -576,3 +576,33 @@ begins below both columns and is more than 1.9× either's width; `THAC0 (base)` 
 `Luck` at x 1,127, which is three columns and not one; the editor still opens under a number in
 the footer and writes with Save going live; one item search box, an added item draggable, six
 portrait targets, Ctrl+K live. `analyze` clean, `dart format` a no-op, 844 + 399 green.
+
+### The field palette removed — ⚠️ and with it the last axis between G1 and G2
+
+**Seventh change, the user's: the field-and-proficiency search comes off the page.** The Ctrl+K box
+that headed the left column is gone, and so is the shortcut that opened it.
+
+**Two things went with it, both stated rather than left to be discovered:**
+
+1. **There is now no way to search the record on G1 at all.** The panels are the index. On a page
+   that draws every field at once that is arguable — the palette was built when the sheet showed
+   forty of fifty-three fields behind a click — but it is a capability the page had this morning
+   and does not have now.
+2. **The findings badge has nowhere to send anybody**, because the palette was its destination.
+   It now shows the count and is **not pressable** — `FindingsBadge` documents a null `onPressed`
+   for exactly this case, and an enabled button that does nothing is the dead control this project
+   keeps deleting. `spikeChrome` takes `onFindings` as optional; G2 still passes its find.
+
+⚠️ **This is the last thing the two variants disagreed about.** The study's **R5** — one find
+surface or two — was the question the spikes existed to settle, and it was already the only axis
+left after the party band gave G1 G2's chrome. It is now settled by removal rather than by
+comparison: **G2 has one box over the record and the catalogue; G1 has one box over the catalogue
+and nothing over the record.** Whatever D19 decides, it is no longer deciding between two
+arrangements that differ in more than one place — and the paper scores in
+`planning/tool-first-study.md` describe neither of these pages any more.
+
+Re-proved: no `CommandPalette` and no `SearchBar` on the page; Ctrl+K does nothing; exactly one
+`ItemSearchField` remains; every `FindingsBadge` on the page has a null `onPressed`; the editor
+still opens under a footer number and `20 → 19` writes with Save going live; an added item is
+draggable with six portrait targets. Minimum window unchanged at **1,260 × 160**. `analyze` clean,
+`dart format` a no-op, 844 + 399 green.
