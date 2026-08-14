@@ -144,13 +144,22 @@ final FutureProviderFamily<Map<int, String>, String> partyNamesProvider =
         final saves = ref.watch(saveGameRepositoryProvider);
         final strings = ref.watch(stringRepositoryProvider);
         final names = <int, String>{};
-        for (final member in charactersFrom(await saves.load(slot), slot)) {
+        final party = charactersFrom(await saves.load(slot), slot);
+        for (final (position, member) in party.indexed) {
           if (member.name.isNotEmpty) continue;
           // The chain is savegame → talk table → resref. Both of the first two
           // legs occur in real data: the protagonist's name is in the savegame
           // and their creature record says -1, while every recruitable
           // companion is the other way round.
-          names[member.creOffset] =
+          //
+          // ⚠️ **Keyed by party POSITION, never by `creOffset`.** This map is
+          // built from the file on disk and read against the live edited
+          // document, and a resizing edit moves every record after the one it
+          // grew — so an offset key misses for exactly those members and the
+          // fallback prints a raw resref like `*AHEIR` on screen. Position is
+          // what a relocation cannot change: `withCreature` splices bytes and
+          // shifts pointers, it never reorders the party array.
+          names[position] =
               await strings.lookup(member.nameStrref) ?? member.creResref;
         }
         return names;
@@ -327,9 +336,12 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
     required RulesCatalogues catalogues,
     List<Character>? keepNamesFrom,
   }) {
+    // ⚠️ **Keyed by party position** — see [partyNamesProvider] for why an
+    // offset key silently loses the name of every member below a resizing edit.
     final resolved = {
-      for (final member in keepNamesFrom ?? const <Character>[])
-        member.creOffset: member.name,
+      for (final (position, member)
+          in (keepNamesFrom ?? const <Character>[]).indexed)
+        position: member.name,
       ...names,
     };
     final session = _session!;
@@ -337,12 +349,16 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
     return PartyState(
       slot: slot,
       members: [
-        for (final member in charactersFrom(session.document, slot))
-          member.name.isNotEmpty
-              ? member
-              : member.copyWith(
-                  name: resolved[member.creOffset] ?? member.creResref,
-                ),
+        for (final (position, member) in charactersFrom(
+          session.document,
+          slot,
+        ).indexed)
+          if (member.name.isNotEmpty)
+            member
+          else
+            member.copyWith(
+              name: resolved[position] ?? member.creResref,
+            ),
       ],
       reputation: session.document.reputation,
       proficiencies: catalogues.proficiencies,

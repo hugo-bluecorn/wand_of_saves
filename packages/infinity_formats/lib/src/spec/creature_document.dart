@@ -47,7 +47,7 @@ import 'package:infinity_formats/src/spec/cre_v1_0.dart';
 /// ⚠️ **All but one of these edits is fixed-width, and the exception is
 /// [withCreature].** Adding an item or granting a proficiency resizes a
 /// section, which means relocating everything after it — a far smaller problem
-/// in a `.chr` (one pointer) than in a savegame (thirty-nine), which is why
+/// in a `.chr` (one pointer) than in a savegame (forty-three), which is why
 /// exporting matters and why `Chr` implements that method while `Gam` refuses
 /// it. An earlier version of this comment said "nothing here moves anything",
 /// which was true when it was written and has been false since [withCreature]
@@ -110,10 +110,12 @@ abstract interface class CreatureDocument<T extends CreatureDocument<T>> {
   /// takes a whole creature rather than a field: a grown record moves every
   /// pointer that follows it, and how many of those there are is the difference
   /// between the two documents. A `.chr` has **one** — the length in its
-  /// 100-byte header. A savegame has thirty-nine, so it **refuses**: growing a
-  /// file that holds hours of someone's play is Phase 1's work and is not
-  /// attempted here.
+  /// 100-byte header. A savegame has **forty-three**: 36 non-party
+  /// `creOffset` fields, six GAM header section offsets and the owning
+  /// struct's own length.
   ///
-  /// Throws `UnsupportedError` on a document that cannot resize safely.
+  /// ⚠️ **Both relocate as of 2026-08-12.** A savegame used to refuse this,
+  /// and that refusal was honest while nothing could move forty-three pointers
+  /// correctly. It no longer applies.
   T withCreature({required int creOffset, required Cre creature});
 }

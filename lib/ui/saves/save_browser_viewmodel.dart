@@ -304,7 +304,7 @@ class SaveBrowserViewModel extends AsyncNotifier<BrowserState> {
 
     // ⚠️ **Everything below here changes the record's size**, which is why the
     // flow writes a `.chr` and not a savegame: one length field in a 100-byte
-    // header against thirty-nine pointers. `CHARBASE` has no effects, no
+    // header against forty-three pointers. `CHARBASE` has no effects, no
     // spellbook and no memorisation rows, so each of these creates its section.
     for (final MapEntry(key: id, value: pips) in proficiencies.entries) {
       created = applyCharacterEdit(

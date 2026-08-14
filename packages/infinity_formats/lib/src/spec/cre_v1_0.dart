@@ -497,6 +497,249 @@ const int creItemSlotsLength = 80;
 /// indexing its inventory array (`docs/findings/eekeeper-reverse-engineering.md`).
 const int creItemLength = 20;
 
+/// One entry of the items section: something the creature is carrying.
+///
+/// Dense with no gaps, so the table is self-checking under the exact-fit rule.
+enum CreItemField implements FormatField {
+  /// Resref of the `ITM` resource, e.g. `BOOT01`.
+  resref(0x00, 8),
+
+  /// Expiration time in days; `0` means the item does not expire.
+  ///
+  /// ⚠️ **Not an unknown, and not a wear count.** IESDP names it: above 255 the
+  /// item expires at game hour `value - 255`, and within 1–255 it converts to a
+  /// delay in days, after which the engine swaps in the ITM's replacement item
+  /// or removes it. Anything this project writes leaves it `0`.
+  expiration(0x08, 2),
+
+  /// First quantity or charge count.
+  ///
+  /// **Quantity for a stack, charges for a wand.** The format does not
+  /// distinguish them; the `ITM` does, through its extended headers.
+  quantity1(0x0a, 2),
+
+  /// Second quantity or charge count — the second ability's charges.
+  quantity2(0x0c, 2),
+
+  /// Third quantity or charge count.
+  quantity3(0x0e, 2),
+
+  /// Identified, unstealable, stolen and undroppable — see [CreItemFlag].
+  flags(0x10, 4);
+
+  const CreItemField(this.offset, this.length);
+
+  @override
+  final int offset;
+
+  @override
+  final int length;
+
+  /// Nothing here is signed: a resref, three counts and a bit field.
+  @override
+  bool get signed => false;
+}
+
+/// The bits of [CreItemField.flags].
+///
+/// ⚠️ **EE Keeper exposes a fourth checkbox it calls "Given"**, where IESDP
+/// names bit 1 *Unstealable*. Whether those are the same bit under two names is
+/// not established, so this follows IESDP and the discrepancy is recorded in
+/// `docs/findings/known-defects.md` rather than guessed at.
+enum CreItemFlag {
+  /// The player knows what it is.
+  ///
+  /// ⚠️ **This changes the name the engine draws.** Clear, the game shows the
+  /// ITM's *unidentified* name — "Belt", not "Belt of Antipode". `Aard1.chr`
+  /// carries exactly that case.
+  identified(1),
+
+  /// A thief cannot steal it.
+  unstealable(2),
+
+  /// It was stolen, so no shopkeeper will buy it.
+  stolen(4),
+
+  /// It cannot be removed in game — only from an editor.
+  undroppable(8);
+
+  const CreItemFlag(this.mask);
+
+  /// The bit this flag occupies.
+  final int mask;
+
+  /// Which flags [stored] sets.
+  ///
+  /// Unknown bits are ignored rather than refused: the field is four bytes and
+  /// IESDP documents four of them, so a record may legitimately carry more than
+  /// this enum names.
+  static Set<CreItemFlag> setFrom(int stored) => {
+    for (final flag in values)
+      if (stored & flag.mask != 0) flag,
+  };
+
+  /// The stored value for [flags].
+  static int maskOf(Iterable<CreItemFlag> flags) =>
+      flags.fold(0, (mask, flag) => mask | flag.mask);
+}
+
+/// A slot in the creature's inventory, in the order the record stores them.
+///
+/// ⚠️ **The table is 40 words and only these 38 are item indices.** The last
+/// two — [selectedWeaponOffset] and [selectedWeaponAbilityOffset] — are
+/// *selection state*, and a model that mapped all forty to items would corrupt
+/// them the first time it wrote a slot.
+///
+/// ⚠️ **There are FOUR quivers**, not three. IESDP marks the fourth
+/// "cannot be accesed from GUI" (sic), and a three-quiver model misaligns every
+/// slot after it by one word — which silently puts the backpack somewhere else.
+///
+/// Source: IESDP's CRE V1.0 page, "BG1, BG2, BGEE: There are 40 slots, and they
+/// are **not** the same as the order specified in SLOTS.IDS." Confirmed against
+/// three real `.chr` fixtures: `Aard1.chr` has `BLUN03` in [shield], the
+/// off-hand, and `BOOT01` in [boots].
+enum CreItemSlot {
+  /// Worn on the head.
+  helmet,
+
+  /// Body armour.
+  armor,
+
+  /// The off-hand slot — a shield, or a second weapon.
+  shield,
+
+  /// Gauntlets and bracers.
+  gloves,
+
+  /// Ring, left hand.
+  leftRing,
+
+  /// Ring, right hand.
+  rightRing,
+
+  /// Amulets and necklaces.
+  amulet,
+
+  /// Belts and girdles.
+  belt,
+
+  /// Boots.
+  boots,
+
+  /// Weapon 1 — the main hand.
+  weapon1,
+
+  /// Weapon 2.
+  weapon2,
+
+  /// Weapon 3.
+  weapon3,
+
+  /// Weapon 4.
+  weapon4,
+
+  /// Quiver 1.
+  quiver1,
+
+  /// Quiver 2.
+  quiver2,
+
+  /// Quiver 3.
+  quiver3,
+
+  /// Quiver 4. ⚠️ Real, and unreachable from the game's own interface.
+  quiver4,
+
+  /// Cloaks and robes.
+  cloak,
+
+  /// Quick item 1.
+  quick1,
+
+  /// Quick item 2.
+  quick2,
+
+  /// Quick item 3.
+  quick3,
+
+  /// Backpack 1.
+  pack1,
+
+  /// Backpack 2.
+  pack2,
+
+  /// Backpack 3.
+  pack3,
+
+  /// Backpack 4.
+  pack4,
+
+  /// Backpack 5.
+  pack5,
+
+  /// Backpack 6.
+  pack6,
+
+  /// Backpack 7.
+  pack7,
+
+  /// Backpack 8.
+  pack8,
+
+  /// Backpack 9.
+  pack9,
+
+  /// Backpack 10.
+  pack10,
+
+  /// Backpack 11.
+  pack11,
+
+  /// Backpack 12.
+  pack12,
+
+  /// Backpack 13.
+  pack13,
+
+  /// Backpack 14.
+  pack14,
+
+  /// Backpack 15.
+  pack15,
+
+  /// Backpack 16.
+  pack16,
+
+  /// The magical-weapon slot the engine fills itself.
+  magicWeapon;
+
+  /// Where this slot's word sits inside the 80-byte table.
+  int get byteOffset => index * 2;
+
+  /// Whether this is one of the sixteen backpack slots.
+  ///
+  /// **Always legal for any item**, which is what makes the backpack the
+  /// honest destination when no rule says where something may go.
+  bool get isPack => index >= pack1.index && index <= pack16.index;
+
+  /// The sixteen backpack slots, in order.
+  static List<CreItemSlot> get pack =>
+      values.where((slot) => slot.isPack).toList();
+
+  /// Byte offset of the *selected weapon* word — not an item index.
+  static const int selectedWeaponOffset = 76;
+
+  /// Byte offset of the *selected weapon ability* word — not an item index.
+  static const int selectedWeaponAbilityOffset = 78;
+
+  /// The word an empty slot holds.
+  ///
+  /// ⚠️ **`0xFFFF`, not `0`** — unlike a section offset, where zero means
+  /// absent. Item `0` is a perfectly ordinary item, and `Aard1.chr` has one in
+  /// its off-hand.
+  static const int empty = 0xFFFF;
+}
+
 /// Bytes per effect entry when [CreHeaderField.effectVersion] is `0`.
 const int creEffectV1Length = 48;
 

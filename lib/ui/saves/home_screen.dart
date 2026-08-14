@@ -306,7 +306,7 @@ class _OverflowMenu extends StatelessWidget {
 /// **Both headings stay when their section is empty.** A Characters heading
 /// that appears only once a character exists is a feature nobody discovers —
 /// and the empty line under it is where the ＋ card lives.
-class _Sections extends StatelessWidget {
+class _Sections extends StatefulWidget {
   const _Sections({
     required this.state,
     required this.selection,
@@ -316,6 +316,23 @@ class _Sections extends StatelessWidget {
   final BrowserState state;
   final DocumentSelectionState selection;
   final SaveBrowserViewModel notifier;
+
+  @override
+  State<_Sections> createState() => _SectionsState();
+}
+
+class _SectionsState extends State<_Sections> {
+  // ⚠️ On desktop a vertical scroll view does not attach itself to the
+  // PrimaryScrollController, so the theme's always-visible Scrollbar must
+  // share a controller with the scroll view it measures — without one it
+  // has no position and asserts on the first frame.
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   /// The widest the column runs before it stops growing with the window.
   ///
@@ -333,10 +350,15 @@ class _Sections extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = widget.state;
+    final selection = widget.selection;
+    final notifier = widget.notifier;
     final selecting = selection.isSelecting;
 
     return Scrollbar(
+      controller: _scroll,
       child: SingleChildScrollView(
+        controller: _scroll,
         padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
         child: Center(
           child: ConstrainedBox(

@@ -53,23 +53,6 @@ Not a basic-workflow blocker, which is the only reason it is here rather than do
 
 ---
 
-## 3 Resizing edits inside a savegame — the GAM relocation
-
-`Gam.withCreature` throws `UnsupportedError`. It is the single thing standing between the app and
-**adding an item, or granting a proficiency the character does not already have, in a live save.**
-
-Measured: **39 pointers, 81–93 KB shifted** — 3 GAM header offsets, the `creOffset` of the 0–3 later
-party members, and the `creOffset` of each of the 33–36 non-party NPCs after it. ⚠️ Those 36 were
-unrecorded until 2026-08-09; a relocation patching only the GAM header corrupts the save silently.
-
-Everything else already works: fixed-width edits in place (engine-confirmed twice), and resizing
-edits through export, where the same change costs one pointer.
-
-**Consequence visible in the UI today:** the Proficiencies panel marks a proficiency the record has
-no effect for as not editable, and says why. That is honest, not a bug — but it is a limit.
-
----
-
 ## 3b The first row of the sheet looks greyed when the screen opens
 
 `Focus(autofocus: true)` in `character_screen.dart` wraps the scrolling body so `Ctrl+K` reaches the
@@ -144,6 +127,101 @@ app is right to preserve the byte and right to say nothing about it.
 
 ---
 
+## 5c EE Keeper has a fourth item flag and IESDP does not name it
+
+**Measured 2026-08-12** from EE Keeper's own dialog templates: `CSetItemFlagsDlg` (dialog 186) has
+four checkboxes — **Identified**, **Given**, **Stolen**, **Undropable** (sic).
+
+IESDP names bit 1 of the CRE item's flags **Unstealable**. `CreItemFlag` follows IESDP, because
+IESDP is the specification source and EE Keeper is not readable as one (D1).
+
+⚠️ **Whether "Given" and "Unstealable" are the same bit under two names is not established**, and
+nothing separates them: both would sit at bit 1, and no fixture item has that bit set alone. Three
+readings fit and no measurement chooses between them.
+
+**How to settle it:** set bit 1 on an item, load the game, and see whether a thief can steal it —
+or open the same file in EE Keeper under Wine and read which box it ticks. Neither has been done.
+
+Not blocking: the app can offer the flag under IESDP's name, and the value it writes is the same
+either way. It is the *label* that is uncertain.
+
+---
+
+## 8 The inventory redesign — slots shipped 2026-08-14, three items still owed
+
+Inventory shipped narrow on purpose, and the user walked the app and named what is missing. **None
+of this is a bug; it is the screen not yet being what it should be.** Recorded so it is not
+rediscovered as a surprise.
+
+✅ **Slots shipped 2026-08-14** — the backpack is sixteen fixed cells, four across, addressed **by
+slot** so a hole at `pack4` draws as a hole. The entry leaves this table because it is fixed, not
+because it was re-read. Shipped with it: each cell carries the name the game would draw *and* the
+code, the search withholds items the engine cannot move, and every item has a menu with Remove and
+Move to.
+
+**What is still owed:**
+
+| | what it needs |
+|---|---|
+| **Weight and capacity** | ⚠️ **The table exists**: `strmod.2da` carries a `WEIGHT_ALLOWANCE` column keyed by Strength, and *"Weight Allowance"* is the game's own phrase (strref 10338). Item weight is ITM `0x4c` — measured zero negatives across all 1,530 items, so the unsigned read is safe. |
+| **Item properties in results** | Weight, price, type and description are already loaded by `ItemEntry` and simply not rendered. |
+| **Categories** | `itemType` → `ITEMCAT.IDS`. Swords, bows, helms. |
+| **Two columns** | ⚠️ D15/D17 fixed **single column for the character sheet**, deliberately. The inventory is a different surface — a picker beside a grid — so two columns is not a contradiction, but it must be a **stated** divergence rather than a quiet one. |
+
+### ⚠️ 8c Equip and unequip are a PHASE, and the reason is already measured — 2026-08-14
+
+The user asked for equip/unequip and then immediately named the blocker themselves: the character's
+numbers would have to move with the item. They are right, and this project measured why on
+2026-08-08 — see `verified-format-offsets.md` §"Stored vs displayed":
+
+> *"since the engine reads a stored effective armour class rather than recomputing it from what is
+> worn, equipping an item in this editor will **not** update armour class on its own. That is EE
+> Keeper's 'Recalculate Stats', and it is now known to be required rather than optional."*
+
+⚠️ **So there is no small safe version.** Unequipping writes two slot words and nothing else — the
+cheapest edit this application could make — and it leaves the stored effective armour class claiming
+armour the character is no longer wearing. The engine reads that value. **A save that loads and is
+quietly wrong is this project's stated worst failure mode**, and unequip-without-recalculation is
+not a smaller feature, it is the one that produces such a save.
+
+**What recalculation needs.** The data is present and unread: `featureBlockOffset` (ITM `0x6a`),
+`equippingIndex` (`0x6e`) and `equippingCount` (`0x70`) select the feature window that applies while
+an item is worn. Using it means **interpreting opcodes** — armour class, THAC0, saving throws,
+abilities, resistances — and their stacking rules. ⚠️ **EE Keeper under Wine is the only oracle** for
+how those derived values should come out; that is already recorded in
+`verified-format-offsets.md:1635`.
+
+⚠️ **And equipping cannot be validated from any data BG:EE ships.** IESDP states `itmslots.2da` is
+*"only available in PSTEE"*, the player's own installation returns **0 tables matching it**,
+`itemtype.2da`'s `SLOT` is `-1` for every everyday type, and the shipped creature records give a
+**superset** rather than a rule — rings hold amulets twenty times over. So which slot may take which
+item is, today, unknowable from data.
+
+⚠️ **A consequence for the UI, raised by the user and worth deciding deliberately.** If moving an
+item moves the character's numbers, then a screen that shows the item and hides the numbers makes the
+change invisible — the failure recorded in `behaviour-without-appearance-is-invisible`. That argues
+for folding the inventory **into** the character sheet, which reopens two recorded decisions: the
+inventory as *"a pushed route, not a panel"* (thirty-four slots would swamp the sheet) and **D15**'s
+single column. Reopen them on purpose or not at all.
+
+**Shipped meanwhile:** the item menu offers `Move to` only for a backpack item the engine can
+actually move. An equipped row offers `Remove` alone — removal needs no derived numbers, because the
+item leaves the record rather than lingering as a stale bonus.
+
+### ⚠️ 8b Item pictures need a BAM decoder, and that is its own phase
+
+The user asked for the item's picture in each slot with the name on hover. The icon is a **BAM**
+resref at ITM `0x3a`.
+
+**Portraits are not precedent.** They work because they are plain BMP and `dart:ui` decodes BMP for
+free — no decoder was ever written. **BAM is palettised and RLE-compressed, and no Dart decoder
+exists**; writing one is a new codec on the scale of the CRE work, plus a frame cache.
+
+**Held back deliberately.** The screen is usable without it — names in slots, detail on hover — and
+bundling a format phase into a UI phase is how a day's work becomes a week's.
+
+---
+
 ## 6 Rules the record does not yet enforce
 
 - **A Blade's Lore is half per level.** The walkthrough says so and `lore.2da` has no kit rows, so
@@ -168,6 +246,34 @@ app is right to preserve the byte and right to say nothing about it.
   the shared demo data broke the merge that was that spike's clearest claim — 13 fields becoming 11
   rows, with `Lore` appearing once. The published captures stand as history; the code did not.
   Recorded so nobody rediscovers it as a bug.
+
+---
+
+## Fixed since — entry 3, the GAM relocation
+
+⚠️ **Closed 2026-08-12 by building it.** `Gam.withCreature` relocates rather than throwing, so
+**adding an item or granting a proficiency now works inside a live savegame**, not only through
+export. It was the last structural gap in the project.
+
+The entry's own figure was wrong and the fix is what found it: **43 pointers, not 39.** The
+recorded number counted only the header offsets the layout table modelled, and three live section
+offsets — familiar info, stored locations, pocket plane — sat past the party creature unnamed.
+`creLength` is the forty-third. See `verified-format-offsets.md` §"What adding a proficiency
+actually costs" for the corrected table and the three encodings of "absent".
+
+⚠️ **Two tests inverted rather than being deleted**, and that is deliberate: `save_editor_test.dart`
+asserted that a savegame *refuses* a resizing edit. The refusal was the defect, so the assertions
+that guarded the limitation now prove it gone.
+
+✅ **Closed 2026-08-13 — the engine has now seen one, and accepted it.** BG:EE loaded
+`000000023-Conan Inventory Move` after this app added `SCRL75` to Xzar, the fourth of six party
+members: the save opened, all six members were there, and the scroll was in his pack. The write
+moved Jaheira and Khalid by exactly 20 bytes each and left the three members before him untouched,
+and both hazardous header encodings — `familiarInfo` at file-length − 400, and two sections parked at
+the old EOF — came through correctly.
+
+⚠️ **Residual, and much smaller:** the engine was not asked to *re-save*, so a field it silently
+corrects rather than rejects would still be invisible. A load-then-save gives a byte diff.
 
 ---
 

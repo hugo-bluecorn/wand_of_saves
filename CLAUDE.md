@@ -55,8 +55,9 @@ to undo.
 - **Never edit a real save in place.** Always write to a temp file and rename, and always keep a
   `.bak`. Test fixtures are *copies*; the originals under
   `~/.local/share/Baldur's Gate - Enhanced Edition/save/` are the user's actual game.
-- **Dart/Flutter are NOT on PATH** — use `fvm flutter …` / `fvm dart …`. SDK pinned to 3.44.8
-  in `.fvmrc`.
+- **Dart/Flutter are NOT on PATH** — use `fvm flutter …` / `fvm dart …`. SDK pinned to 3.47.0
+  (Dart 3.13.0) in `.fvmrc`; the `sdk: ^3.12.2` floor in both pubspecs is deliberate — raising it
+  forces `dart format`'s 3.13 whole-repo reformat, which is its own commit when it happens.
 - **`packages/infinity_formats` must never import `package:flutter`.** It is pure Dart so its suite runs
   under `dart test`, which makes the rule mechanical: a Flutter import fails to compile there and
   names the file. `packages/infinity_formats/dart_test.yaml` pins `platforms: [vm]` to keep that true,
@@ -87,10 +88,13 @@ to undo.
   covered by an approved plan, enter plan mode and get the plan agreed. **Do not use the
   `tdd-workflow` plugin** — not its skills, agents or slash commands. Hand-rolled TDD only; the
   point is the discipline, not the scaffolding.
-- **Lint is `very_good_analysis`, applied whole, with NO suppressions** (D8). No `exclude:`
-  entries, no rule carve-outs, no `// ignore` or `// ignore_for_file` anywhere. This is
-  checkable, so check it — **with the exclusion D8's amendment added**, since `dart_mappable`
-  emits five `ignore_for_file` lines into every file it generates and they cannot be turned off:
+- **Lint is `very_good_analysis`, applied whole, with NO suppressions in code this project
+  writes** (D8, twice amended). No rule carve-outs and no `// ignore` or `// ignore_for_file` we
+  author. The only `exclude:` entries are D8's two amendments: `dart_mappable`'s unremovable
+  generated headers, and the build/platform directories **Flutter 3.47's `pub get` itself
+  writes** into the root `analysis_options.yaml` on every run — do not fight it, do not extend
+  it, and expect it only there (plain `dart pub get` leaves the format package's file alone).
+  This is checkable, so check it — the `grep -v` covers the generated mappers:
 
   ```bash
   grep -rn 'ignore_for_file\|// ignore:' --include='*.dart' . | grep -v '\.mapper\.dart'
@@ -184,13 +188,22 @@ slices), the creation flow (steps A–F) and **authored-and-derived** (six slice
 a created character's numbers the ones the engine would have written) — plus the Starfleet Workbench,
 which replaced the shipped UI rather than repairing it.
 
-⚠️ **"Phase 1" is retired as a phase**, not deferred: three of its four bullets had shipped and its
-gate was superseded. What is left is one method, `Gam.withCreature`. See `planning/roadmap.md`, which
-also carries the four workflows.
+✅ **"Phase 1" is finished, and so is the last structural gap.** `Gam.withCreature` relocates
+(2026-08-12), so **a resizing edit works inside a live savegame** and not only through export. See
+`planning/roadmap.md`, which also carries the four workflows.
 
 **The basic workflow is the product, and it works**: open a save or a character file, edit the
-record, write it back. **Next up is spells and inventory** — both need reading first, and inventory
-has no domain model at all.
+record, write it back. ✅ **Inventory now works too** — see `planning/inventory-seed.md` for the
+researched brief and `~/.claude/plans/swirling-purring-aho.md` for the plan it was cut from.
+✅ **The inventory redesign is largely done** (2026-08-14): sixteen slot-addressed cells, three
+panels, a per-item menu, drag-to-portrait. Three items remain in `known-defects.md` §8 — weight and
+capacity, item properties in results, categories.
+
+⚠️ **Next, and it is an architectural decision rather than a slice: merging the character and
+inventory screens.** The reasoning is `known-defects.md` §8c — equip/unequip needs *Recalculate
+Stats*, and if items move the character's numbers then a screen showing the item while hiding the
+numbers makes the change invisible. That reopens the recorded pushed-route shape and **D15**'s single
+column, so reopen them deliberately.
 
 > ### 🔷 The UI is the Starfleet Workbench, single column
 >
@@ -213,55 +226,62 @@ has no domain model at all.
 > assertion means anything. `planning/ui-review.md` is the critique; the widgets that answered it
 > are `lib/ui/core/` and `lib/ui/character/`.
 
-> ### 🔶 Where the last session stopped, 2026-08-12 (evening)
+> ### 🔶 Where the last session stopped, 2026-08-14
 >
-> **`main` is clean and green — 743 app tests, 287 format tests**, `analyze` clean, zero
-> suppressions. The Workbench branch is merged.
+> **844 app tests, 399 format tests**, `analyze` clean, `dart format` clean, zero suppressions, tree
+> clean. On branch **`feat/inventory-format-layer`**, not pushed, no PR.
 >
-> **The user walked the app with a checklist and reported nine items. Seven are fixed**, one turned
-> out to be correct behaviour, and two are recorded in `docs/findings/known-defects.md` — **read that
-> file before reporting a bug or picking up work.**
+> ✅ **Flutter upgraded 3.44.8 → 3.47.0 (Dart 3.13.0), and Impeller is now the Linux renderer** —
+> the launch log prints `Using the Impeller rendering backend (OpenGLESSDF)`. The upgrade surfaced
+> one real defect: the home and inventory screens' `Scrollbar`s shared no controller with their
+> scroll views, which 3.47 turns into a first-frame assertion on desktop (the suite runs as
+> Android, where the primary controller hides it — the two new tests pin `TargetPlatform.linux`
+> with the real app theme). D8 gained an amendment: 3.47's `pub get` writes seven `exclude:` lines
+> into `analysis_options.yaml` itself, on every run.
 >
-> ⚠️ **Three defects were the app stating what the engine draws, wrongly**, and that is now the
-> sharpest recurring fault in this codebase:
+> ✅ **THE ENGINE OPENED A RELOCATED SAVE — the project's oldest gate, closed 2026-08-13.** BG:EE
+> loaded a **six-member** save this app had resized (`SCRL75` added to Xzar, fourth in the array on
+> purpose), drew all six party members, and showed the scroll in his pack. Both hazardous header
+> encodings were live in that file and both survived — `familiarInfo` at file-length − 400, and two
+> sections parked at the **old EOF** carried to the new one. ⚠️ **Residual:** the engine *loaded*, it
+> did not *re-save*, so a field it silently corrects is still invisible. **A load-then-save gives the
+> byte diff** and is the cheapest strengthening left.
 >
-> - `in game 25` on a thief skill a Fighter/Mage cannot allocate. The engine draws **no such row** —
->   measured 2026-08-10 — but `skilldex`/`skillrac` answer for any character, so the sum was computed
->   and printed.
-> - `in game 499/2` on attacks per round, from a stored **255**. The encoding covers 0–10 and the
->   arithmetic extrapolated past it.
-> - A findings badge reading **13** on a healthy first-level character, every entry restating the two
->   chips beside it.
+> ✅ **Inventory is now a real screen**: a 4 × 4 grid of sixteen cells addressed **by slot** (a hole
+> at `pack4` draws as a hole), each cell carrying the name the game would draw *and* the resref;
+> three panels — Inventory, Equipped, In no slot; the party rail and Save/undo/redo on its own app
+> bar; drag an item onto a portrait to hand it over; and a `…`/right-click menu per item with
+> **Remove** and **Move to**.
 >
-> **The rule that came out of it: the `in game` value is the one thing on the sheet that speaks for
-> the engine, so absent always beats invented.**
+> ⚠️ **The subject is Conan, and the fixtures are his.** Arduin was deleted entirely — his `.chr`
+> carried a `dialogFile` no code path explains, and his CRE resref was `*RDUIN` where an
+> engine-created character carries `*HARBASE`. Fixtures hold a **2/4/6-member progression** plus the
+> transfer pair, and `ConanEX.chr`. The old fixtures stay as regression data only.
 >
-> ⚠️ **`weapprof.2da` holds three generations and only one is live.** Settled by reading **all 2,253
-> shipped creature records**: 24 distinct proficiency ids are in use and **none is below 89**. The
-> obsolete BG1 band (0–7, `Bow`, `Large Sword`) carries valid names and non-zero caps, so no column
-> in the table separates it — hence a measured constant, D18. `ProficiencyCatalogue.live` serves the
-> sheet and creation alike; creation had the same bug.
->
-> ⚠️ **`CHARBASE` itself stores `numberOfAttacks = 255`** where every shipped NPC stores `1`, so every
-> created character carries it. What it means is **unknown and not guessed at** — `known-defects.md`
-> §5b has the three readings and the one trip into the game that would settle it.
->
-> ⚠️ **Those two golden saves still exist ONLY as gitignored fixtures.** The user deleted every save
-> through the app and asked that they never be restored; `sync_fixtures.dart` cannot regenerate them.
-> Lose that directory and `000000102-Gnome Start` and `000000103-Halfling Start` must be remade.
->
-> **Still parked by the user, do not propose:** the stored-hit-point rule, a Gnome Mage's
-> Intelligence minimum, a Barbarian's bytes at `0x244`, the export half of the Phase 2 gate, and an
-> anime theme.
+> ⚠️ **The recurring fault of the day, four times over: a rule written twice, and the second copy
+> wrong.** The naming rule, the pack-slot rule, the movable rule, the identified-name rule — each
+> reached one surface correctly and another incorrectly. See
+> [[a-rule-with-two-copies-is-the-bug]]. Every fix was to make it **one** copy, not to correct the
+> second.
 
 ### What exists
 
 - **`packages/infinity_formats`** — `Tlk`, `GamCodec`, `CreCodec`, `Table2da`, `IdsMap`, atomic
   file write. Format layouts are enhanced enums carrying offset, width and **signedness** (D6), so
-  one table serves reader and writer and they cannot disagree. 287 tests.
+  one table serves reader and writer and they cannot disagree. 374 tests.
   - **`Cre` resizes**: `withEntryInserted` (insert at an entry index, not only append),
     `withEntryField`, `withEffectVersion` and `readField`. The three spell sections have their own
     field tables and readers; `SplCodec` reads enough of an `SPL` header to list a spellbook.
+  - **`Gam` relocates** — `withCreature` shifts the 43 pointers a resized record moves.
+    `GamSection` names all nine header sections and the three encodings of "absent".
+  - **`Itm` + `ItmCodec`** — the `ITM V1` header, bytes-as-the-model like `Spl`, plus the 8-byte
+    resref read `Spl` has no branch for. ⚠️ **It checks the version where `SplCodec` does not**:
+    `ITM` has three layouts across the Infinity games and reading V2.0 with V1's table yields a
+    plausible name, type and price, all wrong.
+  - **The CRE inventory layer** — `CreItemField`, `CreItemFlag`, `itemEntry`, `Cre.items`, and the
+    slot table: `CreItemSlot` (⚠️ **38 slots, not 40** — the last two words are selection state),
+    `itemSlots`, `withItemSlot`, `firstFreePackSlot` and `withItemRemoved`, which renumbers every
+    slot above the one it drops. Adding is `withEntryAppended` then `withItemSlot`.
   - **The whole character sheet reads**: saving throws, resistances, thief skills, attacks,
     armour class modifiers, morale, fatigue, luck. Homogeneous groups come back as **records**.
   - **`Effect`** — enough of the 264-byte v2 record to find proficiencies, which on BG:EE are
@@ -433,33 +453,53 @@ rather than recomputing it from equipment, equipping an item will not update arm
 itself. EE Keeper's "Recalculate Stats" is therefore **required**, not the optional parity feature
 the roadmap files it as.
 
-### What is left of "Phase 1", which is one method
-
-⚠️ **Retired as a phase on 2026-08-12** — three of its four bullets had shipped and its gate was
-superseded, so keeping it on the board made a solved problem look untouched and an unsolved one look
-bigger than it is. `planning/roadmap.md` has the audit.
+### ✅ "Phase 1" is finished — the GAM relocation shipped 2026-08-12
 
 **Shipped:** the CRE-internal layout pass (`Cre.withEntryInserted` creates an absent section, splices
 an entry, raises its count, shifts every sibling offset and relocates the item-slot table), original-
-byte retention, and atomic write with a `.bak`. **Superseded:** the round-trip gate, because byte
-identity on an *unedited* file proves nothing — `return input` passes it. The gate that shipped is
-*exactly N bytes differ*.
+byte retention, atomic write with a `.bak`, and now **`Gam.withCreature`**. **Superseded:** the
+round-trip gate, because byte identity on an *unedited* file proves nothing — `return input` passes
+it. The gate that shipped is *exactly N pointers differ*.
 
-⚠️ **And its premise was false.** It claimed the layout pass "becomes unavoidable at Phase 4, when
-inventory and spells start resizing". **Spells already resize** — `LearnSpell`, `MemoriseSpell` and
-`GrantProficiency` all ship, through a `.chr` where the same edit costs one pointer.
+⚠️ **Its premise was false too.** It claimed the layout pass "becomes unavoidable at Phase 4, when
+inventory and spells start resizing". **Spells already resized** through a `.chr`, where the same
+edit costs one pointer.
 
-**What remains is `Gam.withCreature`**, which throws. It unlocks exactly one thing: adding an item or
-a new proficiency to a character **inside a live save**. Cost measured: **39 pointers, 81–93 KB** — 3
-GAM header offsets, the `creOffset` of the 0–3 later party members, and each of the 33–36 non-party
-NPCs after it. ⚠️ Those 36 went unrecorded until 2026-08-09; a relocation patching only the header
-corrupts the save silently. Two more traps, both in
-`docs/findings/verified-format-offsets.md`:
+⚠️ **The recorded cost was wrong, and building it is what found that.** This file said **39
+pointers**; it is **43** — 36 non-party `creOffset` fields, **6** GAM header section offsets, and the
+owning struct's `creLength`. Measured on `000000022-last`: the protagonist sits at 532, runs 6,780
+bytes, and growing it shifts 95,436. The old figure counted only the header offsets `GamHeaderField`
+happened to model, and the enum stopped at `0x58`.
 
-- **`GamHeaderField` records five of the GAM's nine offset fields.** A layout pass that relocates
-  data without patching all nine corrupts the save silently.
-- **"Absent" is encoded three different ways** in that one header — `0`, `0xFFFFFFFF`, and
-  *offset-equals-EOF with count 0*. The `offset != 0` rule used elsewhere is not sufficient there.
+**Now named, and all four were missing:** `familiarExtraOffset` `0x48`, `familiarInfoOffset` `0x68`,
+`storedLocationsOffset` `0x6c`, `pocketPlaneOffset` `0x78`. ⚠️ **`0x68` is live on every save** —
+always file length − 400 — so a relocation blind to it corrupts silently.
+
+**"Absent" is encoded three different ways** in that one header, and `GamSection` is where that now
+lives — `0` and `0xFFFFFFFF` are skipped; **offset-equals-EOF-with-count-0 is not**, because the
+engine keeps those at the end of the file. It needs no special case: an offset equal to the old EOF
+is past any splice, so the ordinary shift carries it to the new EOF for free.
+
+### ✅ The engine opened a relocated save — 2026-08-13
+
+**The trip was made and the relocation passed.** `000000023-Conan Inventory Move`, a **six-member**
+party, had `SCRL75` added to **Xzar** — fourth in the array, so his growth moves the two records
+after him as well as the header sections. BG:EE **loaded it, drew all six party members, and showed
+the scroll in his pack.**
+
+The write was byte-exact: 107,588 → 107,608, one 20-byte entry. Xzar `len 2868 → 2888`; **Jaheira
+`18728 → 18748` and Khalid `21856 → 21876`, and nobody before Xzar moved at all.** Six header
+sections shifted by exactly 20 — `nonPartyNpcs`, `globals`, `journal`, `familiarInfo`,
+`storedLocations`, `pocketPlane`.
+
+⚠️ **Both hazardous encodings were live in this file and both survived.** `familiarInfo` sat at
+file-length − 400 before and still does after. `storedLocations` and `pocketPlane` were both parked
+at the **old EOF** — the third encoding of "absent", the one that must *not* be skipped — and the
+ordinary shift carried them to the new EOF exactly as predicted.
+
+⚠️ **What this does not cover.** The engine was not asked to *re-save*, so nothing rules out a field
+it silently corrects rather than rejects. A load-then-save would give a byte diff and is the cheapest
+remaining strengthening.
 
 The read-path spike that started this project was **deleted** on 2026-08-08 once all four of its
 recorded bugs were answered and everything it did lived in tested code. It is in git history.

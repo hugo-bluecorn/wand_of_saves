@@ -492,6 +492,15 @@ class CreationCatalogueMapper extends ClassMapperBase<CreationCatalogue> {
   static Map<String, int> _$schoolByKit(CreationCatalogue v) => v.schoolByKit;
   static const Field<CreationCatalogue, Map<String, int>> _f$schoolByKit =
       Field('schoolByKit', _$schoolByKit, opt: true, def: const {});
+  static Map<int, Set<String>> _$kitsAllowedByRace(CreationCatalogue v) =>
+      v.kitsAllowedByRace;
+  static const Field<CreationCatalogue, Map<int, Set<String>>>
+  _f$kitsAllowedByRace = Field(
+    'kitsAllowedByRace',
+    _$kitsAllowedByRace,
+    opt: true,
+    def: const {},
+  );
   static Map<int, String> _$textByStrref(CreationCatalogue v) => v.textByStrref;
   static const Field<CreationCatalogue, Map<int, String>> _f$textByStrref =
       Field('textByStrref', _$textByStrref, opt: true, def: const {});
@@ -517,6 +526,7 @@ class CreationCatalogueMapper extends ClassMapperBase<CreationCatalogue> {
     #skills: _f$skills,
     #thiefSkillPointsByClass: _f$thiefSkillPointsByClass,
     #schoolByKit: _f$schoolByKit,
+    #kitsAllowedByRace: _f$kitsAllowedByRace,
     #textByStrref: _f$textByStrref,
   };
 
@@ -541,6 +551,7 @@ class CreationCatalogueMapper extends ClassMapperBase<CreationCatalogue> {
       skills: data.dec(_f$skills),
       thiefSkillPointsByClass: data.dec(_f$thiefSkillPointsByClass),
       schoolByKit: data.dec(_f$schoolByKit),
+      kitsAllowedByRace: data.dec(_f$kitsAllowedByRace),
       textByStrref: data.dec(_f$textByStrref),
     );
   }
@@ -682,6 +693,13 @@ abstract class CreationCatalogueCopyWith<
   MapCopyWith<$R, String, int, ObjectCopyWith<$R, int, int>>
   get thiefSkillPointsByClass;
   MapCopyWith<$R, String, int, ObjectCopyWith<$R, int, int>> get schoolByKit;
+  MapCopyWith<
+    $R,
+    int,
+    Set<String>,
+    ObjectCopyWith<$R, Set<String>, Set<String>>
+  >
+  get kitsAllowedByRace;
   MapCopyWith<$R, int, String, ObjectCopyWith<$R, String, String>>
   get textByStrref;
   $R call({
@@ -704,6 +722,7 @@ abstract class CreationCatalogueCopyWith<
     SkillCatalogue? skills,
     Map<String, int>? thiefSkillPointsByClass,
     Map<String, int>? schoolByKit,
+    Map<int, Set<String>>? kitsAllowedByRace,
     Map<int, String>? textByStrref,
   });
   CreationCatalogueCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(
@@ -856,6 +875,18 @@ class _CreationCatalogueCopyWithImpl<$R, $Out>
         (v) => call(schoolByKit: v),
       );
   @override
+  MapCopyWith<
+    $R,
+    int,
+    Set<String>,
+    ObjectCopyWith<$R, Set<String>, Set<String>>
+  >
+  get kitsAllowedByRace => MapCopyWith(
+    $value.kitsAllowedByRace,
+    (v, t) => ObjectCopyWith(v, $identity, t),
+    (v) => call(kitsAllowedByRace: v),
+  );
+  @override
   MapCopyWith<$R, int, String, ObjectCopyWith<$R, String, String>>
   get textByStrref => MapCopyWith(
     $value.textByStrref,
@@ -883,6 +914,7 @@ class _CreationCatalogueCopyWithImpl<$R, $Out>
     SkillCatalogue? skills,
     Map<String, int>? thiefSkillPointsByClass,
     Map<String, int>? schoolByKit,
+    Map<int, Set<String>>? kitsAllowedByRace,
     Map<int, String>? textByStrref,
   }) => $apply(
     FieldCopyWithData({
@@ -914,6 +946,7 @@ class _CreationCatalogueCopyWithImpl<$R, $Out>
       if (thiefSkillPointsByClass != null)
         #thiefSkillPointsByClass: thiefSkillPointsByClass,
       if (schoolByKit != null) #schoolByKit: schoolByKit,
+      if (kitsAllowedByRace != null) #kitsAllowedByRace: kitsAllowedByRace,
       if (textByStrref != null) #textByStrref: textByStrref,
     }),
   );
@@ -971,6 +1004,10 @@ class _CreationCatalogueCopyWithImpl<$R, $Out>
       or: $value.thiefSkillPointsByClass,
     ),
     schoolByKit: data.get(#schoolByKit, or: $value.schoolByKit),
+    kitsAllowedByRace: data.get(
+      #kitsAllowedByRace,
+      or: $value.kitsAllowedByRace,
+    ),
     textByStrref: data.get(#textByStrref, or: $value.textByStrref),
   );
 

@@ -79,3 +79,6 @@ test/fixtures/
 
 # Oracle build output — compiled NearInfinity classes (LGPL-2.1, never committed).
 /build/oracle-classes/
+
+# FVM Version Cache
+.fvm/

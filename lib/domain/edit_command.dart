@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/domain/character_identity.dart';
 import 'package:wand_of_saves/domain/character_stat.dart';
 
@@ -281,8 +282,9 @@ enum SpellType {
 /// On BG:EE a proficiency is a 264-byte opcode 233 effect, so granting one adds
 /// an entry to the effects section and moves everything after it.
 ///
-/// ⚠️ **A savegame refuses this.** Growing a record inside a save moves 39
-/// pointers; a `.chr` moves one. That is why creation writes a character file.
+/// ⚠️ **A savegame took this from 2026-08-12.** Growing a record inside a save
+/// moves 43 pointers against a `.chr`'s one, which is why creation still writes
+/// a character file — but it is no longer a refusal.
 final class GrantProficiency extends CharacterEditCommand {
   /// Grants [proficiencyId] at [pips] to the creature at [creOffset].
   const GrantProficiency({
@@ -384,6 +386,92 @@ final class MemoriseSpell extends CharacterEditCommand {
   String get label => 'Memorise $resref';
 }
 
+/// Puts an item the game ships into a character's inventory.
+///
+/// ⚠️ **Two writes, and the second is what makes it visible.** Appending the
+/// 20-byte entry puts the item in the file; writing [slot] is what puts it in
+/// the game. Every engine-written record references every item from a slot —
+/// measured across 18 of them — so an item nothing points at would be this
+/// application inventing a shape the engine has never produced.
+///
+/// ⚠️ **[slot] is resolved by the caller**, not chosen here. Finding the first
+/// free backpack slot means reading the record, and a command that reads the
+/// file it is about to change is no longer a description of an edit — the same
+/// line [SetProficiency] draws around `effectOffset` and [MemoriseSpell] around
+/// `memorisable`.
+///
+/// This resizes, so before the GAM relocation shipped it would have been a
+/// `.chr`-only edit. It is not any more.
+final class AddItem extends CharacterEditCommand {
+  /// Gives the creature at [creOffset] the item [resref], in [slot].
+  const AddItem({
+    required this.creOffset,
+    required this.resref,
+    required this.slot,
+    this.quantity = 1,
+  });
+
+  @override
+  final int creOffset;
+
+  /// The `ITM` resource, e.g. `BOOT01`.
+  ///
+  /// ⚠️ **The key, and the only one.** Four items resolve to the name "The Paws
+  /// of the Cheetah"; nothing but the resref tells them apart.
+  final String resref;
+
+  /// Where it goes.
+  final CreItemSlot slot;
+
+  /// How many, for something that stacks.
+  final int quantity;
+
+  /// What this edit did.
+  ///
+  /// Names the item by resref, because naming it properly needs the archives
+  /// and the player's own talk table — which a domain command must not reach
+  /// for.
+  @override
+  String get label => 'Add $resref';
+}
+
+/// Takes an item out of a creature's record entirely.
+///
+/// ⚠️ **This is the one thing this application can do that the game cannot**,
+/// and it is the feature's whole justification rather than a mirror of
+/// [AddItem]. `CreItemFlag.undroppable` says so in its own words: an item so
+/// marked "cannot be removed in game — only from an editor". A cursed item
+/// already equipped is the same case, and so is anything whose `ITM` header has
+/// the *Movable* bit clear.
+///
+/// A [CharacterEditCommand] rather than a bare [EditCommand], unlike
+/// [MoveItem]: it touches one creature, so an exported character takes it too
+/// and the type system says so instead of a run-time refusal.
+final class RemoveItem extends CharacterEditCommand {
+  /// Removes entry [itemIndex] from the creature at [creOffset].
+  const RemoveItem({
+    required this.creOffset,
+    required this.itemIndex,
+    required this.resref,
+  });
+
+  @override
+  final int creOffset;
+
+  /// Which entry of the items section to drop.
+  final int itemIndex;
+
+  /// What [itemIndex] is expected to name.
+  ///
+  /// ⚠️ **A check field, for the reason a carried item's own index documents:**
+  /// the index is positional and any earlier removal renumbers it, so a command
+  /// built from a list that has moved on would delete somebody else's item.
+  final String resref;
+
+  @override
+  String get label => 'Remove $resref';
+}
+
 /// Sets the shared party purse.
 ///
 /// Its own command rather than a [CharacterStat]: the purse lives in the GAM
@@ -401,6 +489,51 @@ final class SetPartyGold extends EditCommand {
 
   @override
   String get label => 'Set party gold to $value';
+}
+
+/// Hands an item from one party member's backpack to another's.
+///
+/// ⚠️ **Outside [CharacterEditCommand] for the same reason [SetPartyGold] is.**
+/// A move needs two creature records and only a savegame has two, so the type
+/// system refuses it against an exported character rather than a run-time check
+/// discovering it later.
+///
+/// ⚠️ **[from] and [to] are party POSITIONS, never creature offsets.** Taking
+/// the item out of the source shrinks that record by one entry, which moves
+/// every record after it — so an offset read before the removal is stale by the
+/// time the second half of the move needs it. Position survives a relocation.
+///
+/// ⚠️ **Backpack slots only.** Equipment is not modelled, and unequipping would
+/// change a *stored* effective armour class the engine reads rather than
+/// recomputes — so a worn item is refused instead of silently making the sheet
+/// disagree with the game.
+final class MoveItem extends EditCommand {
+  /// Moves entry [itemIndex] of party member [from] to member [to].
+  const MoveItem({
+    required this.from,
+    required this.to,
+    required this.itemIndex,
+    required this.resref,
+  });
+
+  /// Party position of the character giving the item up.
+  final int from;
+
+  /// Party position of the character receiving it.
+  final int to;
+
+  /// Which entry of [from]'s items section to move.
+  final int itemIndex;
+
+  /// What [itemIndex] is expected to name.
+  ///
+  /// ⚠️ **A check field, not a lookup.** An item's index is positional and any
+  /// earlier removal renumbers it, so a command built from a stale list would
+  /// otherwise move whatever happened to land at that index.
+  final String resref;
+
+  @override
+  String get label => 'Move $resref';
 }
 
 /// Thrown when a command carries a value the field it targets will not accept.

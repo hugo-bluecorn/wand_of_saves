@@ -27,6 +27,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wand_of_saves/config/providers.dart';
+import 'package:wand_of_saves/ui/core/theme.dart';
 import 'package:wand_of_saves/ui/saves/home_screen.dart';
 
 import '../../support/fakes.dart';
@@ -39,6 +40,7 @@ void main() {
     bool withSaves = true,
     bool withCharacters = true,
     bool hasDeleted = false,
+    ThemeData? theme,
   }) async {
     // Tall enough that a single column of cards needs no scrolling to be
     // tapped: `SingleChildScrollView` builds its children whether they are on
@@ -101,7 +103,7 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: MaterialApp.router(routerConfig: router),
+        child: MaterialApp.router(routerConfig: router, theme: theme),
       ),
     );
     await tester.pumpAndSettle();
@@ -111,6 +113,25 @@ void main() {
     await tester.tap(find.byIcon(Icons.delete_outline));
     await tester.pumpAndSettle();
   }
+
+  group('the desktop scrollbar', () {
+    testWidgets(
+      '⚠️ has a scroll position on the platform the app ships on',
+      (tester) async {
+        // `flutter test` runs as Android, where a vertical scroll view
+        // attaches itself to the PrimaryScrollController and the Scrollbar
+        // finds it by accident. On desktop neither happens: unless the
+        // Scrollbar and the scroll view share one controller, the theme's
+        // always-visible thumb has nothing to measure and Flutter 3.47
+        // asserts on the first frame. Pin both conditions, or this is the
+        // suite that shipped it.
+        await showHome(tester, theme: AppTheme.light);
+
+        expect(tester.takeException(), isNull);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.linux),
+    );
+  });
 
   group('two sections, one column', () {
     testWidgets('both headings show, and characters come first', (

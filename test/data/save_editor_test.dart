@@ -824,25 +824,33 @@ void main() {
       );
     });
 
-    test('⚠️ a savegame refuses to memorise, for the same reason', () {
-      // Every resizing command shares one refusal, and each is stated rather
-      // than assumed: `withCreature` is where a `Gam` says no, and a command
-      // that reached the section splice would already have moved bytes.
+    test('⚠️ a savegame now MEMORISES, and grows to fit', () {
+      // **This test used to assert the opposite**, and the inversion is the
+      // point of the GAM relocation rather than an accident of refactoring:
+      // `Gam.withCreature` threw, so every resizing command shared one refusal.
+      // It now relocates — 43 pointers on the real fixture — so the assertion
+      // that guarded the limitation becomes the assertion that proves it gone.
       final gam = openSave();
+      final before = gam.bytes.length;
+
+      final after = applyEdit(
+        gam,
+        MemoriseSpell(
+          creOffset: creOffsetOf(gam),
+          resref: 'SPWI112',
+          level: 1,
+          type: SpellType.wizard,
+          memorisable: 1,
+        ),
+      );
 
       expect(
-        () => applyEdit(
-          gam,
-          MemoriseSpell(
-            creOffset: creOffsetOf(gam),
-            resref: 'SPWI112',
-            level: 1,
-            type: SpellType.wizard,
-            memorisable: 1,
-          ),
-        ),
-        throwsA(isA<UnsupportedError>()),
+        after.bytes.length,
+        greaterThan(before),
+        reason: 'memorising adds a row and a spell, so the file grows',
       );
+      // What the refusal was really protecting: a save that still parses.
+      expect(after.partyMembers, hasLength(gam.partyMembers.length));
     });
 
     test('says what it did, naming the spell', () {
@@ -859,10 +867,12 @@ void main() {
     });
 
     test(
-      '⚠️ a savegame refuses a resizing edit rather than corrupting itself',
+      '⚠️ a savegame takes a resizing edit and relocates around it',
       () {
-        // Adding one effect inside a save moves 39 pointers. Until Phase 1's
-        // layout pass exists, saying so is the only safe answer.
+        // The other half of the same inversion. Adding one 264-byte effect
+        // inside a save moves 43 pointers — measured, and three of them were
+        // invisible to the codec until the header table named them. The
+        // refusal this test used to assert was honest while that was true.
         final gam = openSave();
 
         expect(
@@ -877,19 +887,196 @@ void main() {
           returnsNormally,
           reason: 'a fixed-width edit is still fine',
         );
-        expect(
-          () => applyEdit(
-            gam,
-            GrantProficiency(
-              creOffset: creOffsetOf(gam),
-              proficiencyId: 89,
-              pips: 1,
-            ),
+
+        final grown = applyEdit(
+          gam,
+          GrantProficiency(
+            creOffset: creOffsetOf(gam),
+            proficiencyId: 89,
+            pips: 1,
           ),
-          throwsA(isA<UnsupportedError>()),
         );
+
+        expect(
+          grown.bytes.length,
+          gam.bytes.length + creEffectV2Length,
+          reason: 'the file grows by exactly one effect record',
+        );
+        // Every character is still where the header says, which is the thing
+        // a silently-wrong relocation would break.
+        expect(grown.partyMembers, hasLength(gam.partyMembers.length));
+        expect(grown.nonPartyMembers, hasLength(gam.nonPartyMembers.length));
       },
     );
+  });
+
+  group('AddItem', () {
+    test('puts the item in the record and points the slot at it', () {
+      final gam = openSave();
+      final after = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+
+      final cre = CreCodec.decode(after.creatureAt(creOffsetOf(after)));
+      expect(cre.items.map((i) => i.resref), contains('BOOT01'));
+      expect(cre.itemIndexAt(CreItemSlot.pack1), cre.items.length - 1);
+    });
+
+    test('⚠️ leaves no orphan — the slot is written, not just the entry', () {
+      // An item nothing points at exists in the file and nowhere in the game.
+      // Engine-written records never contain one; this must not be the first.
+      final gam = openSave();
+      final after = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      final cre = CreCodec.decode(after.creatureAt(creOffsetOf(after)));
+      expect(cre.orphanedItems, isEmpty);
+    });
+
+    test('⚠️ grows the SAVEGAME by exactly one item entry', () {
+      // Only possible since the relocation shipped. Before it, this threw.
+      final gam = openSave();
+      final after = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      expect(after.bytes.length, gam.bytes.length + creItemLength);
+      expect(
+        after.partyMembers.single.creLength,
+        gam.partyMembers.single.creLength + creItemLength,
+      );
+    });
+
+    test('the same command works on an exported character', () {
+      final chr = ChrCodec.decode(buildCharacterFile());
+      final after = applyCharacterEdit(
+        chr,
+        AddItem(
+          creOffset: chr.creOffset,
+          resref: 'RING01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      final cre = CreCodec.decode(after.creatureAt(after.creOffset));
+      expect(cre.items.single.resref, 'RING01');
+      expect(cre.itemIndexAt(CreItemSlot.pack1), 0);
+    });
+
+    test('the second item lands in its own slot, not on top of the first', () {
+      var chr = ChrCodec.decode(buildCharacterFile());
+      chr = applyCharacterEdit(
+        chr,
+        AddItem(
+          creOffset: chr.creOffset,
+          resref: 'RING01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      chr = applyCharacterEdit(
+        chr,
+        AddItem(
+          creOffset: chr.creOffset,
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack2,
+        ),
+      );
+      final cre = CreCodec.decode(chr.creatureAt(chr.creOffset));
+      expect(cre.items.map((i) => i.resref), ['RING01', 'BOOT01']);
+      expect(cre.itemIndexAt(CreItemSlot.pack1), 0);
+      expect(cre.itemIndexAt(CreItemSlot.pack2), 1);
+      expect(cre.orphanedItems, isEmpty);
+    });
+
+    test('⚠️ an item added into a HOLE inserts in slot order', () {
+      // ⚠️ **The shape the synthetic record does not have, and whose absence
+      // let the append bug ship.** `buildSave()` makes a creature with no items
+      // at all, and on an empty record appending and inserting agree — so the
+      // whole group above passes either way. Build the shape first: five items
+      // with pack4 deliberately left empty.
+      var gam = openSave();
+      for (final (resref, slot) in [
+        ('BOOT01', CreItemSlot.pack1),
+        ('RING01', CreItemSlot.pack2),
+        ('STAF01', CreItemSlot.pack3),
+        ('DAGG01', CreItemSlot.pack5),
+        ('HAMM03', CreItemSlot.pack6),
+      ]) {
+        gam = applyEdit(
+          gam,
+          AddItem(creOffset: creOffsetOf(gam), resref: resref, slot: slot),
+        );
+      }
+
+      final filled = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'SW1H06',
+          slot: CreItemSlot.pack4,
+        ),
+      );
+      final cre = CreCodec.decode(filled.creatureAt(creOffsetOf(filled)));
+
+      expect(
+        cre.itemIndexAt(CreItemSlot.pack4),
+        3,
+        reason: 'ordered, not appended at 5',
+      );
+      expect(cre.items[3].resref, 'SW1H06');
+      expect(cre.itemIndexAt(CreItemSlot.pack5), 4, reason: 'was 3');
+      expect(cre.itemIndexAt(CreItemSlot.pack6), 5, reason: 'was 4');
+      // And each slot still points at the item it always did.
+      expect(cre.items[4].resref, 'DAGG01');
+      expect(cre.items[5].resref, 'HAMM03');
+      // The invariant itself: dense and ascending in slot order.
+      expect(
+        [
+          for (final slot in CreItemSlot.values)
+            if (cre.itemIndexAt(slot) case final int at) at,
+        ],
+        [0, 1, 2, 3, 4, 5],
+      );
+    });
+
+    test('refuses a resref too long for the field', () {
+      final gam = openSave();
+      expect(
+        () => applyEdit(
+          gam,
+          AddItem(
+            creOffset: creOffsetOf(gam),
+            resref: 'FARTOOLONGRESREF',
+            slot: CreItemSlot.pack1,
+          ),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('says what it did, naming the item', () {
+      expect(
+        const AddItem(
+          creOffset: 0,
+          resref: 'BOOT01',
+          slot: CreItemSlot.pack1,
+        ).label,
+        contains('BOOT01'),
+      );
+    });
   });
 
   group('SetClassLevels', () {
@@ -943,6 +1130,306 @@ void main() {
           SetClassLevels(creOffset: creOffsetOf(gam), levels: const [999]),
         ),
         throwsA(isA<InvalidEditException>()),
+      );
+    });
+  });
+
+  group('MoveItem', () {
+    /// A two-member party where member 0 carries [resrefs] in packs 1..n.
+    Gam twoWithItems(List<String> resrefs) {
+      var gam = GamCodec.decode(
+        buildSave(
+          party: const [
+            SyntheticCharacter(),
+            SyntheticCharacter(
+              resref: '*IMOEN',
+              displayName: 'Imoen',
+              partyOrder: 1,
+            ),
+          ],
+        ),
+      );
+      for (final (index, resref) in resrefs.indexed) {
+        gam = applyEdit(
+          gam,
+          AddItem(
+            creOffset: gam.partyMembers.first.creOffset,
+            resref: resref,
+            slot: CreItemSlot.pack[index],
+          ),
+        );
+      }
+      return gam;
+    }
+
+    Cre creOf(Gam gam, int position) =>
+        CreCodec.decode(gam.partyMembers[position].creBytes);
+
+    test('the source loses it and the destination gains it', () {
+      final before = twoWithItems(['BOOT01', 'RING01']);
+
+      final after = applyEdit(
+        before,
+        const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+      );
+
+      expect(creOf(after, 0).items.map((i) => i.resref), ['RING01']);
+      expect(creOf(after, 1).items.map((i) => i.resref), ['BOOT01']);
+      expect(creOf(after, 1).itemIndexAt(CreItemSlot.pack1), 0);
+      expect(creOf(after, 0).orphanedItems, isEmpty);
+      expect(creOf(after, 1).orphanedItems, isEmpty);
+    });
+
+    test('⚠️ the destination’s offset is re-read after the source shrinks', () {
+      // ⚠️ **The test the whole design exists for.** Member 1 sits AFTER member
+      // 0, so removing from 0 moves 1 by twenty bytes mid-command. Writing the
+      // second half at the offset read before the removal puts a creature
+      // record twenty bytes into the wrong place — a save that still parses and
+      // is wrong, which is this project's stated failure mode.
+      final before = twoWithItems(['BOOT01']);
+      final destinationWas = before.partyMembers[1].creOffset;
+
+      final after = applyEdit(
+        before,
+        const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+      );
+
+      expect(
+        after.partyMembers[1].creOffset,
+        destinationWas - creItemLength,
+        reason: 'the source shrank by one entry beneath it',
+      );
+      // And the record really is there: it parses and holds the item.
+      expect(creOf(after, 1).items.single.resref, 'BOOT01');
+      expect(creOf(after, 1).contentEnd, after.partyMembers[1].creLength);
+    });
+
+    test('the file and the party are the same size afterwards', () {
+      final before = twoWithItems(['BOOT01']);
+      final after = applyEdit(
+        before,
+        const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+      );
+
+      expect(after.bytes.length, before.bytes.length, reason: '−20 then +20');
+      expect(after.partyMembers, hasLength(2));
+    });
+
+    test('⚠️ quantity and flags survive, because the bytes are copied', () {
+      // Rebuilding the entry through `itemEntry` would quietly drop the second
+      // and third charge counts and the expiration. Preserving unknown bytes is
+      // a rule of this project, not a nicety.
+      var gam = twoWithItems(const []);
+      gam = applyEdit(
+        gam,
+        AddItem(
+          creOffset: gam.partyMembers.first.creOffset,
+          resref: 'AROW01',
+          slot: CreItemSlot.pack1,
+          quantity: 17,
+        ),
+      );
+      final original = creOf(gam, 0).items.single;
+
+      final after = applyEdit(
+        gam,
+        const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'AROW01'),
+      );
+
+      final moved = creOf(after, 1).items.single;
+      expect(moved.quantity, 17);
+      expect(moved.flags, original.flags);
+      expect(moved.expiration, original.expiration);
+    });
+
+    test('refuses a resref that disagrees with the index', () {
+      // The index is positional and shifts under any earlier removal, so the
+      // resref is the check field that catches a stale one.
+      final gam = twoWithItems(['BOOT01', 'RING01']);
+      expect(
+        () => applyEdit(
+          gam,
+          const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'RING01'),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('refuses an item that is not in a backpack slot', () {
+      // Equipment is not implemented, so an equipped item is not movable —
+      // which is also what keeps the stored armour class out of this.
+      var gam = twoWithItems(const []);
+      gam = applyEdit(
+        gam,
+        AddItem(
+          creOffset: gam.partyMembers.first.creOffset,
+          resref: 'BOOT01',
+          slot: CreItemSlot.boots,
+        ),
+      );
+      expect(
+        () => applyEdit(
+          gam,
+          const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('refuses a destination whose backpack is full', () {
+      var gam = twoWithItems(['BOOT01']);
+      for (var i = 0; i < 16; i++) {
+        gam = applyEdit(
+          gam,
+          AddItem(
+            creOffset: gam.partyMembers[1].creOffset,
+            resref: 'ITEM$i',
+            slot: CreItemSlot.pack[i],
+          ),
+        );
+      }
+      expect(
+        () => applyEdit(
+          gam,
+          const MoveItem(from: 0, to: 1, itemIndex: 0, resref: 'BOOT01'),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('refuses a move to the character who already has it', () {
+      final gam = twoWithItems(['BOOT01']);
+      expect(
+        () => applyEdit(
+          gam,
+          const MoveItem(from: 0, to: 0, itemIndex: 0, resref: 'BOOT01'),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('says what it did', () {
+      expect(
+        const MoveItem(
+          from: 0,
+          to: 1,
+          itemIndex: 0,
+          resref: 'BOOT01',
+        ).label,
+        contains('BOOT01'),
+      );
+    });
+  });
+
+  group('RemoveItem', () {
+    Gam withItems(List<String> resrefs) {
+      var gam = openSave();
+      for (final (index, resref) in resrefs.indexed) {
+        gam = applyEdit(
+          gam,
+          AddItem(
+            creOffset: creOffsetOf(gam),
+            resref: resref,
+            slot: CreItemSlot.pack[index],
+          ),
+        );
+      }
+      return gam;
+    }
+
+    test('takes out that item and leaves the rest', () {
+      final before = withItems(['BOOT01', 'RING01', 'STAF01']);
+
+      final after = applyEdit(
+        before,
+        RemoveItem(
+          creOffset: creOffsetOf(before),
+          itemIndex: 1,
+          resref: 'RING01',
+        ),
+      );
+
+      final cre = creatureIn(after);
+      expect(cre.items.map((i) => i.resref), ['BOOT01', 'STAF01']);
+      expect(cre.orphanedItems, isEmpty);
+      // ⚠️ The slot that held it is cleared and the one above renumbers down.
+      expect(cre.itemIndexAt(CreItemSlot.pack1), 0);
+      expect(cre.itemIndexAt(CreItemSlot.pack2), isNull);
+      expect(cre.itemIndexAt(CreItemSlot.pack3), 1);
+      expect(after.bytes.length, before.bytes.length - creItemLength);
+    });
+
+    test('⚠️ refuses a resref that disagrees with the index', () {
+      // The index is positional and any earlier removal renumbers it, so a
+      // command built from a stale list would otherwise delete the wrong item.
+      final gam = withItems(['BOOT01', 'RING01']);
+      expect(
+        () => applyEdit(
+          gam,
+          RemoveItem(
+            creOffset: creOffsetOf(gam),
+            itemIndex: 0,
+            resref: 'RING01',
+          ),
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('⚠️ removes an EQUIPPED item, which is the whole point', () {
+      // `CreItemFlag.undroppable`'s own doc: "cannot be removed in game — only
+      // from an editor". A cursed item already worn is exactly that case.
+      var gam = openSave();
+      gam = applyEdit(
+        gam,
+        AddItem(
+          creOffset: creOffsetOf(gam),
+          resref: 'CHAN04',
+          slot: CreItemSlot.armor,
+        ),
+      );
+
+      final after = applyEdit(
+        gam,
+        RemoveItem(
+          creOffset: creOffsetOf(gam),
+          itemIndex: 0,
+          resref: 'CHAN04',
+        ),
+      );
+
+      expect(creatureIn(after).items, isEmpty);
+      expect(creatureIn(after).itemIndexAt(CreItemSlot.armor), isNull);
+    });
+
+    test('the same command works on an exported character', () {
+      // ⚠️ A `CharacterEditCommand`, unlike `MoveItem`: it touches one
+      // creature, so a `.chr` takes it and the type system says so.
+      var chr = ChrCodec.decode(buildCharacterFile());
+      chr = applyCharacterEdit(
+        chr,
+        AddItem(
+          creOffset: chr.creOffset,
+          resref: 'RING01',
+          slot: CreItemSlot.pack1,
+        ),
+      );
+      final after = applyCharacterEdit(
+        chr,
+        RemoveItem(creOffset: chr.creOffset, itemIndex: 0, resref: 'RING01'),
+      );
+
+      expect(CreCodec.decode(after.creatureAt(after.creOffset)).items, isEmpty);
+    });
+
+    test('says what it did', () {
+      expect(
+        const RemoveItem(
+          creOffset: 0,
+          itemIndex: 0,
+          resref: 'BOOT01',
+        ).label,
+        contains('BOOT01'),
       );
     });
   });

@@ -524,8 +524,211 @@ four weapons, four quivers, cloak, three quick items, sixteen pack slots, magic 
 are all fixed-width edits.** Only adding or removing an item resizes the items table — and removing
 also shifts every slot index above the one removed.
 
-No item record in the fixture is unreferenced by a slot, so the engine keeps the table tight;
-writing an orphan would be novel behaviour rather than something it already tolerates.
+⚠️ **CORRECTED 2026-08-13.** This section used to say: *"No item record in the fixture is
+unreferenced by a slot, so the engine keeps the table tight; writing an orphan would be novel
+behaviour rather than something it already tolerates."* That was generalised from **one** savegame's
+party, and it is false as a claim about the format.
+
+Measured across **all 2,253 shipped creature records**: **618 items in 220 records are referenced by
+no slot at all** — `APPAR` orphans all five of its. None is explained by a missing slot table; every
+record has one. So BioWare's authored data contains orphans and the engine ships with them.
+
+**The split is clean, and the corrected statement is narrower:**
+
+| | orphans |
+|---|---|
+| **engine-written** — 18 party members and `.chr` files, 82 items | **0** |
+| **hand-authored** — the 2,253 shipped creatures | 618 across 220 |
+
+**The engine keeps *its own* tables tight; authored data does not.** So an added item should still
+get a slot word — an item nothing points at is invisible in the inventory screen — but the reason is
+*the player would not see it*, not *the engine would reject it*. And a reader must tolerate orphans,
+because anything that walks the shipped creatures meets 220 records full of them.
+
+#### Modelled 2026-08-12, and three things the prose above did not say
+
+⚠️ **The table is 40 words and only 38 are slots.** Indices 38 and 39 are *selected weapon* and
+*selected weapon ability* — state, not item indices. Both hold `0` on the fixtures, which read as a
+slot would say "item 0 is equipped here" twice, in two places that are not slots. `CreItemSlot` has
+38 values for exactly this reason.
+
+⚠️ **Holes in the backpack are legal.** `Aard1.chr` fills packs 1–7 and 9 and leaves **pack 8
+empty**. So "the first free slot" has to *scan*; deriving it from the item count answers pack 9 and
+overwrites the quarterstaff sitting there.
+
+⚠️ **On real data the slot table comes BEFORE the items section** — `Aard1.chr` has it at 1040 with
+items at 1120. That is why `Cre.withEntryInserted`'s slot-relocation branch (`slots >= spliceAt`)
+had **never once fired in a test**: every fixture and every synthetic builder used the same order.
+A test now builds the other order deliberately.
+
+**Removing renumbers.** Slot words are *indices into the items array*, so dropping entry `i` leaves
+every word above `i` pointing one item too high. `Cre.withItemRemoved` clears the slot that held it,
+decrements the ones above, and shifts the sections and the slot table — the mirror of an insert.
+This is the same hazard the code documents for memorisation windows and had never documented for
+items.
+
+#### ⚠️ Adding by appending writes a record the engine would not — CORRECTED 2026-08-13
+
+This section used to say: *"**Adding composes from what already exists**: `withEntryAppended(section:
+items)` then `withItemSlot(...)`. Verified against `Aard1.chr` — 11 items to 12, no orphans, and the
+section chain still closes on the declared size."* Every one of those checks passes and every one is
+structural — none of them looked at the **order** of the entries.
+
+**The engine keeps the items array in ascending slot order.** Measured across **41 engine-written
+records** — the party of every fixture savegame plus every `.chr` on disk — with **zero inversions
+and zero unreferenced entries**. Walking the slot table in slot order yields item indices
+`0, 1, 2, … n−1`, exactly.
+
+⚠️ **Sparse slots, dense indices — two different sequences, and only one has gaps.** Conan's pack
+occupies slots 1, 2, 3, 5, 6, 11, 13, 15, 16, so **seven holes**; his entry indices across those same
+slots run 3, 4, 5, 6, 7, 8, 9, 10, 11 with **no gap at all**. A hole in the slot table does not put a
+hole in the items array, and neither fact implies the other.
+
+**And the engine fills a hole by *inserting*, not appending.** Measured on the
+`000000022-Conan Full Party` → `000000023-Conan Inventory Move` pair, one in-game inventory transfer
+apart: Imoen's `pack1` was empty, the engine placed `SCRL68` in it and spliced the entry in at
+**index 6**, renumbering every index above. Two further items that landed in `pack7`/`pack8` were
+appended at 12 and 13 — because *there* the append already is the ordered position.
+
+**So `withEntryAppended` + `withItemSlot` is right only when the target slot is above every occupied
+one.** Into a hole it produces `pack3=[5] pack4=[8] pack5=[6]`, a shape occurring in none of the 41.
+⚠️ **Whether the engine rejects such a record is not answerable from the bytes and is owed an
+in-game load.** `Cre.withEntryInserted` exists but relocates the slot table *without* renumbering the
+indices inside it, so it is not a drop-in — it needs the mirror of `withItemRemoved`'s renumbering.
+
+**The same pair is the relocation answer key.** Four items left Conan for Imoen and Xzar: Conan
+−80 bytes and −4 entries, Imoen +60 and +3, Xzar +20 and +1 — **20 bytes per entry, confirmed three
+independent ways**, 30 entries before and after. The cumulative shift reaches **exactly zero** by
+Jaheira, so the last two records never moved and both files are 107,588 bytes. That is the engine
+performing `Gam.withCreature`'s job with the answer published.
+
+
+### ⚠️ ITM header flags — bit 2 decides whether an item can be moved at all — 2026-08-14
+
+**The field sat in the spec table unread for weeks**, and an item the engine will never release
+reached a real character's inventory before anyone asked what it said. IESDP's names for the first
+byte of `ItmHeaderField.flags` (`0x18`):
+
+| bit | meaning |
+|---|---|
+| 0 | Unsellable (critical item) |
+| 1 | Two-handed |
+| **2** | **Movable / Droppable** — *"overridden by the `CRE`/`STO` item flag NONDROPABLE"* |
+| 3 | Displayable — whether the engine draws it on the ground |
+| 4 | **Cursed** — *"the item cannot be unequipped"* |
+| 5 | Cannot scribe to spellbook (scrolls) |
+| 6 | Magical |
+| 7 | Left-handed |
+
+**The case that found it.** `BOW99` — *Protector of the Dryads +2* — was added to Imoen and could
+then be neither equipped nor moved out. Its flags are `0xe2`; the ordinary `BOW05` shortbow's are
+`0xae`. The difference is bit 2, and BioWare authored it that way. Nothing this application writes
+was involved: the CRE entry we produced carried `identified` alone, and CRE flags bit 3
+(*Undroppable*) was clear throughout.
+
+⚠️ **It is a large minority, not a curiosity: 432 of the 1,428 named items have bit 2 clear.**
+Searching *"attack"* returned sixty results, every one of them immovable — and sixty is the search
+limit, so there were more.
+
+⚠️ **The two are different questions and must not be conflated.** *Cursed* (bit 4) means the item
+cannot be **un**equipped; it carries, moves and changes hands perfectly well until somebody wears it,
+and the game's own shops sell them. Only bit 2 makes an item permanently stuck.
+
+⚠️ **A trap this creates.** `MISC57` is a genuine, movable *"Broken Shield"* sharing its name with
+nine monster attacks; `BOOTDRIZ` shares *"The Paws of the Cheetah"* with `BOOT01` and is immovable.
+**Name search cannot distinguish them — only the resref can**, which is the fifth time this project
+has met "a name is not a key".
+
+**What a monster attack actually is**, since 224 of the immovable ones are that: a creature's claw,
+bite or gaze is an **ITM equipped in its weapon slot**. Confirmed across all 2,253 shipped creature
+records — `BASILG` carries `BASILG1` in `weapon1`, `CARRIO` carries `CARRIO1`, `RSDTROLL` carries
+`TROLL01`. ⚠️ **But the immovable set is not only those**: `ARROPHEO` (Short Sword +1, 800 gp) and
+`BOW99` itself sit in the same group, so there is no "monster attack" category to filter on — the
+single Movable bit is the whole rule.
+
+### The game's own name for every equipment slot — 2026-08-14
+
+Scanned the player's talk table, 34,000 strings. **The slot labels sit in one contiguous block**:
+
+| strref | slot | | strref | slot |
+|---|---|---|---|---|
+| 11997 | Armor | | 12005 | Boots |
+| 11998 | Gauntlets | | 12006 | Shield |
+| 11999 | Helmet | | 12009 | Quiver |
+| 12000 | Amulet | | 12010 | Quick Weapon |
+| 12001 | Belt | | 12012 | Quick Item |
+| 12004 | Cloak | | 6348 | Ring |
+
+⚠️ **What the game does NOT have a word for**, checked exhaustively: *Equipped*, *Equipment*, *Worn*,
+*Carried*, ***Backpack*** and *Pack* appear nowhere as standalone strings — the game's own screen is
+a paper doll, so it needs no heading. *Inventory* is 6671, 11292 and 24358. The word **"equipped"**
+does run through the item descriptions, so it is the game's vocabulary even though it is never a
+label.
+
+⚠️ **And no string distinguishes the left ring from the right, or numbers the weapon slots.** Those
+qualifiers are this project's, and the code says so where it writes them.
+
+### ITM V1 — read 2026-08-12, header verified against real bytes
+
+**1,530 items** in a BG:EE install, across 7 archives (1,282 in `data/ITEMS.BIF`). Reading every
+header costs **28 ms**; resolving both name strrefs for all of them costs **69 ms** more.
+
+The 114-byte header, derived from IESDP's own width rules and then **checked against `BOOT01`**,
+whose arithmetic closes exactly: 114 + 2 feature blocks × 48 = **210**, the file's length.
+
+| offset | field | | offset | field |
+|---|---|---|---|---|
+| `0x08` | unidentified name (strref) | | `0x42` | lore to identify |
+| `0x0c` | identified name (strref) | | `0x44` | ground icon (resref) |
+| `0x18` | flags | | `0x4c` | weight |
+| `0x1c` | item type (`ITEMCAT.IDS`) | | `0x50`/`0x54` | descriptions (strref) |
+| `0x1e`–`0x21` | usability, **4 separate bytes** | | `0x58` | description icon (resref) |
+| `0x34` | price | | `0x64`/`0x68` | extended headers offset/count |
+| `0x38` | stack amount | | `0x6a` | feature-block pool offset |
+| `0x3a` | inventory icon (resref) | | `0x6e`/`0x70` | equipping index/count |
+
+⚠️ **`0x6a` is a dword at a non-4-aligned offset.** ⚠️ **The min-stat bytes `0x28`–`0x31` are
+interleaved with the kit-usability bytes**, not laid out as two blocks. ⚠️ **Usability is four
+independent bytes** — IESDP presents it as a Bit × Byte grid, and reading it little-endian as a
+dword scrambles the classes ("Mage and Sorcerer" is byte 3 bit 2).
+
+**Signedness is measured, not inherited.** IESDP states none for any ITM field. **195 of the 1,530
+items carry a negative value in one of the two name strrefs**, so both are signed and `Itm` answers
+`null` rather than `-1` — the idiom `Spl.nameStrref` established.
+
+#### ⚠️ The offerable filter is two-stage, and the two numbers differ
+
+| where | count | what it means |
+|---|---|---|
+| `Itm.hasName` — the format layer | **102** | neither name strref is present at all |
+| the app, after the talk table | **107** | plus five whose strref resolves to *empty text* |
+
+`infinity_formats` must never open the talk table — where the game is installed and which language
+the player chose are facts about a machine, not a file format (D11) — so the second stage belongs
+above the repository. Both numbers are right about different questions, and recording only one is
+how somebody later "fixes" a passing test.
+
+The nameless ones are `GHOST`, `DEMOGORG`, `ANKHEG1` and their like: **a monster's innate attack is
+an item to the engine**, and must never be offered to a player as one. Same shape as `SPL`, where
+86 of 108 first-level wizard spells are engine plumbing.
+
+#### Two more rules that are not guessable
+
+- **Stacking needs two conditions.** IESDP: *"For items to be stackable, they must contain at least
+  one extension header, even if it is empty."* So `stackAmount > 1` is necessary and **not
+  sufficient** — asserted against the shipped data: no item claims to stack with zero extended
+  headers.
+- ⚠️ **A name is not a key.** `BOOT01`, `BOOTDRIZ`, `DASBOOT` and `TROLLBOO` all resolve to strref
+  6823, "The Paws of the Cheetah". The **resref** is the key. Fifth time this project has met that
+  shape, after `KIT.IDS`, two `AXE` rows in `weapprof.2da`, `FALLEN_CLERIC`, and `weapprof`'s
+  padding band.
+- ⚠️ **"Boots of Speed" matches no item name in BG:EE** and three item *descriptions*. The name a
+  player remembers is not always a name the game holds.
+
+⚠️ **`ItmCodec` checks the version where `SplCodec` deliberately does not**, and the difference is
+recorded in both: a BG:EE install has one `SPL` layout, but `ITM` has three — V1.1 is Planescape and
+V2.0 is Icewind Dale II. Read with V1's table either yields a plausible name, type and price, all
+wrong. Dropping an item from a picker is visible; showing the wrong name for one is not.
 
 ### ⚠️ The first byte of a CRE resref is overwritten with `*` — 2026-08-08
 
@@ -835,15 +1038,56 @@ record. Measured on both saves:
 
 | | in a savegame | in a `.chr` |
 |---|---|---|
-| GAM header offsets | 3 | — |
+| GAM header offsets | **6** | — |
 | later party `creOffset`s | 0–3 | — |
 | **non-party `creOffset`s** | **33–36** | — |
+| the owning struct's `creLength` | 1 | — |
 | CHR header length field | — | 1 |
-| **total pointers to patch** | **39** | **1** |
-| bytes shifted | 81–93 KB | 0 |
+| **total pointers to patch** | **43** | **1** |
+| bytes shifted | 81–95 KB | 0 |
 
-⚠️ **36 of those 39 are the `creOffset` embedded in each non-party NPC struct.** No earlier note
+⚠️ **36 of those 43 are the `creOffset` embedded in each non-party NPC struct.** No earlier note
 mentioned them; a layout pass that patches only the GAM header corrupts the save silently.
+
+⚠️ **This table said 39 until 2026-08-12, and that was a floor rather than a total.** It counted
+only the header offsets `GamHeaderField` happened to *model* — the enum stopped at `0x58`. Three
+more section offsets sit past the party creature, and `creLength` is a fourth pointer nobody
+counted. Corrected by building the relocation and measuring what it patches: on
+`000000022-last` the protagonist sits at **532**, runs **6,780** bytes, and growing it patches
+**exactly 43** dwords and shifts **95,436** bytes. `gam_relocation_fixture_test.dart` asserts the
+number and names every field.
+
+**The four header fields that were missing**, read off IESDP's GAM V2.0 page and confirmed across
+all eleven fixtures:
+
+| field | offset | what every fixture holds |
+|---|---|---|
+| Offset to Familiar Extra | `0x48` | `0xFFFFFFFF` |
+| Offset to familiar info | `0x68` | ⚠️ **live** — always file length − 400 |
+| Offset to stored locations | `0x6c` | == EOF, count `0` |
+| Offset to pocket plane locations | `0x78` | == EOF, count `0` |
+
+⚠️ **`0x68` is the dangerous one**: it is a real pointer, it sits after every party creature, and a
+relocation blind to it leaves it 20 bytes inside the file with nothing to say so.
+
+#### The three encodings of "absent", and the one that must still move
+
+All three appear in a single real save, which is why `offset != 0` is not sufficient here:
+
+| encoding | field | on relocation |
+|---|---|---|
+| `0` | `partyInventoryOffset` | leave alone |
+| `0xFFFFFFFF` | `familiarExtraOffset` | leave alone |
+| **== EOF with count `0`** | `storedLocations`, `pocketPlane` | ⚠️ **patch to the NEW EOF** |
+
+The third is settled by measurement rather than reasoning: across three saves of **different**
+lengths — 95,968 / 101,352 / 88,280 — both fields equal the file length every time, so the engine
+maintains them at the end of the file.
+
+**And it needs no special case, which is the useful part.** An offset equal to the old end of file
+is at or after any splice, so the ordinary "shift everything past the splice" rule carries it to the
+new end of file for free. Only the two sentinels need excluding, and `GamSection` is where that
+lives.
 
 **The engine performs this resize constantly.** Aurel's record was **1,908 bytes** at
 `000000007-Prologue Start` and **6,924** by `000000101-Aurel Start`: the prologue attached 19
@@ -1852,3 +2096,48 @@ own words, and `creation_view.dart` already draws it.
 It is **prose**: display it and cross-check against it; never parse it into a lookup. And note what
 that means — our creation screen has been printing *"May only become Proficient (one slot) in any
 weapon class"* directly above a control that offers two.
+
+## ✅ The engine opened a relocated save — 2026-08-13
+
+**The gate this project had never passed.** Every check on `Gam.withCreature` was a byte gate: exactly
+N pointers differ, and here they are by name. Whether BG:EE would *load* the result was unknown, and
+only the engine could answer it.
+
+**The run.** `000000023-Conan Inventory Move` — a **six-member** party — opened in this app, `SCRL75`
+added to **Xzar**, saved, then loaded in BG:EE. ⚠️ **Xzar is fourth in the array deliberately**: a
+resize of the protagonist only ever shifts things downstream of him, which is the easy half. Growing
+a middle member moves the records *after* him as well as the header sections.
+
+**The engine loaded it, drew all six party members, and showed the scroll in Xzar's pack.**
+
+### What the write actually did
+
+107,588 → **107,608 bytes**, one 20-byte entry.
+
+| member | before | after |
+|---|---|---|
+| Conan, Imoen, Montaron | `@2292`, `@9320`, `@12812` | **unmoved** |
+| **Xzar** | `@15860` len 2868, 8 items | `@15860` len **2888**, **9** items, `SCRL75` in `pack7` |
+| Jaheira | `@18728` | **`@18748`** |
+| Khalid | `@21856` | **`@21876`** |
+
+Six header sections shifted by exactly 20 — `nonPartyNpcs` 24880, `globals` 102364, `journal` 106984,
+`familiarInfo` 107188, `storedLocations` and `pocketPlane` both 107588.
+
+### ⚠️ Both hazardous encodings were live in this file, and both survived
+
+- **`familiarInfo` sat at file-length − 400** before (107,588 − 400 = 107,188) and still does after
+  (107,608 − 400 = 107,208). This is the offset the old 39-pointer count missed entirely, and it is
+  live on every save — a relocation blind to it corrupts silently.
+- **`storedLocations` and `pocketPlane` were both parked at the old EOF**, which is the third
+  encoding of "absent" and the one that must *not* be skipped. The ordinary shift carried them to the
+  new EOF, exactly as `GamSection` predicts and with no special case.
+
+### ⚠️ What this does NOT establish
+
+The engine was asked to *load*, not to *re-save*. A field it silently **corrects** rather than
+rejects would be invisible to this run — the save opening proves acceptance, not equivalence. A
+load-then-save inside the game yields a byte diff and is the cheapest remaining strengthening.
+
+Nor does it say anything about the **out-of-order items array** the append bug used to produce: that
+record shape was never taken into the engine, and the fix means the app no longer creates one.

@@ -60,6 +60,23 @@ void main() {
         expect(overlaps, isFalse, reason: '${field.name} overlaps partyGold');
       }
     });
+
+    test("names all nine of the header's section offsets", () {
+      // ⚠️ **The four added here are the reason a relocation was unsafe.** The
+      // table stopped at 0x58, so `familiarInfoOffset` — which every fixture
+      // holds as a live pointer — was invisible to any code that shifted the
+      // file. `docs/findings/verified-format-offsets.md` recorded "3 GAM
+      // header offsets, 39 pointers"; that counted only what this enum
+      // modelled, and the real figure is 43.
+      //
+      // Read off IESDP's GAM V2.0 page 2026-08-12, not recalled.
+      expect(GamHeaderField.familiarExtraOffset.offset, 0x48);
+      expect(GamHeaderField.familiarInfoOffset.offset, 0x68);
+      expect(GamHeaderField.storedLocationsOffset.offset, 0x6c);
+      expect(GamHeaderField.storedLocationsCount.offset, 0x70);
+      expect(GamHeaderField.pocketPlaneOffset.offset, 0x78);
+      expect(GamHeaderField.pocketPlaneCount.offset, 0x7c);
+    });
   });
 
   group('GamNpcField', () {

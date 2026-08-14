@@ -71,18 +71,27 @@ Phase 4, when inventory and spells start resizing". **Spells already resize** �
 `MemoriseSpell` and `GrantProficiency` are shipped commands and the creation flow issues all
 three, through a `.chr` where the same edit costs one pointer.
 
-### What is actually left: the GAM relocation
+### ✅ The GAM relocation — **done 2026-08-12**
 
-**One method.** `Gam.withCreature` throws `UnsupportedError`; `Chr.withCreature` does the same job
-for one pointer. It unlocks exactly one thing: **adding an item or a new proficiency to a character
-inside a live save.** Everything else already works, in place or through export.
+`Gam.withCreature` relocates instead of throwing, so **adding an item or a new proficiency to a
+character inside a live save works.** That was the last structural gap; nothing in this project
+is now blocked on a format the codec cannot write.
 
-Cost, measured rather than estimated: **39 pointers, 81–93 KB shifted** — 3 GAM header offsets, the
-`creOffset` of the 0–3 later party members, and the `creOffset` of each of the 33–36 non-party NPCs
-after it. ⚠️ **Nobody had recorded those 36 before**; a relocation that patches only the GAM header
-corrupts the save silently. Two further traps are in
-`docs/findings/verified-format-offsets.md`: `GamHeaderField` covers only five of the GAM's nine
-offset fields, and "absent" is encoded three different ways in that one header.
+Cost, measured by building it rather than estimated: **43 pointers, 95,436 bytes shifted** on
+`000000022-last` — 36 non-party `creOffset` fields, 6 GAM header section offsets, and the owning
+struct's `creLength`.
+
+⚠️ **The figure recorded here was 39, and it was a floor.** It counted only the header offsets
+`GamHeaderField` modelled; the enum stopped at `0x58` and three live section offsets sat past the
+party creature unnamed — familiar info in particular is a real pointer on every save. All four are
+named now, and `GamSection` carries the three encodings of "absent". The corrected table is in
+`docs/findings/verified-format-offsets.md`.
+
+✅ **The in-game load happened on 2026-08-13, and it passed.** BG:EE opened a six-member save this
+app had resized — `SCRL75` added to Xzar, fourth in the array — with the party intact and the item in
+his pack. Jaheira and Khalid moved 20 bytes each, the three members before him did not move, and six
+header sections shifted correctly including the two parked at the old EOF. Details in `CLAUDE.md`
+§"The engine opened a relocated save".
 
 ## Phase 2 — first useful app · **done 2026-08-07**
 
@@ -156,6 +165,10 @@ KEY/BIFF reader in an isolate; 2DA/IDS tables; item and spell pickers.
 ## Phase 4 — inventory, spells, proficiencies
 
 **Cheaper than this entry assumed.** Measured 2026-08-08:
+
+✅ **Shipped 2026-08-13, narrowed**: search by name/resref and add, inventory slots only. The `ITM`
+codec, the CRE item and slot layer, the catalogue and the screen. **Equipment slots and armour class
+were cut** to ship in a day.
 
 - **Inventory already reads** with the existing `CreCodec`. Item records are 20 bytes and the slot
   table is **fixed at 80**, so quantities, charges and the identified/stolen/undroppable flags are

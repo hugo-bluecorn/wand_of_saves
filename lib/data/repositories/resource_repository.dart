@@ -19,6 +19,7 @@ import 'dart:typed_data';
 import 'package:infinity_formats/infinity_formats.dart';
 import 'package:wand_of_saves/data/services/game_profile_service.dart';
 import 'package:wand_of_saves/domain/creation_catalogue.dart';
+import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
@@ -336,6 +337,57 @@ class ResourceRepository {
           ),
         );
       }
+    }
+    // By resref, so the order is stable whatever the archive's is. The screen
+    // sorts by name, which needs the talk table and happens above this layer.
+    return found..sort((a, b) => a.resref.compareTo(b.resref));
+  }
+
+  /// Every item the installation ships, with names left as **strrefs**.
+  ///
+  /// The same shape as [wizardSpells], and for the same reason: a repository
+  /// reads one source and never learns about another, so resolving a strref
+  /// happens above this in `loadItemCatalogue` (D11, and the rule that
+  /// repositories must never be aware of each other).
+  ///
+  /// ⚠️ **Stage one of a two-stage filter.** `Itm.hasName` drops the 102 items
+  /// that name no string at all — `GHOST`, `DEMOGORG`, `ANKHEG1`, a monster's
+  /// innate attack being an item to the engine. Five more resolve to *empty
+  /// text* and can only be caught once the talk table is open.
+  ///
+  /// Measured 2026-08-12: 1,530 items, whole read in about 28 ms.
+  Future<List<ItemEntry>> items() async {
+    final index = await _keyIndex();
+    if (index == null) return const [];
+
+    final found = <ItemEntry>[];
+    for (final resref in index.resrefsOf(ResourceType.item)) {
+      final bytes = await _resource(resref, ResourceType.item);
+      if (bytes == null) continue;
+      final Itm item;
+      try {
+        item = ItmCodec.decode(bytes, source: resref);
+      } on InfinityFormatException {
+        // A PST or IWD2 item, or something that is not an item at all.
+        continue;
+      }
+      if (!item.hasName) continue;
+      found.add(
+        ItemEntry(
+          resref: resref.toUpperCase(),
+          itemType: item.itemType,
+          // ⚠️ Read here because the `Itm` is already decoded — asking the
+          // archives a second time for one bit would double the 28 ms this
+          // whole sweep costs.
+          isMovable: item.flags.contains(ItmFlag.movable),
+          isCursed: item.flags.contains(ItmFlag.cursed),
+          identifiedNameStrref: item.identifiedNameStrref,
+          unidentifiedNameStrref: item.unidentifiedNameStrref,
+          descriptionStrref:
+              item.identifiedDescriptionStrref ??
+              item.unidentifiedDescriptionStrref,
+        ),
+      );
     }
     // By resref, so the order is stable whatever the archive's is. The screen
     // sorts by name, which needs the talk table and happens above this layer.

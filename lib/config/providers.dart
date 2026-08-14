@@ -31,6 +31,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // naming this one, so the import is the honest way to satisfy it (D8).
 import 'package:flutter_riverpod/misc.dart';
 import 'package:wand_of_saves/data/creation_catalogue_loading.dart';
+import 'package:wand_of_saves/data/item_catalogue_loading.dart';
 import 'package:wand_of_saves/data/name_tables_loading.dart';
 import 'package:wand_of_saves/data/repositories/character_file_repository.dart';
 import 'package:wand_of_saves/data/repositories/resource_repository.dart';
@@ -43,6 +44,7 @@ import 'package:wand_of_saves/data/services/recycle_service.dart';
 import 'package:wand_of_saves/domain/character_file.dart';
 import 'package:wand_of_saves/domain/creation_catalogue.dart';
 import 'package:wand_of_saves/domain/document_ref.dart';
+import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/domain/rules/game_rules.dart';
 import 'package:wand_of_saves/domain/rules/hit_die_tables.dart';
 import 'package:wand_of_saves/domain/rules/name_tables.dart';
@@ -177,8 +179,17 @@ final portraitImportServiceProvider = Provider<PortraitImportService>(
 /// own rule rather than a tuning choice:** without it "one state per parameter
 /// combination will be created, which can lead to memory leaks"
 /// (`concepts2/auto_dispose.mdx`). The picker shows 210 portraits; scrolling it
-/// would otherwise retain every one for the session. The named argument, not
-/// `.autoDispose` — that form is codegen-only, which D2 forbids.
+/// would otherwise retain every one for the session.
+///
+/// ⚠️ **The named argument, not `.autoDispose`** — and the reason recorded
+/// here until 2026-08-12 was false. It said `.autoDispose` "is codegen-only,
+/// which D2 forbids"; Riverpod's own **non-codegen** snippets use it
+/// (`concepts2/family/functional/raw.dart`). The real reason is that the builder
+/// classes behind `.autoDispose` are `@internal`
+/// (`riverpod/src/builder.dart`), while `isAutoDispose:` is what
+/// `concepts2/auto_dispose.mdx` prescribes by name for hand-declared
+/// providers. Same choice, checkable citation — which is what D2 rests on.
+///
 final FutureProviderFamily<Uint8List?, String> portraitProvider =
     FutureProvider.family<Uint8List?, String>(
       isAutoDispose: true,
@@ -330,6 +341,28 @@ final creationCatalogueProvider = FutureProvider<CreationCatalogue>(
     rules: ref.watch(gameRulesProvider),
   ),
 );
+
+/// Every item the installation ships, named.
+///
+/// **Keep-alive, which is the hand-declared default** — no `isAutoDispose`,
+/// because this is shared business state that many widgets read and it costs a
+/// measured ~146 ms to build. `retry: neverRetry` on the provider itself, not
+/// only on the scope, for the reason D12 records: a test container does not
+/// inherit the app's scope.
+///
+/// ⚠️ **The search query does NOT live here.** Riverpod's own `do_dont.mdx`
+/// classifies a text field's contents as ephemeral, controller-backed state and
+/// says to keep it out of providers; `CommandPalette` already does that. This
+/// provider holds the corpus; the widget holds the query and filters
+/// synchronously.
+final FutureProvider<ItemCatalogue> itemCatalogueProvider =
+    FutureProvider<ItemCatalogue>(
+      retry: neverRetry,
+      (ref) => loadItemCatalogue(
+        resources: ref.watch(resourceRepositoryProvider),
+        strings: ref.watch(stringRepositoryProvider),
+      ),
+    );
 
 /// Base names of every portrait the player can choose.
 ///

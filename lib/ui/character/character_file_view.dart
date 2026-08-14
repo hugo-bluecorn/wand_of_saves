@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wand_of_saves/config/providers.dart';
+import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/ui/character/character_file_viewmodel.dart';
@@ -26,6 +27,8 @@ import 'package:wand_of_saves/ui/character/rules_toggle.dart';
 import 'package:wand_of_saves/ui/character/sheet_projection.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
 import 'package:wand_of_saves/ui/character/side_sheet.dart';
+import 'package:wand_of_saves/ui/core/save_button.dart';
+import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 
 /// The editor for one exported character.
 ///
@@ -37,7 +40,7 @@ import 'package:wand_of_saves/ui/character/side_sheet.dart';
 /// between, and the party's reputation, which no exported character has.
 ///
 /// ⚠️ **A `.chr` is the document that can grow.** Adding a proficiency moves
-/// one pointer here against thirty-nine inside a savegame, so this is the
+/// one pointer here against forty-three inside a savegame, so this is the
 /// screen where resizing edits are safe — the reason export is a primary path
 /// and not a convenience.
 class CharacterFileView extends ConsumerStatefulWidget {
@@ -99,7 +102,7 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
     // ⚠️ **A `.chr` is the document that can grow, so this is where granting
     // belongs.** Raising a proficiency from zero appends a 264-byte opcode 233
     // effect: **one** pointer here, the length in its 100-byte header, against
-    // **thirty-nine** inside a savegame. An earlier version of this method
+    // **forty-three** inside a savegame. An earlier version of this method
     // refused it anyway, with a comment saying it was safe, which made every
     // proficiency the record did not already hold inert on the one screen where
     // it is safe to add one.
@@ -194,6 +197,62 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
               onChanged: (value) => setState(() => _rulesBind = value),
             ),
             const SizedBox(width: 8),
+            // ⚠️ **The same icon the savegame editor has.** Both documents take
+            // the same edits; a `.chr` being the less capable surface would
+            // invert every other feature in this application.
+            if (state?.character case final Character character)
+              IconButton(
+                // ⚠️ **Inside a `Consumer`, which it was not.** The route used
+                // this widget's own `ref` from within the pushed screen's
+                // build — the shape that once left the inventory showing what
+                // it held when the route opened. The pushed route watches for
+                // itself now, exactly as the savegame editor does.
+                //
+                // ⚠️ **No rail: a `.chr` has no party.** A one-member rail
+                // would be decoration, and this is the one place the two
+                // editors deliberately differ.
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => Consumer(
+                      builder: (context, ref, _) {
+                        final file = ref
+                            .watch(characterFileProvider(widget.fileName))
+                            .value;
+                        return InventoryScreen(
+                          character: () => file?.character ?? character,
+                          onAdd: (resref, slot) => notifier.edit(
+                            AddItem(
+                              creOffset: character.creOffset,
+                              resref: resref,
+                              slot: slot,
+                            ),
+                          ),
+                          isDirty: file?.isDirty ?? false,
+                          onSave: notifier.save,
+                          // ⚠️ No party, so no `Move to` — the same rule the
+                          // rail follows. Remove works here, and this is the
+                          // document where a resizing edit is cheapest.
+                          onRemove: (item) => notifier.edit(
+                            RemoveItem(
+                              creOffset: character.creOffset,
+                              itemIndex: item.index,
+                              resref: item.resref,
+                            ),
+                          ),
+                          onUndo: (file?.canUndo ?? false)
+                              ? notifier.undo
+                              : null,
+                          onRedo: (file?.canRedo ?? false)
+                              ? notifier.redo
+                              : null,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.backpack_outlined),
+                tooltip: 'Inventory',
+              ),
             IconButton(
               onPressed: (state?.canUndo ?? false) ? notifier.undo : null,
               icon: const Icon(Icons.undo),
@@ -205,10 +264,9 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
               tooltip: 'Redo',
             ),
             const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: (state?.isDirty ?? false) ? notifier.save : null,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save'),
+            SaveButton(
+              isDirty: state?.isDirty ?? false,
+              onSave: notifier.save,
             ),
             const SizedBox(width: 12),
           ],
@@ -228,8 +286,6 @@ class _CharacterFileViewState extends ConsumerState<CharacterFileView> {
                           character: sheet,
                           rulesBind: _rulesBind,
                           onOpen: _open,
-                          // One pointer, not thirty-nine. See `_applyPips`.
-                          canGrant: true,
                         ),
                       ),
                     ),
