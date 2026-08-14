@@ -326,19 +326,6 @@ carve-outs, no `// ignore` we author. If a rule bites our own code, fix the code
 Generated output **is committed**. There is no CI, so a fresh clone must build without anyone
 remembering to run `build_runner` first.
 
-### Amended 2026-08-14 — the Flutter 3.47 tool writes seven `exclude:` lines itself
-
-Flutter 3.47's `pub get` prints `Upgrading analysis_options.yaml to exclude build and platform
-directories` and appends `build/**` plus the six platform directories to the app's
-`analyzer: exclude:` list. **Reverting is futile — verified by reverting and rerunning: the tool
-reapplies the migration on every `pub get`**, so fighting it means a dirty tree after every
-dependency change.
-
-The lines stay, under the same reasoning as the `*.mapper.dart` exclusion: none of those
-directories contains Dart this project writes (`build/` is output; `linux/`, `macos/`, `windows/`
-are C++ scaffolds; `android/`, `ios/`, `web/` do not exist here), so nothing D8 protects is
-silenced. **The invariant is unchanged: zero suppressions in code this project writes.**
-
 49 `info`-level issues across both packages, all fixed rather than suppressed. The ones worth
 knowing because they will recur:
 
@@ -351,6 +338,21 @@ knowing because they will recur:
 - `cascade_invocations`, `public_member_api_docs`, `lines_longer_than_80_chars`,
   `avoid_multiple_declarations_per_line`, `no_adjacent_strings_in_list`,
   `avoid_escaping_inner_quotes`, `only_throw_errors`.
+
+### Amended 2026-08-14 — the Flutter 3.47 tool writes seven `exclude:` lines itself
+
+Flutter 3.47's `pub get` prints `Upgrading analysis_options.yaml to exclude build and platform
+directories` and appends `build/**` plus the six platform directories to the app's
+`analyzer: exclude:` list. **Reverting is futile — verified by reverting and rerunning: the tool
+reapplies the migration on every `pub get`**, so fighting it means a dirty tree after every
+dependency change.
+
+The lines stay, under the same reasoning as the `*.mapper.dart` exclusion: none of those
+directories contains Dart this project writes (`build/` is output; `linux/`, `macos/`, `windows/`
+are C++ scaffolds; `android/`, `ios/`, `web/` do not exist here), so nothing D8 protects is
+silenced. **The invariant is unchanged: zero suppressions in code this project writes.** Only the
+app's file gets the migration — plain `dart pub get` performs none, so the format package's file
+correctly stays without an exclude block.
 
 ---
 

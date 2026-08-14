@@ -88,10 +88,13 @@ to undo.
   covered by an approved plan, enter plan mode and get the plan agreed. **Do not use the
   `tdd-workflow` plugin** — not its skills, agents or slash commands. Hand-rolled TDD only; the
   point is the discipline, not the scaffolding.
-- **Lint is `very_good_analysis`, applied whole, with NO suppressions** (D8). No `exclude:`
-  entries, no rule carve-outs, no `// ignore` or `// ignore_for_file` anywhere. This is
-  checkable, so check it — **with the exclusion D8's amendment added**, since `dart_mappable`
-  emits five `ignore_for_file` lines into every file it generates and they cannot be turned off:
+- **Lint is `very_good_analysis`, applied whole, with NO suppressions in code this project
+  writes** (D8, twice amended). No rule carve-outs and no `// ignore` or `// ignore_for_file` we
+  author. The only `exclude:` entries are D8's two amendments: `dart_mappable`'s unremovable
+  generated headers, and the build/platform directories **Flutter 3.47's `pub get` itself
+  writes** into the root `analysis_options.yaml` on every run — do not fight it, do not extend
+  it, and expect it only there (plain `dart pub get` leaves the format package's file alone).
+  This is checkable, so check it — the `grep -v` covers the generated mappers:
 
   ```bash
   grep -rn 'ignore_for_file\|// ignore:' --include='*.dart' . | grep -v '\.mapper\.dart'

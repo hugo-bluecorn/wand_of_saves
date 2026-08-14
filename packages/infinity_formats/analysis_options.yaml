@@ -1,6 +1,9 @@
 # very_good_analysis, applied whole (D8). One package serves both Dart and
-# Flutter, so this file and the app's stay identical — a source file then
-# behaves the same wherever it lives.
+# Flutter, so this file and the app's share the same include and the same
+# zero-suppressions-in-our-code invariant. The app's copy additionally carries
+# an analyzer exclude block that Flutter 3.47's own pub get writes there (D8
+# amendment 2); plain dart pub get performs no such migration, so this file
+# rightly has none.
 #
 # NO suppressions: see the root analysis_options.yaml for the reasoning.
 include: package:very_good_analysis/analysis_options.yaml

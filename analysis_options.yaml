@@ -3,16 +3,19 @@
 # context/flutter-ai-rules.md names, so it subsumes the canon rather than
 # weakening it.
 #
-# NO suppressions: no exclude entries, no rule carve-outs, no // ignore
-# comments anywhere in the repository. A strict ruleset that is exempted
-# wherever it bites is a weaker ruleset with extra steps. If a rule is
-# genuinely unsatisfiable, fix the code or reopen D8 — do not silence it.
+# NO suppressions in code this project writes: no rule carve-outs, no
+# // ignore comments we author. A strict ruleset that is exempted wherever it
+# bites is a weaker ruleset with extra steps. If a rule is genuinely
+# unsatisfiable, fix the code or reopen D8 — do not silence it. The exclude
+# list below is D8's two recorded amendments, not exemptions we chose.
 include: package:very_good_analysis/analysis_options.yaml
 
-# Generated mappers carry ignore_for_file headers that dart_mappable emits
-# unconditionally and we cannot edit. D8 is amended to scope its zero-suppression
-# invariant to hand-written code; this is the only exclusion, and it must never
-# be extended to cover code we author.
+# Two amendments (planning/decisions.md §D8), and nothing here holds Dart this
+# project writes. Amendment 1: generated mappers carry ignore_for_file headers
+# that dart_mappable emits unconditionally and we cannot edit. Amendment 2:
+# Flutter 3.47's pub get appends build/** and the platform directories itself,
+# on every run — reverting is futile, so the lines are committed. Never extend
+# this list to cover code we author.
 analyzer:
   exclude:
     - '**/*.mapper.dart'
