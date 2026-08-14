@@ -14,6 +14,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,6 +26,8 @@ import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/ui/character/portrait_image.dart';
 import 'package:wand_of_saves/ui/core/palette_finish.dart';
+import 'package:wand_of_saves/ui/grid_spikes/g1_two_benches.dart';
+import 'package:wand_of_saves/ui/grid_spikes/g2_ledger_grid.dart';
 import 'package:wand_of_saves/ui/saves/save_browser_viewmodel.dart';
 
 /// The lineup — the application's front door, and the Workbench structure D15
@@ -429,11 +432,73 @@ class _SectionsState extends State<_Sections> {
                       ),
                   ],
                 ),
+                if (kDebugMode && state.saves.isNotEmpty) ...[
+                  const SizedBox(height: 36),
+                  _LayoutSpikes(slot: state.saves.first),
+                ],
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// ⚠️ **THROWAWAY, and the only production surface the grid spikes touch.**
+/// Two buttons opening the two arrangements of `planning/tool-first-study.md`,
+/// so D19 can be closed by looking at them. Guarded by [kDebugMode]: a release
+/// build draws nothing here, and the whole block goes when D19 does.
+///
+/// ⚠️ **It opens the most recently modified save**, which is [slot] — the
+/// browser already sorts that way, and it is the six-member party the study
+/// asks for. Named on the row, so it is never a guess which file is open.
+class _LayoutSpikes extends StatelessWidget {
+  const _LayoutSpikes({required this.slot});
+
+  /// The save both spikes open.
+  final SaveSlot slot;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Layout spikes', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Debug only. Two grid arrangements of the merged character and '
+          'inventory page, over ${slot.label}.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      G1TwoBenches(slotDirectoryName: slot.directoryName),
+                ),
+              ),
+              child: const Text('G1 — Two benches'),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      G2LedgerGrid(slotDirectoryName: slot.directoryName),
+                ),
+              ),
+              child: const Text('G2 — Ledger grid'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
