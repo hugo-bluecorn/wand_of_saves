@@ -14,40 +14,45 @@
 
 /// ⚠️ **THROWAWAY** — see `grid_spike_host.dart`.
 ///
-/// **G1, as the user has reshaped it: the party, and one column.**
+/// **G1, as the user has reshaped it: the party, and one page in two columns.**
 ///
 /// - **Left, the party**: portraits that accept a dropped item, the identity,
-///   and the chrome.
-/// - **Right, the record**: the field palette, then Character, Abilities,
-///   Skills and Proficiencies, then the **inventory**, then the numbers
-///   equipment moves — Combat, Resistances, Condition. One scroll, one authored
-///   order, nothing rearranging on resize.
+///   and the chrome. Its own column, its own height.
+/// - **The page, in two columns**: the field palette and the read-once panels —
+///   Character, Abilities, Skills, Proficiencies — on the left; the
+///   **inventory** and then the numbers equipment moves — Combat, Resistances,
+///   Condition — on the right.
+///
+/// ⚠️ **One page, not two panes.** The two columns share a single scroll, so
+/// the record and the items move together and the page reads as one document
+/// laid out in columns. The three-column G1 that came before scrolled each
+/// bench separately, which is the thing this replaced.
 ///
 /// Editing is **inline** wherever a row lives: the selected row expands the
 /// editor beneath itself, and the side sheet does not appear. Finds stay
 /// **split**: Ctrl+K over the record, the item search over the catalogue.
 ///
-/// ⚠️ **The name is historical.** This is still the G1 the study drew and the
-/// one D19 refers to, but there are no longer two benches and the numbers are
-/// no longer pinned. Three changes, all the user's, all made after looking at
-/// the built spike, and none of them what the paper derived:
+/// ⚠️ **The name is historical**, and so are the study's scores for this
+/// variant. Four changes, all the user's, all made after looking at the built
+/// spike, none of them what the paper derived:
 ///
 /// 1. **The party column moved from the right edge to the left.** The study put
 ///    it on the right so the dominant drag — pack → member — travelled one
 ///    column instead of the window. It now travels the window. That was G1's
 ///    margin on the **W-A2** script.
 /// 2. **The numbers stopped being pinned.** Measured, the band cost ~750 points
-///    and left 78 for the backpack at 1280 × 860 — so R1's pin was bought at
-///    the price of the thing it sat above. **W-A6** is a scroll again.
-/// 3. **The two content columns became one.** Which lands this on the shape
-///    `inventory-merge-review.md` §7 called **option A** — inventory joining
-///    the sheet's single column as panels — reached by building rather than by
-///    argument. **D15's single column, extended**, with a party rail beside it.
+///    and left 78 for the backpack at 1280 × 860 — R1's pin was bought at the
+///    price of the thing it sat above. **W-A6** is a scroll again.
+/// 3. **The record and the items became one page.** Two independent scrolling
+///    benches became one scroll in two columns.
+/// 4. **The items lead their own column**, which is what puts the backpack back
+///    above the fold: stacked under the record it began 1,438 points down, and
+///    about 2,500 with a real installation's proficiencies.
 ///
 /// The one thing left over from the pin is the **compact** rendering of the
 /// last three panels: it was what made a pinned band possible at all, and the
-/// user chose it. In one column it now sits under four panels drawn at full
-/// height, which is a difference a capture will show.
+/// user chose it. It now sits under an inventory drawn at full height, which is
+/// a difference a capture will show.
 library;
 
 import 'package:flutter/material.dart';
@@ -70,7 +75,7 @@ const Map<String, CompactStyle> _numbers = {
   'Condition': CompactStyle.flowing,
 };
 
-/// The panels the column leads with, in the sheet's own order.
+/// The panels the left-hand column holds, in the sheet's own order.
 const List<String> _record = [
   'Character',
   'Abilities',
@@ -81,13 +86,14 @@ const List<String> _record = [
 /// How wide the party column is. **Authored, not computed.**
 const double _partyColumnWidth = 232;
 
-/// How wide the record column runs before it stops growing with the window.
+/// How wide the two columns together run before they stop growing.
 ///
-/// ⚠️ **900, which is the inventory's number rather than the sheet's 820.** The
-/// merge review lists reconciling those two as a constraint, and this is the
-/// first surface where both are in the same column: the 4 × 4 backpack is what
-/// wants the extra width, and eighty points does not hurt a row of text.
-const double _recordColumnWidth = 900;
+/// Without a ceiling a wide monitor gives each column eleven hundred points and
+/// a row of two words with a number a metre away from it.
+const double _pageWidth = 1600;
+
+/// The gutter between the two columns.
+const double _columnGap = 24;
 
 /// G1 over the savegame in [slotDirectoryName].
 class G1TwoBenches extends StatelessWidget {
@@ -115,6 +121,9 @@ class _G1Body extends StatefulWidget {
 
 class _G1BodyState extends State<_G1Body> {
   final SearchController _palette = SearchController();
+
+  /// ⚠️ **One controller, because it is one page.** Two would be two
+  /// scrollbars, which is exactly the two-panes reading this replaced.
   final ScrollController _scroll = ScrollController();
 
   /// What is open for editing, or `null` when nothing is.
@@ -133,9 +142,9 @@ class _G1BodyState extends State<_G1Body> {
 
   /// The editor for [subject], when that is what is open.
   ///
-  /// **One answer for every row on the page.** With one scrolling column there
-  /// is no cell whose height may not change, so nothing has to open anywhere
-  /// but under the row it belongs to.
+  /// **One answer for every row on the page**, in either column: nothing here
+  /// has a height that may not change, so nothing has to open anywhere but
+  /// under the row it belongs to.
   Widget? _editorFor(Subject subject) {
     final editing = _editing;
     if (editing == null) return null;
@@ -150,6 +159,12 @@ class _G1BodyState extends State<_G1Body> {
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
+    final panels = sheetPanelsOf(
+      character: model.sheet,
+      rulesBind: model.rulesBind,
+      onOpen: _open,
+      inlineEditor: _editorFor,
+    );
 
     return Row(
       children: [
@@ -159,12 +174,52 @@ class _G1BodyState extends State<_G1Body> {
         ),
         const VerticalDivider(width: 1),
         Expanded(
-          child: _RecordColumn(
-            model: model,
-            palette: _palette,
-            scroll: _scroll,
-            onOpen: _open,
-            inlineEditor: _editorFor,
+          child: CallbackShortcuts(
+            bindings: <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+                  _palette.openView,
+            },
+            child: Focus(
+              autofocus: true,
+              child: Scrollbar(
+                controller: _scroll,
+                child: SingleChildScrollView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: _pageWidth),
+                      // ⚠️ **The two columns, and the reason this is a `Row`
+                      // inside the scroll view rather than two scroll views in
+                      // a `Row`.** The page is one document: one scrollbar
+                      // moves both, and the page is as tall as its taller
+                      // column.
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _RecordColumn(
+                              model: model,
+                              palette: _palette,
+                              panels: panels,
+                              onOpen: _open,
+                            ),
+                          ),
+                          const SizedBox(width: _columnGap),
+                          Expanded(
+                            child: _ItemsColumn(
+                              model: model,
+                              onOpen: _open,
+                              inlineEditor: _editorFor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -172,112 +227,107 @@ class _G1BodyState extends State<_G1Body> {
   }
 }
 
-/// Everything about the character, in one authored order and one scroll.
+/// The left-hand column of the page: the palette, then the read-once panels.
 class _RecordColumn extends StatelessWidget {
   const _RecordColumn({
     required this.model,
     required this.palette,
-    required this.scroll,
+    required this.panels,
+    required this.onOpen,
+  });
+
+  final GridSpikeModel model;
+  final SearchController palette;
+  final Map<String, Widget> panels;
+  final ValueChanged<Subject> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      // ⚠️ In an unbounded height — this sits in a scroll view — a column that
+      // wants all of it resolves to infinity and throws during layout.
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ⚠️ **Outside the `SelectionArea`.** A search field wrapped in one
+        // gives the region its gestures instead of keeping its own.
+        CommandPalette(
+          controller: palette,
+          character: model.sheet,
+          onSelected: onOpen,
+        ),
+        const SizedBox(height: 20),
+        SelectionArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final title in _record)
+                if (panels[title] case final Widget panel) ...[
+                  panel,
+                  const SizedBox(height: 16),
+                ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The right-hand column of the page: the items, then the numbers they move.
+///
+/// ⚠️ **The items lead, and that is what puts them above the fold.** Stacked
+/// under the record they began fourteen hundred points down; at the top of
+/// their own column they are the first thing in it.
+class _ItemsColumn extends StatelessWidget {
+  const _ItemsColumn({
+    required this.model,
     required this.onOpen,
     required this.inlineEditor,
   });
 
   final GridSpikeModel model;
-  final SearchController palette;
-  final ScrollController scroll;
   final ValueChanged<Subject> onOpen;
 
-  /// What to draw beneath a row that is open for editing.
+  /// What to draw beneath a number that is open for editing.
   final Widget? Function(Subject subject) inlineEditor;
 
   @override
   Widget build(BuildContext context) {
-    final panels = sheetPanelsOf(
-      character: model.sheet,
-      rulesBind: model.rulesBind,
-      onOpen: onOpen,
-      inlineEditor: inlineEditor,
-    );
-
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-            palette.openView,
-      },
-      child: Focus(
-        autofocus: true,
-        child: Scrollbar(
-          controller: scroll,
-          child: SingleChildScrollView(
-            controller: scroll,
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: _recordColumnWidth,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // ⚠️ **Not inside the `SelectionArea`.** A search field
-                    // wrapped in one takes the region's gestures instead of its
-                    // own; the sheet keeps selection because every number on it
-                    // is one somebody wants to quote.
-                    CommandPalette(
-                      controller: palette,
-                      character: model.sheet,
-                      onSelected: onOpen,
-                    ),
-                    const SizedBox(height: 20),
-                    SelectionArea(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (final title in _record)
-                            if (panels[title] case final Widget panel) ...[
-                              panel,
-                              const SizedBox(height: 16),
-                            ],
-                        ],
-                      ),
-                    ),
-                    // ⚠️ **The items sit directly above the numbers they
-                    // move.** That adjacency is the whole reason §8c wanted the
-                    // two screens merged, and it is the last thing left of R1
-                    // now that the pin is gone.
-                    InventoryPanels(
-                      character: () => model.character,
-                      onAdd: model.addItem,
-                      partyPosition: model.state.selectedIndex,
-                      onRemove: model.removeItem,
-                      party: [
-                        for (final member in model.state.members) member.name,
-                      ],
-                      onMoveTo: (item, to) => model.moveItem(
-                        from: model.state.selectedIndex,
-                        to: to,
-                        itemIndex: item.index,
-                        resref: item.resref,
-                      ),
-                      // ⚠️ The palette holds the focus, so Ctrl+K works the
-                      // moment the grid opens. Two boxes cannot both have it.
-                      autofocusSearchField: false,
-                    ),
-                    const SizedBox(height: 20),
-                    CompactNumbers(
-                      character: model.sheet,
-                      panels: _numbers,
-                      rulesBind: model.rulesBind,
-                      onOpen: onOpen,
-                      inlineEditor: inlineEditor,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InventoryPanels(
+          character: () => model.character,
+          onAdd: model.addItem,
+          partyPosition: model.state.selectedIndex,
+          onRemove: model.removeItem,
+          party: [for (final member in model.state.members) member.name],
+          onMoveTo: (item, to) => model.moveItem(
+            from: model.state.selectedIndex,
+            to: to,
+            itemIndex: item.index,
+            resref: item.resref,
+          ),
+          // ⚠️ The palette holds the focus, so Ctrl+K works the moment the
+          // grid opens. Two boxes cannot both have it.
+          autofocusSearchField: false,
+        ),
+        const SizedBox(height: 20),
+        // Selectable, because every number here is one somebody wants to quote
+        // — and unlike the items above it, nothing in this block drags.
+        SelectionArea(
+          child: CompactNumbers(
+            character: model.sheet,
+            panels: _numbers,
+            rulesBind: model.rulesBind,
+            onOpen: onOpen,
+            inlineEditor: inlineEditor,
           ),
         ),
-      ),
+      ],
     );
   }
 }

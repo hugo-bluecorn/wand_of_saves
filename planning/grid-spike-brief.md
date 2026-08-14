@@ -362,3 +362,63 @@ Re-proved after this change, again as throwaway tests run green and deleted: one
 beside the party, in that order; a record row and a number both expand the editor beneath
 themselves and `20 → 19` writes with Save going live; Ctrl+K still reaches the palette; an added
 item still drags to the other five portraits.
+
+### Corrected — "merged" meant one PAGE in two columns, not one column
+
+⚠️ **The previous step was built from a misreading and has been redone.** "Merge the middle and
+right columns" was taken as *stack their contents*, which produced a single column of everything;
+what was wanted was **one page laid out in two columns** — the two benches stop being independent
+panes and become one document. The distinction is the scroll: the three-column G1 gave each bench
+its own scrollbar, and a page has one.
+
+**G1 as it now stands:**
+
+```
+┌─PARTY─┬────────────── ONE page, two columns ──────────────┐
+│ ┌───┐ │ ⌕ Ctrl+K                │ Inventory               │
+│ │Con│ │ Character               │  ⌕ Find an item         │
+│ └───┘ │ Abilities               │  ┌────┬────┬────┬────┐  │
+│ ┌───┐ │ Skills                  │  │    │    │    │    │  │
+│ │Imo│ │ Proficiencies           │  └────┴────┴────┴────┘  │
+│ └───┘ │                         │ Equipped · In no slot   │
+│ ident │                         │ Combat · Resistances    │
+│ chrome│                         │ Condition               │
+└───────┴─────────────────────────┴─────────────────────────┘
+                    ↕ ONE scrollbar moves both columns
+```
+
+The two columns share one `ScrollController` and sit in a `Row` **inside** the scroll view, rather
+than being two scroll views in a `Row`. The pair is capped at **1600** and centred, so a wide
+monitor does not give each column eleven hundred points and put a row's two words a metre from its
+number. The party rail keeps its own column and its own height.
+
+**And this is what fixed the fold problem the previous step measured:**
+
+| | one column (previous step) | two columns (now) |
+|---|---|---|
+| the record starts at | 411 | 411 |
+| **the inventory starts at** | **1,438** *(≈2,500 with real proficiencies)* | **20** |
+| the numbers start at | 1,960 | 542 |
+| minimum window | 520 × 300 | **780 × 300** |
+
+**The backpack is the first thing in its column**, so it is above the fold at every window the app
+allows, and the numbers equipment moves are ~540 points under it rather than two thousand. The
+extra 260 points of minimum width is what a second column costs, and it is still well inside the
+application's own 900 × 600 floor.
+
+⚠️ **Two things a capture should be looked at for**, both consequences rather than defects:
+
+1. **The columns are wildly unequal in height.** The record column with a real installation's
+   twenty-four proficiencies runs perhaps 2,500 points; the items column about 1,200. The right
+   column simply ends, leaving white space beside the bottom half of the left one. Nothing
+   rebalances them — that is D17's zigzag, and this project has already paid for it once.
+2. **The numbers are still in the compact rendering** the pinned band needed, now sitting under an
+   inventory drawn at full height. The reason for compactness is gone; what it still buys is a
+   short scroll from the items to the numbers. Making the column uniform — either everything full
+   or nothing — is a one-line change, not made unasked.
+
+Re-proved after this change: party column, then two columns side by side with the items level with
+the record rather than below it; **exactly one `Scrollbar` on the page**; a row in either column
+expands the editor beneath itself and `20 → 19` writes with Save going live; Ctrl+K reaches the
+palette; an added item still drags to the other five portraits. `analyze` clean, `dart format` a
+no-op, 844 + 399 green.
