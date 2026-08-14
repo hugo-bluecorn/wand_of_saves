@@ -353,11 +353,12 @@ class PartyViewModel extends AsyncNotifier<PartyState> {
           session.document,
           slot,
         ).indexed)
-          member.name.isNotEmpty
-              ? member
-              : member.copyWith(
-                  name: resolved[position] ?? member.creResref,
-                ),
+          if (member.name.isNotEmpty)
+            member
+          else
+            member.copyWith(
+              name: resolved[position] ?? member.creResref,
+            ),
       ],
       reputation: session.document.reputation,
       proficiencies: catalogues.proficiencies,
