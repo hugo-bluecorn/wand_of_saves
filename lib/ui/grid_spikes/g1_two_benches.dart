@@ -14,37 +14,40 @@
 
 /// ⚠️ **THROWAWAY** — see `grid_spike_host.dart`.
 ///
-/// **G1 — "Two benches", adjacency-biased.** Three fixed columns, authored
-/// positions, no `MediaQuery` and no `LayoutBuilder`: nothing here rearranges
-/// when the window resizes.
+/// **G1, as the user has reshaped it: the party, and one column.**
 ///
 /// - **Left, the party**: portraits that accept a dropped item, the identity,
 ///   and the chrome.
-/// - **Centre, the slow bench**: the panels you read once — Character,
-///   Abilities, Skills, Proficiencies — with the field palette above them.
-/// - **Right, the fast bench**: the items, and directly beneath them the
-///   numbers equipment moves, in one column that scrolls as a whole.
+/// - **Right, the record**: the field palette, then Character, Abilities,
+///   Skills and Proficiencies, then the **inventory**, then the numbers
+///   equipment moves — Combat, Resistances, Condition. One scroll, one authored
+///   order, nothing rearranging on resize.
 ///
 /// Editing is **inline** wherever a row lives: the selected row expands the
 /// editor beneath itself, and the side sheet does not appear. Finds stay
 /// **split**: Ctrl+K over the record, the item search over the catalogue.
 ///
-/// ⚠️ **Two things here were changed by the user after looking at the built
-/// spike, and both go against what the study derived on paper.** Recorded
-/// rather than quietly applied, because the paper scores no longer describe
-/// what this is:
+/// ⚠️ **The name is historical.** This is still the G1 the study drew and the
+/// one D19 refers to, but there are no longer two benches and the numbers are
+/// no longer pinned. Three changes, all the user's, all made after looking at
+/// the built spike, and none of them what the paper derived:
 ///
 /// 1. **The party column moved from the right edge to the left.** The study put
 ///    it on the right so the dominant drag — pack → member — travelled one
-///    column instead of the window; on the left it travels the whole width.
-///    That was G1's margin on the W-A2 script.
-/// 2. **The fast bench is no longer split, and the numbers are no longer
-///    pinned.** It was a fixed band of numbers above a scrolling item region;
-///    it is now one scroll with the items at the top. Measured, the band cost
-///    ~750 points and left 78 for the backpack at 1280 × 860 — so the pin was
-///    bought at the price of the thing it sat above. The numbers are still
-///    directly under the items and still compact, which is what keeps them
-///    within a short scroll rather than a long one.
+///    column instead of the window. It now travels the window. That was G1's
+///    margin on the **W-A2** script.
+/// 2. **The numbers stopped being pinned.** Measured, the band cost ~750 points
+///    and left 78 for the backpack at 1280 × 860 — so R1's pin was bought at
+///    the price of the thing it sat above. **W-A6** is a scroll again.
+/// 3. **The two content columns became one.** Which lands this on the shape
+///    `inventory-merge-review.md` §7 called **option A** — inventory joining
+///    the sheet's single column as panels — reached by building rather than by
+///    argument. **D15's single column, extended**, with a party rail beside it.
+///
+/// The one thing left over from the pin is the **compact** rendering of the
+/// last three panels: it was what made a pinned band possible at all, and the
+/// user chose it. In one column it now sits under four panels drawn at full
+/// height, which is a difference a capture will show.
 library;
 
 import 'package:flutter/material.dart';
@@ -67,18 +70,24 @@ const Map<String, CompactStyle> _numbers = {
   'Condition': CompactStyle.flowing,
 };
 
-/// The panels you read through once, in the sheet's own order.
-const List<String> _slow = [
+/// The panels the column leads with, in the sheet's own order.
+const List<String> _record = [
   'Character',
   'Abilities',
   'Skills',
   'Proficiencies',
 ];
 
-/// How wide the three columns are. **Authored, not computed** — a fixed grid
-/// means a fixed column count and stated widths.
-const double _slowBenchWidth = 480;
+/// How wide the party column is. **Authored, not computed.**
 const double _partyColumnWidth = 232;
+
+/// How wide the record column runs before it stops growing with the window.
+///
+/// ⚠️ **900, which is the inventory's number rather than the sheet's 820.** The
+/// merge review lists reconciling those two as a constraint, and this is the
+/// first surface where both are in the same column: the 4 × 4 backpack is what
+/// wants the extra width, and eighty points does not hurt a row of text.
+const double _recordColumnWidth = 900;
 
 /// G1 over the savegame in [slotDirectoryName].
 class G1TwoBenches extends StatelessWidget {
@@ -106,8 +115,7 @@ class _G1Body extends StatefulWidget {
 
 class _G1BodyState extends State<_G1Body> {
   final SearchController _palette = SearchController();
-  final ScrollController _slowScroll = ScrollController();
-  final ScrollController _fastScroll = ScrollController();
+  final ScrollController _scroll = ScrollController();
 
   /// What is open for editing, or `null` when nothing is.
   Subject? _editing;
@@ -115,8 +123,7 @@ class _G1BodyState extends State<_G1Body> {
   @override
   void dispose() {
     _palette.dispose();
-    _slowScroll.dispose();
-    _fastScroll.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -126,10 +133,9 @@ class _G1BodyState extends State<_G1Body> {
 
   /// The editor for [subject], when that is what is open.
   ///
-  /// **One answer for every row on the page**, whichever bench it is on: with
-  /// the fast bench scrolling as a whole there is no longer a cell whose height
-  /// may not change, so nothing has to open anywhere but under the row it
-  /// belongs to.
+  /// **One answer for every row on the page.** With one scrolling column there
+  /// is no cell whose height may not change, so nothing has to open anywhere
+  /// but under the row it belongs to.
   Widget? _editorFor(Subject subject) {
     final editing = _editing;
     if (editing == null) return null;
@@ -144,12 +150,6 @@ class _G1BodyState extends State<_G1Body> {
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
-    final panels = sheetPanelsOf(
-      character: model.sheet,
-      rulesBind: model.rulesBind,
-      onOpen: _open,
-      inlineEditor: _editorFor,
-    );
 
     return Row(
       children: [
@@ -158,21 +158,11 @@ class _G1BodyState extends State<_G1Body> {
           child: _PartyColumn(model: model, onFindings: _palette.openView),
         ),
         const VerticalDivider(width: 1),
-        SizedBox(
-          width: _slowBenchWidth,
-          child: _SlowBench(
+        Expanded(
+          child: _RecordColumn(
             model: model,
             palette: _palette,
-            scroll: _slowScroll,
-            panels: panels,
-            onOpen: _open,
-          ),
-        ),
-        const VerticalDivider(width: 1),
-        Expanded(
-          child: _FastBench(
-            model: model,
-            scroll: _fastScroll,
+            scroll: _scroll,
             onOpen: _open,
             inlineEditor: _editorFor,
           ),
@@ -182,24 +172,33 @@ class _G1BodyState extends State<_G1Body> {
   }
 }
 
-/// The middle bench: the palette, then the panels nobody watches change.
-class _SlowBench extends StatelessWidget {
-  const _SlowBench({
+/// Everything about the character, in one authored order and one scroll.
+class _RecordColumn extends StatelessWidget {
+  const _RecordColumn({
     required this.model,
     required this.palette,
     required this.scroll,
-    required this.panels,
     required this.onOpen,
+    required this.inlineEditor,
   });
 
   final GridSpikeModel model;
   final SearchController palette;
   final ScrollController scroll;
-  final Map<String, Widget> panels;
   final ValueChanged<Subject> onOpen;
+
+  /// What to draw beneath a row that is open for editing.
+  final Widget? Function(Subject subject) inlineEditor;
 
   @override
   Widget build(BuildContext context) {
+    final panels = sheetPanelsOf(
+      character: model.sheet,
+      rulesBind: model.rulesBind,
+      onOpen: onOpen,
+      inlineEditor: inlineEditor,
+    );
+
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.keyK, control: true):
@@ -211,87 +210,72 @@ class _SlowBench extends StatelessWidget {
           controller: scroll,
           child: SingleChildScrollView(
             controller: scroll,
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-            child: SelectionArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  CommandPalette(
-                    controller: palette,
-                    character: model.sheet,
-                    onSelected: onOpen,
-                  ),
-                  const SizedBox(height: 20),
-                  for (final title in _slow)
-                    if (panels[title] case final Widget panel) ...[
-                      panel,
-                      const SizedBox(height: 16),
-                    ],
-                ],
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: _recordColumnWidth,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ⚠️ **Not inside the `SelectionArea`.** A search field
+                    // wrapped in one takes the region's gestures instead of its
+                    // own; the sheet keeps selection because every number on it
+                    // is one somebody wants to quote.
+                    CommandPalette(
+                      controller: palette,
+                      character: model.sheet,
+                      onSelected: onOpen,
+                    ),
+                    const SizedBox(height: 20),
+                    SelectionArea(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final title in _record)
+                            if (panels[title] case final Widget panel) ...[
+                              panel,
+                              const SizedBox(height: 16),
+                            ],
+                        ],
+                      ),
+                    ),
+                    // ⚠️ **The items sit directly above the numbers they
+                    // move.** That adjacency is the whole reason §8c wanted the
+                    // two screens merged, and it is the last thing left of R1
+                    // now that the pin is gone.
+                    InventoryPanels(
+                      character: () => model.character,
+                      onAdd: model.addItem,
+                      partyPosition: model.state.selectedIndex,
+                      onRemove: model.removeItem,
+                      party: [
+                        for (final member in model.state.members) member.name,
+                      ],
+                      onMoveTo: (item, to) => model.moveItem(
+                        from: model.state.selectedIndex,
+                        to: to,
+                        itemIndex: item.index,
+                        resref: item.resref,
+                      ),
+                      // ⚠️ The palette holds the focus, so Ctrl+K works the
+                      // moment the grid opens. Two boxes cannot both have it.
+                      autofocusSearchField: false,
+                    ),
+                    const SizedBox(height: 20),
+                    CompactNumbers(
+                      character: model.sheet,
+                      panels: _numbers,
+                      rulesBind: model.rulesBind,
+                      onOpen: onOpen,
+                      inlineEditor: inlineEditor,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The right bench: the items, and the numbers they move directly beneath.
-///
-/// ⚠️ **One scroll region, not two.** The items lead because they are what this
-/// column is for; the numbers follow because an equip is only worth watching if
-/// the number it moves is the next thing down.
-class _FastBench extends StatelessWidget {
-  const _FastBench({
-    required this.model,
-    required this.scroll,
-    required this.onOpen,
-    required this.inlineEditor,
-  });
-
-  final GridSpikeModel model;
-  final ScrollController scroll;
-  final ValueChanged<Subject> onOpen;
-
-  /// What to draw beneath a number that is open for editing.
-  final Widget? Function(Subject subject) inlineEditor;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scrollbar(
-      controller: scroll,
-      child: SingleChildScrollView(
-        controller: scroll,
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            InventoryPanels(
-              character: () => model.character,
-              onAdd: model.addItem,
-              partyPosition: model.state.selectedIndex,
-              onRemove: model.removeItem,
-              party: [for (final member in model.state.members) member.name],
-              onMoveTo: (item, to) => model.moveItem(
-                from: model.state.selectedIndex,
-                to: to,
-                itemIndex: item.index,
-                resref: item.resref,
-              ),
-              // ⚠️ The slow bench holds the focus, so Ctrl+K works the moment
-              // the grid opens. Two boxes cannot both have it.
-              autofocusSearchField: false,
-            ),
-            const SizedBox(height: 20),
-            CompactNumbers(
-              character: model.sheet,
-              panels: _numbers,
-              rulesBind: model.rulesBind,
-              onOpen: onOpen,
-              inlineEditor: inlineEditor,
-            ),
-          ],
         ),
       ),
     );

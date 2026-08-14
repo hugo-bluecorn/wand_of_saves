@@ -316,3 +316,49 @@ leftmost column; the items and the numbers share a column with the items above; 
 inside the numbers block and `20 → 19` writes with Save going live; a slow-bench row still edits
 inline; Ctrl+K still reaches the palette; an added item still drags to the other five portraits.
 `analyze` clean, `dart format` a no-op, 844 + 399 green.
+
+### Amended again — the two content columns became one
+
+**Third change, same day, also the user's: the middle and right columns are merged.** G1 is now
+**the party rail and one column**, which is the shape `inventory-merge-review.md` §7 called
+**option A** — the inventory joining the sheet's single column as panels — arrived at by building
+rather than by argument. **D15's single column, extended.** The two benches G1 is named for no
+longer exist; the name is kept because it is what the study and D19 call this variant.
+
+The column's order keeps the two old columns' relative order, so it reads: field palette →
+Character, Abilities, Skills, Proficiencies → **inventory** → Combat, Resistances, Condition. That
+preserves the sheet's authored order *and* leaves the items directly above the numbers equipment
+moves, which is the last thing left of R1. Width is capped at **900** and centred — the
+inventory's number rather than the sheet's 820, because the 4 × 4 backpack is now in the same
+column and is what wants the width. That is the 820-vs-900 reconciliation the merge review lists
+as a constraint, settled here by the first surface that has to hold both.
+
+| | pinned band | merged fast bench | one column |
+|---|---|---|---|
+| minimum width | 940 | 720 | **520** |
+| minimum height | 740 | 300 | **300** |
+
+⚠️ **And here is the cost, measured, which is the strongest argument against this order.** In one
+column the record comes before the items, and the record is long:
+
+| | starts at |
+|---|---|
+| Abilities | 411 |
+| **the inventory** | **1,438** |
+| the numbers | 1,960 |
+
+**The backpack is below the fold at every window size the app allows** — you scroll past the whole
+record to reach the thing you came to drag. ⚠️ **And the real figure is worse than this**: the
+measurement ran with an empty proficiency catalogue, so it has **no Proficiencies panel at all**.
+With a real installation's twenty-four proficiencies that panel adds roughly another 1,100 points,
+putting the inventory about **2,500 points down**.
+
+**The fix, if the user wants it, is one line: lead the column with the inventory** — the same
+instruction that was given for the centre column before the merge, applied to the merged one. It
+would put the items first, the numbers they move second, and the read-once panels last. Not done
+unasked, because it inverts the sheet's authored reading order, which is D15's other half.
+
+Re-proved after this change, again as throwaway tests run green and deleted: one content column
+beside the party, in that order; a record row and a number both expand the editor beneath
+themselves and `20 → 19` writes with Save going live; Ctrl+K still reaches the palette; an added
+item still drags to the other five portraits.
