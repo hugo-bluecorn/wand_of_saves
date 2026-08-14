@@ -19,15 +19,16 @@
 ///
 /// - **Across the top, the party**: portraits that accept a dropped item, who
 ///   this is, and the chrome — one band the width of the page.
-/// - **Left column**: the field palette, then Character — which now ends with
-///   fatigue and intoxication — Abilities, Skills, the Resistances as pills,
-///   and anything in no slot.
+/// - **Heading the page, Combat**: the full width of both columns, its
+///   eighteen rows split into three. It is the one panel neither half owns —
+///   the items move its numbers and the record explains them — so it belongs
+///   above both rather than inside either, and at the top of the scroll it is
+///   what an unscrolled window opens on.
+/// - **Left column**: Character — which now ends with fatigue and
+///   intoxication — Abilities, Skills, the Resistances as pills, and anything
+///   in no slot.
 /// - **Right column**: the **backpack**, what is **Equipped**, and the
 ///   **Proficiencies**.
-/// - **Across the foot, Combat**: the full width of both columns, its eighteen
-///   rows split into three. It is the one panel neither half owns — the items
-///   move its numbers and the record explains them — so it belongs under both
-///   rather than inside either.
 ///
 /// ⚠️ **That split is a balance, chosen by measuring rather than by meaning.**
 /// The obvious division — record on the left, items on the right — left the
@@ -52,7 +53,7 @@
 /// the record at all.
 ///
 /// ⚠️ **The name is historical**, and so are the study's scores for this
-/// variant. Four changes, all the user's, all made after looking at the built
+/// variant. Six changes, all the user's, all made after looking at the built
 /// spike, none of them what the paper derived:
 ///
 /// 1. **The party stopped being a column at all.** The study put it on the
@@ -70,14 +71,15 @@
 /// 4. **The items lead their own column**, which is what puts the backpack back
 ///    above the fold: stacked under the record it began 1,438 points down, and
 ///    about 2,500 with a real installation's proficiencies.
-/// 5. **Condition stopped being a panel** and Combat became the page's footer.
+/// 5. **Condition stopped being a panel**, and Combat became a band across
+///    both columns — first at the foot of the page, then at its head.
 /// 6. **The field palette is gone**, and with it Ctrl+K and the findings
 ///    badge's destination — see above.
 ///
-/// The one thing left over from the pin is the **compact** rendering of the
-/// last three panels: it was what made a pinned band possible at all, and the
-/// user chose it. It now sits under an inventory drawn at full height, which is
-/// a difference a capture will show.
+/// The one thing left over from the pin is the **compact** rendering: it was
+/// what made a pinned band possible at all, and the user chose it. Combat and
+/// the Resistances are still drawn that way while every panel around them is
+/// drawn at full height, which is a difference a capture will show.
 library;
 
 import 'package:flutter/material.dart';
@@ -89,7 +91,7 @@ import 'package:wand_of_saves/ui/grid_spikes/grid_spike_host.dart';
 import 'package:wand_of_saves/ui/grid_spikes/member_switcher.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 
-/// Combat, drawn across the foot of the page.
+/// Combat, drawn across the head of the page.
 ///
 /// ⚠️ **A line per number, in three columns.** Its rows carry what the engine
 /// draws instead of what is stored, which is the comparison they are here for —
@@ -218,6 +220,22 @@ class _G1BodyState extends State<_G1Body> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // ⚠️ **Combat heads the page**, across both columns and
+                      // the full width of them, split into three. It is the
+                      // one panel neither half owns — the items move its
+                      // numbers and the record explains them — and at the top
+                      // of the scroll it is what an unscrolled window opens
+                      // on, which is the nearest thing left to R1's pin now
+                      // that nothing is pinned.
+                      CompactNumbers(
+                        character: model.sheet,
+                        panels: _combat,
+                        rulesBind: model.rulesBind,
+                        onOpen: _open,
+                        inlineEditor: _editorFor,
+                        columns: 3,
+                      ),
+                      const SizedBox(height: 20),
                       // ⚠️ **The two columns, and the reason this is a
                       // `Row` inside the scroll view rather than two
                       // scroll views in a `Row`.** The page is one
@@ -241,20 +259,6 @@ class _G1BodyState extends State<_G1Body> {
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 20),
-                      // ⚠️ **Combat is the page's footer**, under both
-                      // columns and the full width of them, split into
-                      // three. It is the one panel neither half owns: the
-                      // items move its numbers and the record explains
-                      // them.
-                      CompactNumbers(
-                        character: model.sheet,
-                        panels: _combat,
-                        rulesBind: model.rulesBind,
-                        onOpen: _open,
-                        inlineEditor: _editorFor,
-                        columns: 3,
                       ),
                     ],
                   ),

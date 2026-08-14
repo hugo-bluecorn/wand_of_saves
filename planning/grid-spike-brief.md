@@ -606,3 +606,53 @@ Re-proved: no `CommandPalette` and no `SearchBar` on the page; Ctrl+K does nothi
 still opens under a footer number and `20 → 19` writes with Save going live; an added item is
 draggable with six portrait targets. Minimum window unchanged at **1,260 × 160**. `analyze` clean,
 `dart format` a no-op, 844 + 399 green.
+
+### Combat moved from the foot of the page to its head — and that gets R1 back
+
+**Eighth change, the user's, and the smallest one with the largest effect on what the study
+cared about.**
+
+```
+┌──────────────────────────── PARTY BAND ────────────────────────────┐
+│ Conan · Fighter 1 · 325 XP  [Con][Imo][Jah][Kha][Xza]  ⚑3 ↶ ↷ Save │
+├────────────────────────────────────────────────────────────────────┤
+│ Combat                                        ▲ top of the scroll  │
+│  THAC0 (base)   20 │ Save vs. death 14 │ AC crushing        0      │
+│  AC (natural)   10 │ Save vs. wands 16 │ AC missile         0      │
+│  AC (effective) 10 │ …                 │ Morale · Luck             │
+├───────────────────────────────┬────────────────────────────────────┤
+│ Character  … Fatigue · Intox. │ Inventory                          │
+│ Abilities                     │  ⌕ Find an item · the 4 × 4 grid    │
+│ Skills                        │ Equipped                           │
+│ Resistances  [pills]          │ Proficiencies                      │
+│ In no slot                    │                                    │
+└───────────────────────────────┴────────────────────────────────────┘
+```
+
+**Measured**, 1,700 × 1,400 with twenty-four proficiencies:
+
+| | |
+|---|---|
+| party band | 16–133 |
+| **Combat** | **170–389**, x 50–1,650 — full width, 219 tall |
+| both columns start | 409 |
+| minimum window | 1,260 × 160, unchanged |
+
+⚠️ **This is the closest anything has come to R1 since the pin was given up.** The numbers
+equipment moves are what an unscrolled window opens on, and the backpack starts 20 points beneath
+them — so an equip and the number it changes are **both on screen at once, at every window height
+the app allows**, without anything being pinned and without the band that cost 750 points and left
+the backpack 78. **W-A6** is a glance again rather than a scroll, and it costs nothing this time.
+
+It also puts the page in a defensible reading order for the first time: the party, then what the
+character *is in a fight*, then who they are on the left and what they carry on the right.
+
+Re-proved: Combat is first in the scroll, above both columns, and more than 1.9× either's width;
+the editor still opens under one of its numbers and `20 → 19` writes with Save going live; the item
+search still adds and the added item drags to six portrait targets. `analyze` clean, `dart format`
+a no-op, 844 + 399 green.
+
+⚠️ **Two stale doc comments were corrected in the same commit**, because a comment describing
+behaviour the code no longer has is a bug report: the file still said "four changes" over a list of
+six, and still described the compact rendering as sitting "under an inventory drawn at full
+height".
