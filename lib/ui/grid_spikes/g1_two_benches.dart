@@ -19,16 +19,20 @@
 ///
 /// - **Across the top, the party**: portraits that accept a dropped item, who
 ///   this is, and the chrome — one band the width of the page.
-/// - **The page, in two columns**: on the left the field palette, the read-once
-///   panels — Character, Abilities, Skills — anything in no slot, and the
-///   numbers equipment moves — Combat, Resistances, Condition. On the right the
-///   **backpack**, what is **Equipped**, and the **Proficiencies**.
+/// - **Left column**: the field palette, then Character — which now ends with
+///   fatigue and intoxication — Abilities, Skills, the Resistances as pills,
+///   and anything in no slot.
+/// - **Right column**: the **backpack**, what is **Equipped**, and the
+///   **Proficiencies**.
+/// - **Across the foot, Combat**: the full width of both columns, its eighteen
+///   rows split into three. It is the one panel neither half owns — the items
+///   move its numbers and the record explains them — so it belongs under both
+///   rather than inside either.
 ///
 /// ⚠️ **That split is a balance, chosen by measuring rather than by meaning.**
 /// The obvious division — record on the left, items on the right — left the
 /// left column about twice the height of the right. Twenty-four pip meters is
-/// the one block big enough to move the other way, and the numbers are the one
-/// block small enough to come back.
+/// the one block big enough to move the other way.
 ///
 /// ⚠️ **One page, not two panes.** The two columns share a single scroll, so
 /// the record and the items move together and the page reads as one document
@@ -76,13 +80,20 @@ import 'package:wand_of_saves/ui/grid_spikes/grid_spike_host.dart';
 import 'package:wand_of_saves/ui/grid_spikes/member_switcher.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 
-/// The panels that sit beside the items because equipment moves them, and how
-/// dense each may be. ⚠️ **Combat keeps a line per number** — its rows carry
-/// what the engine draws instead, which is the comparison they are here for.
-const Map<String, CompactStyle> _numbers = {
-  'Combat': CompactStyle.lines,
+/// Combat, drawn across the foot of the page.
+///
+/// ⚠️ **A line per number, in three columns.** Its rows carry what the engine
+/// draws instead of what is stored, which is the comparison they are here for —
+/// so they cannot become pills. Eighteen of them down a single file under a
+/// page twice as wide as it is tall is what the three columns answer.
+const Map<String, CompactStyle> _combat = {'Combat': CompactStyle.lines};
+
+/// The resistances, under Skills, as pills.
+///
+/// Eleven values, each a word and a percentage, none of which the engine draws
+/// differently. A line each would spend three hundred points saying `0%`.
+const Map<String, CompactStyle> _resistances = {
   'Resistances': CompactStyle.flowing,
-  'Condition': CompactStyle.flowing,
 };
 
 /// The panels the left-hand column leads with, in the sheet's own order.
@@ -92,6 +103,11 @@ const Map<String, CompactStyle> _numbers = {
 /// twice the height of the right; twenty-four pip meters is the one block big
 /// enough to move the other way.
 const List<String> _record = ['Character', 'Abilities', 'Skills'];
+
+/// ⚠️ **Condition is not a panel any more.** Fatigue and intoxication are two
+/// values about the person, and a card of its own for two rows was a heading
+/// costing more than what it headed. They are the last two rows of Character.
+const Map<String, String> _folded = {'Condition': 'Character'};
 
 /// How wide the two columns together run before they stop growing.
 ///
@@ -171,6 +187,7 @@ class _G1BodyState extends State<_G1Body> {
       rulesBind: model.rulesBind,
       onOpen: _open,
       inlineEditor: _editorFor,
+      foldInto: _folded,
     );
 
     return Column(
@@ -193,29 +210,48 @@ class _G1BodyState extends State<_G1Body> {
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: _pageWidth),
-                      // ⚠️ **The two columns, and the reason this is a `Row`
-                      // inside the scroll view rather than two scroll views in
-                      // a `Row`.** The page is one document: one scrollbar
-                      // moves both, and the page is as tall as its taller
-                      // column.
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: _RecordColumn(
-                              model: model,
-                              palette: _palette,
-                              panels: panels,
-                              onOpen: _open,
-                              inlineEditor: _editorFor,
-                            ),
+                          // ⚠️ **The two columns, and the reason this is a
+                          // `Row` inside the scroll view rather than two
+                          // scroll views in a `Row`.** The page is one
+                          // document: one scrollbar moves both.
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _RecordColumn(
+                                  model: model,
+                                  palette: _palette,
+                                  panels: panels,
+                                  onOpen: _open,
+                                  inlineEditor: _editorFor,
+                                ),
+                              ),
+                              const SizedBox(width: _columnGap),
+                              Expanded(
+                                child: _ItemsColumn(
+                                  model: model,
+                                  panels: panels,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: _columnGap),
-                          Expanded(
-                            child: _ItemsColumn(
-                              model: model,
-                              panels: panels,
-                            ),
+                          const SizedBox(height: 20),
+                          // ⚠️ **Combat is the page's footer**, under both
+                          // columns and the full width of them, split into
+                          // three. It is the one panel neither half owns: the
+                          // items move its numbers and the record explains
+                          // them.
+                          CompactNumbers(
+                            character: model.sheet,
+                            panels: _combat,
+                            rulesBind: model.rulesBind,
+                            onOpen: _open,
+                            inlineEditor: _editorFor,
+                            columns: 3,
                           ),
                         ],
                       ),
@@ -279,23 +315,23 @@ class _RecordColumn extends StatelessWidget {
             ],
           ),
         ),
-        // ⚠️ **Items no slot points at, over here with the record rather than
-        // with the backpack.** They are not a place anything can be put and
-        // the game will not draw them at all, so they read as something wrong
-        // with the record — which is what this column is about.
-        _Items(model: model, groups: const [CarriedGroup.inNoSlot]),
-        const SizedBox(height: 20),
-        // Selectable, because every number here is one somebody wants to quote
-        // — and unlike the items opposite, nothing in this block drags.
+        // Under Skills, because a resistance is a thing the character has
+        // rather than a thing they do. Selectable, and nothing here drags.
         SelectionArea(
           child: CompactNumbers(
             character: model.sheet,
-            panels: _numbers,
+            panels: _resistances,
             rulesBind: model.rulesBind,
             onOpen: onOpen,
             inlineEditor: inlineEditor,
           ),
         ),
+        const SizedBox(height: 20),
+        // ⚠️ **Items no slot points at, over here with the record rather than
+        // with the backpack.** They are not a place anything can be put and
+        // the game will not draw them at all, so they read as something wrong
+        // with the record — which is what this column is about.
+        _Items(model: model, groups: const [CarriedGroup.inNoSlot]),
       ],
     );
   }

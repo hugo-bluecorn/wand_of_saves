@@ -68,6 +68,7 @@ class CompactNumbers extends StatelessWidget {
     required this.rulesBind,
     required this.onOpen,
     this.inlineEditor,
+    this.columns = 1,
     super.key,
   });
 
@@ -87,6 +88,18 @@ class CompactNumbers extends StatelessWidget {
   /// What to draw beneath a row that is open, the same hook `sheetPanelsOf`
   /// takes — so a number edits where it lives, exactly as a full row does.
   final Widget? Function(Subject subject)? inlineEditor;
+
+  /// How many columns a [CompactStyle.lines] panel splits its rows across.
+  ///
+  /// One by default. More is for a panel drawn across the full width of a page
+  /// rather than inside one of its columns: Combat is eighteen rows, which is
+  /// a very long single file under a page that is twice as wide as it is.
+  ///
+  /// ⚠️ **Split in reading order, not balanced by height.** The rows go 1–6,
+  /// 7–12, 13–18 down each column in turn; nothing measures anything. An
+  /// algorithm balancing them is D17's zigzag, which this project has paid for
+  /// once already.
+  final int columns;
 
   @override
   Widget build(BuildContext context) {
@@ -109,17 +122,7 @@ class CompactNumbers extends StatelessWidget {
             PanelCard(
               title: title,
               children: switch (style) {
-                CompactStyle.lines => [
-                  for (final entry in rows) ...[
-                    _CompactRow(
-                      entry: entry,
-                      finding: flagged[entry.key],
-                      rulesBind: rulesBind,
-                      onTap: () => onOpen(FieldSubject(entry)),
-                    ),
-                    ?inlineEditor?.call(FieldSubject(entry)),
-                  ],
-                ],
+                CompactStyle.lines => _lines(rows, flagged),
                 CompactStyle.flowing => [
                   Wrap(
                     spacing: 6,
@@ -143,6 +146,51 @@ class CompactNumbers extends StatelessWidget {
             ),
       ],
     );
+  }
+
+  /// [rows] as lines, in one column or split across [columns] of them.
+  List<Widget> _lines(List<FieldEntry> rows, Map<String, Finding> flagged) {
+    final cells = [
+      for (final entry in rows)
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _CompactRow(
+              entry: entry,
+              finding: flagged[entry.key],
+              rulesBind: rulesBind,
+              onTap: () => onOpen(FieldSubject(entry)),
+            ),
+            ?inlineEditor?.call(FieldSubject(entry)),
+          ],
+        ),
+    ];
+    if (columns <= 1) return cells;
+
+    final perColumn = (cells.length / columns).ceil();
+    return [
+      Row(
+        // ⚠️ `start`, so a column with fewer rows — or one with an editor open
+        // in it — does not stretch its neighbours to match.
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var column = 0; column < columns; column++) ...[
+            if (column > 0) const SizedBox(width: 24),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: cells
+                    .skip(column * perColumn)
+                    .take(perColumn)
+                    .toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ];
   }
 }
 

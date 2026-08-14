@@ -520,3 +520,59 @@ If the band is kept, `min_width` wants raising to about 1,280. That is a one-lin
 Re-proved: the band sits above both columns with six drop targets; the editor still opens under a
 number and writes with Save going live; one item search box; an added item is draggable; Ctrl+K
 reaches the palette. `analyze` clean, `dart format` a no-op, 844 + 399 green.
+
+### Condition folded away, Resistances under Skills, Combat as a footer
+
+**Sixth change, the user's, and the first to touch the sheet's own grouping rather than only its
+arrangement.**
+
+```
+┌──────────────────────────── PARTY BAND ────────────────────────────┐
+│ Conan · Fighter 1 · 325 XP  [Con][Imo][Jah][Kha][Xza]  ⚑3 ↶ ↷ Save │
+├───────────────────────────────┬────────────────────────────────────┤
+│ ⌕ Ctrl+K                      │ Inventory                          │
+│ Character  … Fatigue · Intox. │  ⌕ Find an item · the 4 × 4 grid    │
+│ Abilities                     │ Equipped                           │
+│ Skills                        │ Proficiencies                      │
+│ Resistances  [pills]          │                                    │
+│ In no slot                    │                                    │
+├───────────────────────────────┴────────────────────────────────────┤
+│ Combat                                                             │
+│  THAC0 (base)   20 │ Save vs. death 14 │ AC crushing        0      │
+│  AC (natural)   10 │ Save vs. wands 16 │ AC missile         0      │
+│  AC (effective) 10 │ …                 │ Morale · Luck             │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+- **Condition is not a panel any more.** Its two rows — fatigue and intoxication — are the last two
+  rows of Character. A card of its own for two values was a heading costing more than what it
+  headed. ⚠️ **The projection was not changed**: `sheetPanelsOf` gained a `foldInto` parameter
+  naming which groups join which panel, empty by default, so the production sheet still draws
+  Condition exactly as it did. `sheetPanelOrder` still names it and simply finds nothing.
+- **Resistances moved under Skills**, still as pills — eleven values, each a word and a percentage,
+  none of which the engine draws differently.
+- **Combat became the page's footer**, spanning both columns at the full 1,600 and splitting its
+  eighteen rows into three. It is the one panel neither half owns: the items move its numbers and
+  the record explains them, so it sits under both rather than inside either. ⚠️ The three columns
+  are filled **in reading order, 1–6 · 7–12 · 13–18** — nothing measures anything and nothing
+  balances. Balancing by height is D17's zigzag.
+
+**Measured**, at 1,700 × 1,400 with twenty-four proficiencies:
+
+| | |
+|---|---|
+| left column | ends 1,802 (Skills 1,115–1,670, Resistances 1,686–1,802) |
+| right column | ends 1,622 |
+| **footer** | 1,842–2,061, x 50–1,650 — the full width, 219 tall |
+| minimum window | **1,260 × 160**, unchanged — the band still sets it |
+
+⚠️ **The columns are now nearly level**: 1,802 against 1,622, where the first attempt was 2.1 : 1.
+Moving Combat out from under either of them is what did the rest of the balancing that the
+Proficiencies swap started.
+
+Re-proved: no panel headed Condition anywhere, and Fatigue and Intoxication are inside the
+Character card; Resistances is in the same column as Skills and directly below it; the footer
+begins below both columns and is more than 1.9× either's width; `THAC0 (base)` sits at x 66 and
+`Luck` at x 1,127, which is three columns and not one; the editor still opens under a number in
+the footer and writes with Save going live; one item search box, an added item draggable, six
+portrait targets, Ctrl+K live. `analyze` clean, `dart format` a no-op, 844 + 399 green.

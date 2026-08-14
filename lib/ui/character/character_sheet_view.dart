@@ -114,11 +114,17 @@ const List<String> sheetPanelOrder = [
 /// [inlineEditor] is asked about every row as it is built, and whatever it
 /// returns is drawn directly beneath that row. `null` — the single column's
 /// answer, and the default — draws nothing extra, so the sheet is unchanged.
+///
+/// [foldInto] names groups that should not get a panel of their own, mapping
+/// each to the panel its rows join instead — `{'Condition': 'Character'}` puts
+/// fatigue and intoxication at the end of the Character panel and leaves no
+/// Condition panel at all. Empty by default, so the sheet is unchanged.
 Map<String, Widget> sheetPanelsOf({
   required SheetCharacter character,
   required bool rulesBind,
   required ValueChanged<Subject> onOpen,
   Widget? Function(Subject subject)? inlineEditor,
+  Map<String, String> foldInto = const {},
 }) {
   final index = indexOf(character);
   final flagged = <String, Finding>{
@@ -127,6 +133,10 @@ Map<String, Widget> sheetPanelsOf({
   };
 
   final built = <String, Widget>{};
+  // ⚠️ Rows are collected before any panel is built, because folding means one
+  // panel can draw more than one group's worth of them.
+  final gathered = <String, List<FieldEntry>>{};
+  final notes = <String, String?>{};
   for (final section in character.sections) {
     if (section.title == 'Abilities') {
       built['Abilities'] = _Abilities(
@@ -144,23 +154,28 @@ Map<String, Widget> sheetPanelsOf({
           if (entry.group == group) entry,
       ];
       if (rows.isEmpty) continue;
-      built[group.title] = PanelCard(
-        title: group.title,
-        note: group.note,
-        children: [
-          for (final entry in rows) ...[
-            if (entry != rows.first) const Divider(),
-            _ValueRow(
-              entry: entry,
-              finding: flagged[entry.key],
-              rulesBind: rulesBind,
-              onTap: () => onOpen(FieldSubject(entry)),
-            ),
-            ?inlineEditor?.call(FieldSubject(entry)),
-          ],
-        ],
-      );
+      final panel = foldInto[group.title] ?? group.title;
+      (gathered[panel] ??= []).addAll(rows);
+      notes[panel] ??= group.note;
     }
+  }
+  for (final MapEntry(key: title, value: rows) in gathered.entries) {
+    built[title] = PanelCard(
+      title: title,
+      note: notes[title],
+      children: [
+        for (final entry in rows) ...[
+          if (entry != rows.first) const Divider(),
+          _ValueRow(
+            entry: entry,
+            finding: flagged[entry.key],
+            rulesBind: rulesBind,
+            onTap: () => onOpen(FieldSubject(entry)),
+          ),
+          ?inlineEditor?.call(FieldSubject(entry)),
+        ],
+      ],
+    );
   }
   if (character.proficiencies.isNotEmpty) {
     built['Proficiencies'] = _Proficiencies(
