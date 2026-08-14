@@ -100,6 +100,20 @@ class ItemEntry {
   bool get isOfferable =>
       _firstNonEmpty(identifiedName, unidentifiedName) != null;
 
+  /// The name the *game* would draw, given whether the carrier identified it.
+  ///
+  /// ⚠️ **A rule about the engine, not a layout choice, which is why it lives
+  /// here and not in a widget.** With the flag clear BG:EE shows the plain name
+  /// — "Belt", never "Belt of Antipode" — and `Aard1.chr` carries exactly that
+  /// case. Two surfaces ask this question, the backpack cell and the equipped
+  /// row, and a copy of the rule in each is how they drift apart.
+  ///
+  /// Falls back to whichever name exists when the other does not, and to `null`
+  /// when neither does; the resref is always there to show instead.
+  String? nameWhen({required bool identified}) => identified
+      ? _firstNonEmpty(identifiedName, unidentifiedName)
+      : _firstNonEmpty(unidentifiedName, identifiedName);
+
   /// A copy carrying resolved text.
   ItemEntry withNames({
     String? identified,

@@ -402,13 +402,21 @@ class _Carried extends StatelessWidget {
           // doll, not a list — but "equipped" is its word, running right
           // through the item descriptions ("when equipped", "cannot be
           // equipped"). Borrowed, not coined.
-          _Panel(title: 'Equipped', items: worn, row: _row, isStuck: isStuck),
+          _Panel(
+            title: 'Equipped',
+            items: worn,
+            row: _row,
+            isStuck: isStuck,
+            describe: describe,
+          ),
         if (loose.isNotEmpty)
           _Panel(
             title: 'In no slot',
             items: loose,
             row: _row,
             isStuck: isStuck,
+            describe: describe,
+            note: 'No slot points at these, so the game will not show them.',
           ),
       ],
     );
@@ -444,9 +452,7 @@ class _Carried extends StatelessWidget {
   /// itself — and this project has already shipped a findings badge whose every
   /// entry repeated the two chips beside it.
   static String? _where(CarriedItem item) {
-    if (!item.isInASlot) {
-      return 'no slot points at it — the game will not show it';
-    }
+    if (!item.isInASlot) return null;
     final slot = CreItemSlot.values[item.slotIndex];
     return slot.isPack ? null : slotLabel(slot);
   }
@@ -475,7 +481,12 @@ String slotLabel(CreItemSlot slot) => switch (slot) {
   CreItemSlot.armor => 'Armor', // 11997 — the game's spelling, so it wins here
   CreItemSlot.shield => 'Shield', // 12006 — holds an off-hand weapon too
   CreItemSlot.gloves => 'Gauntlets', // 11998
-  CreItemSlot.leftRing || CreItemSlot.rightRing => 'Ring', // 6348
+  // ⚠️ The game's talk table has *Ring* (6348) and nothing distinguishing the
+  // hands, so the qualifier is ours — the same honest gap as the numerals
+  // below. Both slots sharing one label left a character wearing two rings
+  // with two identical rows and no way to tell which was which.
+  CreItemSlot.leftRing => 'Left Ring', // 6348 + ours
+  CreItemSlot.rightRing => 'Right Ring', // 6348 + ours
   CreItemSlot.amulet => 'Amulet', // 12000
   CreItemSlot.belt => 'Belt', // 12001
   CreItemSlot.boots => 'Boots', // 12005
@@ -505,29 +516,53 @@ class _Panel extends StatelessWidget {
     required this.items,
     required this.row,
     required this.isStuck,
+    required this.describe,
+    this.note,
   });
 
   final String title;
   final List<CarriedItem> items;
   final Widget Function(CarriedItem, Widget) row;
   final bool Function(String resref) isStuck;
+  final ItemEntry? Function(String resref) describe;
+
+  /// The name the game would draw, or `null` when the catalogue cannot say.
+  String? _named(CarriedItem item) =>
+      describe(item.resref)?.nameWhen(identified: item.isIdentified);
+
+  /// A qualifier for the panel as a whole.
+  ///
+  /// ⚠️ **Once, not per row.** A panel that states its own meaning should not
+  /// repeat it on every line — the same reasoning that took the redundant
+  /// "Inventory" subtitle off the backpack rows.
+  final String? note;
 
   @override
   Widget build(BuildContext context) => PanelCard(
     title: title,
-
-    trailing: Tag('${items.length}', caption: 'items'),
+    note: note,
     children: [
       for (final item in items)
         row(
           item,
           ListTile(
             dense: true,
-            title: Text(item.resref),
-            subtitle: switch (_Carried._where(item)) {
-              final String where => Text(where),
+            // ⚠️ **The slot leads, and the warnings trail.** "Which slot" is an
+            // identifier; "cannot be moved" is a caveat. Mixed together the eye
+            // cannot tell what is describing the row from what is warning about
+            // it.
+            leading: switch (_Carried._where(item)) {
+              final String where => Tag(where),
               null => null,
             },
+            // The name the game would draw, by the same rule the cell uses —
+            // shared through the domain rather than copied, because a copy in
+            // each surface is how the two came to disagree in the first place.
+            // ⚠️ The code is the subtitle only when there is a name above it;
+            // with no game installed the row would otherwise say the code
+            // twice.
+            title: Text(_named(item) ?? item.resref),
+            subtitle: _named(item) == null ? null : Text(item.resref),
             trailing: Wrap(
               spacing: 8,
               children: [
@@ -586,7 +621,6 @@ class _Backpack extends StatelessWidget {
 
     return PanelCard(
       title: 'Inventory',
-      trailing: Tag('${items.length}/${slots.length}', caption: 'slots'),
       children: [
         for (var start = 0; start < slots.length; start += _columns)
           Padding(
@@ -645,11 +679,8 @@ class InventoryCell extends StatelessWidget {
   /// catalogue is empty; the code below is always there to read.
   String? get _name {
     final carried = item;
-    final known = entry;
-    if (carried == null || known == null) return null;
-    return carried.isIdentified
-        ? known.identifiedName ?? known.unidentifiedName
-        : known.unidentifiedName ?? known.identifiedName;
+    if (carried == null) return null;
+    return entry?.nameWhen(identified: carried.isIdentified);
   }
 
   @override

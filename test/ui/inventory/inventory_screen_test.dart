@@ -111,7 +111,6 @@ void main() {
     // empty backpack shows sixteen empty slots, so the capacity is countable
     // rather than merely asserted to be unused.
     expect(find.byType(InventoryCell), findsNWidgets(16));
-    expect(find.text('0/16'), findsOneWidget);
   });
 
   testWidgets('lists what the character carries', (tester) async {
@@ -463,7 +462,9 @@ void main() {
         expect(find.text(leaked), findsNothing, reason: leaked);
       }
       expect(find.text('Boots'), findsOneWidget);
-      expect(find.text('Ring'), findsOneWidget);
+      // ⚠️ Was 'Ring' — both hands shared one label, so a character wearing two
+      // could not tell the rows apart.
+      expect(find.text('Left Ring'), findsOneWidget);
       expect(find.text('Weapon 1'), findsOneWidget);
     });
 
@@ -491,10 +492,11 @@ void main() {
         ]),
         onAdd: (_, _) {},
       );
-      // Two carried, one worn — not three and three. The backpack counts
-      // against its capacity now; the Equipped list counts plainly.
-      expect(find.text('2/16'), findsOneWidget);
-      expect(find.text('1'), findsOneWidget);
+      // ⚠️ No counts anywhere: sixteen cells with two filled IS the count, and
+      // the Equipped rows are countable by eye. A badge restating what is drawn
+      // is the findings-badge-reading-13 failure.
+      expect(find.textContaining('/16'), findsNothing);
+      expect(find.text('items'), findsNothing);
     });
   });
 
@@ -675,6 +677,97 @@ void main() {
         findsOneWidget,
         reason: 'BOOT01 only — fourteen empties and BOW99 must not drag',
       );
+    });
+  });
+
+  group('an equipped row describes an item the way a cell does', () {
+    testWidgets('⚠️ name as title, code as subtitle, slot as a leading tag', (
+      tester,
+    ) async {
+      // The defect a screenshot of Xzar exposed: the grid said "The Paws of the
+      // Cheetah / BOOT01" while the Equipped list said "BOOT01 / Boots" — the
+      // same item, the same screen, two descriptions.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 8),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      expect(find.text('The Paws of the Cheetah'), findsOneWidget);
+      expect(find.text('BOOT01'), findsOneWidget);
+      expect(find.text('Boots'), findsOneWidget, reason: 'the slot tag');
+    });
+
+    testWidgets('⚠️ the identified rule reaches the row, not just the cell', (
+      tester,
+    ) async {
+      // Mutating `nameWhen` must redden this AND the cell's test — the proof
+      // the rule is shared rather than copied into each surface.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(
+            resref: 'BELT16',
+            index: 0,
+            slotIndex: 7,
+            isIdentified: false,
+          ),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      // ⚠️ Twice, and that is not a defect: an unidentified BELT16 is called
+      // "Belt" and it sits in the slot the game also calls "Belt", so the title
+      // and the slot tag read the same. The claim under test is the absence of
+      // the identified name.
+      expect(find.text('Belt'), findsNWidgets(2));
+      expect(find.text('Belt of Antipode'), findsNothing);
+    });
+
+    testWidgets('⚠️ two rings are tellable apart', (tester) async {
+      // Both slots mapped to "Ring", so a character wearing two could not tell
+      // which row was which. Slot 4 is the left ring, slot 5 the right.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'RING01', index: 0, slotIndex: 4),
+          CarriedItem(resref: 'RING06', index: 1, slotIndex: 5),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      expect(find.text('Left Ring'), findsOneWidget);
+      expect(find.text('Right Ring'), findsOneWidget);
+      expect(find.text('Ring'), findsNothing, reason: 'ambiguous on its own');
+    });
+
+    testWidgets('falls back to the code with no catalogue', (tester) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'XYZZY01', index: 0, slotIndex: 8),
+        ]),
+        onAdd: (_, _) {},
+      );
+      expect(find.text('XYZZY01'), findsWidgets);
+      expect(find.text('Boots'), findsOneWidget);
+    });
+
+    testWidgets('the no-slot warning is said once, by the panel', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: -1),
+          CarriedItem(resref: 'RING01', index: 1, slotIndex: -1),
+        ]),
+        onAdd: (_, _) {},
+      );
+      // Two rows, one explanation — not the sentence repeated per row.
+      expect(find.textContaining('will not'), findsOneWidget);
     });
   });
 }

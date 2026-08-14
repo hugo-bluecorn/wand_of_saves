@@ -228,4 +228,51 @@ void main() {
       );
     });
   });
+
+  group('ItemEntry.nameWhen', () {
+    // ⚠️ **The rule about what the ENGINE draws, so it lives in the domain.**
+    // Two surfaces need it — the backpack cell and the equipped row — and a
+    // copy in each is how they drift apart, which is the defect being fixed.
+    const both = ItemEntry(
+      resref: 'BELT16',
+      itemType: 8,
+      identifiedName: 'Belt of Antipode',
+      unidentifiedName: 'Belt',
+    );
+
+    test('identified draws its name, unidentified draws the plain one', () {
+      expect(both.nameWhen(identified: true), 'Belt of Antipode');
+      expect(
+        both.nameWhen(identified: false),
+        'Belt',
+        reason: 'the engine shows "Belt" with the flag clear',
+      );
+    });
+
+    test('each falls back to the other when its own is missing', () {
+      const identifiedOnly = ItemEntry(
+        resref: 'RING01',
+        itemType: 10,
+        identifiedName: 'Ring of Protection +1',
+      );
+      const unidentifiedOnly = ItemEntry(
+        resref: 'MISC01',
+        itemType: 0,
+        unidentifiedName: 'A rock',
+      );
+
+      expect(
+        identifiedOnly.nameWhen(identified: false),
+        'Ring of Protection +1',
+        reason: 'better the wrong register than no name at all',
+      );
+      expect(unidentifiedOnly.nameWhen(identified: true), 'A rock');
+    });
+
+    test('answers null when it knows no name, rather than inventing one', () {
+      const nameless = ItemEntry(resref: 'GHOST1', itemType: 0);
+      expect(nameless.nameWhen(identified: true), isNull);
+      expect(nameless.nameWhen(identified: false), isNull);
+    });
+  });
 }
