@@ -917,4 +917,95 @@ void main() {
       expect(moved.single, ('BOOT01', 2));
     });
   });
+
+  group('⚠️ an equipped item has nowhere to be moved to', () {
+    Future<void> openMenu(WidgetTester tester, {int at = 0}) async {
+      final button = find.byIcon(Icons.more_horiz).at(at);
+      await tester.ensureVisible(button);
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('an EQUIPPED row offers no Move to at all', (tester) async {
+      // ⚠️ **The bug this fixes.** The menu offered `Move to → <member>` on
+      // every row while `MoveItem` refuses anything outside a backpack slot, so
+      // choosing a member for an equipped item threw. The drag path had the
+      // rule right; the menu had a second copy of it, wrong.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 8),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: (_) {},
+        party: const ['Conan', 'Imoen', 'Xzar'],
+        draggable: true,
+        onMoveTo: (_, _) {},
+      );
+
+      await openMenu(tester);
+      expect(find.text('Move to'), findsNothing);
+      expect(find.text('Remove'), findsOneWidget, reason: 'still removable');
+    });
+
+    testWidgets('a BACKPACK row still offers it', (tester) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: (_) {},
+        party: const ['Conan', 'Imoen', 'Xzar'],
+        draggable: true,
+        onMoveTo: (_, _) {},
+      );
+
+      await openMenu(tester);
+      expect(find.text('Move to'), findsOneWidget);
+    });
+
+    testWidgets('⚠️ an IMMOVABLE backpack item offers no Move to either', (
+      tester,
+    ) async {
+      // The second half of the same bug: handing `BOW99` on would simply
+      // strand it on somebody else. The drag already refused it; the menu did
+      // not, because it carried its own copy of the rule.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOW99', index: 0, slotIndex: 21),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: (_) {},
+        party: const ['Conan', 'Imoen', 'Xzar'],
+        draggable: true,
+        onMoveTo: (_, _) {},
+      );
+
+      await openMenu(tester);
+      expect(find.text('Move to'), findsNothing);
+      expect(find.text('Remove'), findsOneWidget);
+    });
+
+    testWidgets('an item in NO slot offers no Move to either', (tester) async {
+      // It is not in a backpack slot, so the command would refuse it just the
+      // same.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: -1),
+        ]),
+        onAdd: (_, _) {},
+        onRemove: (_) {},
+        party: const ['Conan', 'Imoen', 'Xzar'],
+        draggable: true,
+        onMoveTo: (_, _) {},
+      );
+
+      await openMenu(tester);
+      expect(find.text('Move to'), findsNothing);
+    });
+  });
 }

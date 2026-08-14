@@ -161,6 +161,46 @@ rediscovered as a surprise.
 | **Categories** | `itemType` → `ITEMCAT.IDS`. Swords, bows, helms. |
 | **Two columns** | ⚠️ D15/D17 fixed **single column for the character sheet**, deliberately. The inventory is a different surface — a picker beside a grid — so two columns is not a contradiction, but it must be a **stated** divergence rather than a quiet one. |
 
+### ⚠️ 8c Equip and unequip are a PHASE, and the reason is already measured — 2026-08-14
+
+The user asked for equip/unequip and then immediately named the blocker themselves: the character's
+numbers would have to move with the item. They are right, and this project measured why on
+2026-08-08 — see `verified-format-offsets.md` §"Stored vs displayed":
+
+> *"since the engine reads a stored effective armour class rather than recomputing it from what is
+> worn, equipping an item in this editor will **not** update armour class on its own. That is EE
+> Keeper's 'Recalculate Stats', and it is now known to be required rather than optional."*
+
+⚠️ **So there is no small safe version.** Unequipping writes two slot words and nothing else — the
+cheapest edit this application could make — and it leaves the stored effective armour class claiming
+armour the character is no longer wearing. The engine reads that value. **A save that loads and is
+quietly wrong is this project's stated worst failure mode**, and unequip-without-recalculation is
+not a smaller feature, it is the one that produces such a save.
+
+**What recalculation needs.** The data is present and unread: `featureBlockOffset` (ITM `0x6a`),
+`equippingIndex` (`0x6e`) and `equippingCount` (`0x70`) select the feature window that applies while
+an item is worn. Using it means **interpreting opcodes** — armour class, THAC0, saving throws,
+abilities, resistances — and their stacking rules. ⚠️ **EE Keeper under Wine is the only oracle** for
+how those derived values should come out; that is already recorded in
+`verified-format-offsets.md:1635`.
+
+⚠️ **And equipping cannot be validated from any data BG:EE ships.** IESDP states `itmslots.2da` is
+*"only available in PSTEE"*, the player's own installation returns **0 tables matching it**,
+`itemtype.2da`'s `SLOT` is `-1` for every everyday type, and the shipped creature records give a
+**superset** rather than a rule — rings hold amulets twenty times over. So which slot may take which
+item is, today, unknowable from data.
+
+⚠️ **A consequence for the UI, raised by the user and worth deciding deliberately.** If moving an
+item moves the character's numbers, then a screen that shows the item and hides the numbers makes the
+change invisible — the failure recorded in `behaviour-without-appearance-is-invisible`. That argues
+for folding the inventory **into** the character sheet, which reopens two recorded decisions: the
+inventory as *"a pushed route, not a panel"* (thirty-four slots would swamp the sheet) and **D15**'s
+single column. Reopen them on purpose or not at all.
+
+**Shipped meanwhile:** the item menu offers `Move to` only for a backpack item the engine can
+actually move. An equipped row offers `Remove` alone — removal needs no derived numbers, because the
+item leaves the record rather than lingering as a stale bonus.
+
 ### ⚠️ 8b Item pictures need a BAM decoder, and that is its own phase
 
 The user asked for the item's picture in each slot with the name on hover. The icon is a **BAM**

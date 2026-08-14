@@ -142,6 +142,23 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     return null;
   }
 
+  /// Whether [item] may be handed to another character at all.
+  ///
+  /// ⚠️ **Backpack slots only, and equipment is not an oversight.** `MoveItem`
+  /// refuses anything else, and the reason it must is recorded: the engine
+  /// reads a *stored* effective armour class rather than recomputing it from
+  /// what is worn, so taking a worn item off without recalculating leaves the
+  /// character carrying its protection while not wearing it. That is a save
+  /// that loads and is quietly wrong, which is the failure this project exists
+  /// to avoid. Equipping and unequipping wait for "Recalculate Stats".
+  bool _movesBetweenCharacters(CarriedItem item) =>
+      widget.partyPosition != null &&
+      item.isInASlot &&
+      CreItemSlot.values[item.slotIndex].isPack &&
+      // ⚠️ And not something the engine refuses to move at all — handing
+      // `BOW99` on would simply strand it on somebody else instead.
+      _catalogue.entries[item.resref]?.isMovable != false;
+
   /// The menu for [item], or `null` when no action is on offer.
   ///
   /// Built here rather than in the widgets because it is the caller's
@@ -149,7 +166,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   /// already follow.
   Widget? _menuFor(CarriedItem item) {
     final remove = widget.onRemove;
-    final moveTo = widget.onMoveTo;
+    // ⚠️ **The same predicate the drag uses**, and that is the fix rather than
+    // a tidy-up: the menu carried a second copy of this rule and got it wrong,
+    // offering a move that `MoveItem` refuses and so threw on the way through.
+    final moveTo = _movesBetweenCharacters(item) ? widget.onMoveTo : null;
     final owner = widget.partyPosition;
     final elsewhere = [
       for (final (position, name) in widget.party.indexed)
@@ -219,6 +239,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
     );
   }
 
+  ItemCatalogue get _catalogue =>
+      ref.read(itemCatalogueProvider).value ?? ItemCatalogue.empty;
+
   Widget _body(BuildContext context) {
     final catalogue =
         ref.watch(itemCatalogueProvider).value ?? ItemCatalogue.empty;
@@ -255,6 +278,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
                     ),
                   _Carried(
                     menu: _menuFor,
+                    canMove: _movesBetweenCharacters,
                     items: _items,
                     from: widget.partyPosition,
                     // ⚠️ Cross-referenced from the catalogue: the creature
@@ -411,6 +435,7 @@ class _Carried extends StatelessWidget {
     required this.isStuck,
     required this.describe,
     required this.menu,
+    required this.canMove,
     this.from,
   });
 
@@ -425,6 +450,13 @@ class _Carried extends StatelessWidget {
   /// What can be done with an item, or `null` when nothing is on offer.
   final Widget? Function(CarriedItem item) menu;
 
+  /// Whether an item may be handed to another character.
+  ///
+  /// ⚠️ **Supplied, not recomputed.** This rule had two copies — one here for
+  /// the drag and one in the menu — and only the drag's was right, so the menu
+  /// offered a move the command refuses and threw on the way through.
+  final bool Function(CarriedItem item) canMove;
+
   /// The owner's party position, when there is somebody to hand items to.
   final int? from;
 
@@ -434,16 +466,7 @@ class _Carried extends StatelessWidget {
   /// off would change a *stored* effective armour class the engine reads rather
   /// than recomputes — so the sheet would disagree with the game with nothing
   /// on screen to say why.
-  bool _movable(CarriedItem item) =>
-      from != null &&
-      item.isInASlot &&
-      CreItemSlot.values[item.slotIndex].isPack &&
-      // ⚠️ **An item the engine will not move must not be draggable either.**
-      // `MoveItem` would carry it out at the byte level perfectly happily and
-      // leave it stuck on somebody else instead. This gate lives here rather
-      // than in the command because the command works on bytes alone and has
-      // no way to reach the archives to ask.
-      !isStuck(item.resref);
+  bool _movable(CarriedItem item) => canMove(item);
 
   bool _isPack(CarriedItem item) =>
       item.isInASlot && CreItemSlot.values[item.slotIndex].isPack;
