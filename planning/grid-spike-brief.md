@@ -474,3 +474,49 @@ Re-proved: Proficiencies really are in the right-hand column; one item search bo
 editor still opens under a number and writes; the added item is in a backpack cell with its
 `Draggable` and five portrait targets; Ctrl+K reaches the palette. `analyze` clean, `dart format` a
 no-op, 844 + 399 green.
+
+### The party became a band across the top — and G1 met G2
+
+**Fifth change, the user's: the party column moves to the top as a row spanning the page.**
+
+```
+┌──────────────────────────── PARTY BAND ────────────────────────────┐
+│ Conan · Fighter 1 · 325 XP  [Con][Imo][Jah][Kha][Xza]  ⚑3 ↶ ↷ Save │
+├───────────────────────────────┬────────────────────────────────────┤
+│ ⌕ Ctrl+K                      │ Inventory                          │
+│ Character · Abilities · Skills│  ⌕ Find an item · the 4 × 4 grid    │
+│ In no slot                    │ Equipped                           │
+│ Combat · Resistances          │ Proficiencies                      │
+│ Condition                     │                                    │
+└───────────────────────────────┴────────────────────────────────────┘
+```
+
+⚠️ **G1 now has G2's chrome.** The band is `MemberSwitcher` — **G2's widget, reused, not a second
+one** — because `NavigationRail` is vertical by construction and a party laid across a band needs
+the other thing. Two horizontal switchers would be two answers to "which portraits will take a
+drop", which is the bug this project keeps paying for. So the variants no longer disagree about
+where the party lives, and the study's **W-X1** row cannot separate them at all now.
+
+**And the drag changed shape rather than distance.** Pack → member used to travel one column (the
+study's derivation), then the whole window (the left-hand column), and now travels *up* — with
+every portrait the same distance from the backpack, which is the one thing neither edge placement
+gave. **W-A2**'s margin is gone either way.
+
+| | party as a column | party as a band |
+|---|---|---|
+| minimum width | 880 | **1,260** |
+| minimum height | 300 | **160** |
+| band height | — | 116 |
+
+⚠️ **This is the first time G1 asks for more than the application will guarantee.** The window's
+own floor is **900 × 600** (`linux/runner/my_application.cc`, untouched per the brief), so a window
+can be made narrower than G1 now needs and the band will overflow. The band is what costs it:
+identity 300 + six portraits ~550 + chrome ~400 leaves nothing to give. **G2 measured 1,240 for the
+same reason** — the two variants have converged on the same minimum, from opposite directions.
+
+If the band is kept, `min_width` wants raising to about 1,280. That is a one-line change to
+`my_application.cc` and the brief reserves it: report the number, do not make the change.
+
+Re-proved: the band sits above both columns with six drop targets; the editor still opens under a
+number and writes with Save going live; one item search box; an added item is draggable; Ctrl+K
+reaches the palette. `analyze` clean, `dart format` a no-op, 844 + 399 green.

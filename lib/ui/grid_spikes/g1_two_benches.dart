@@ -14,10 +14,11 @@
 
 /// ⚠️ **THROWAWAY** — see `grid_spike_host.dart`.
 ///
-/// **G1, as the user has reshaped it: the party, and one page in two columns.**
+/// **G1, as the user has reshaped it: a party band, and one page in two
+/// columns.**
 ///
-/// - **Left, the party**: portraits that accept a dropped item, the identity,
-///   and the chrome. Its own column, its own height.
+/// - **Across the top, the party**: portraits that accept a dropped item, who
+///   this is, and the chrome — one band the width of the page.
 /// - **The page, in two columns**: on the left the field palette, the read-once
 ///   panels — Character, Abilities, Skills — anything in no slot, and the
 ///   numbers equipment moves — Combat, Resistances, Condition. On the right the
@@ -42,10 +43,13 @@
 /// variant. Four changes, all the user's, all made after looking at the built
 /// spike, none of them what the paper derived:
 ///
-/// 1. **The party column moved from the right edge to the left.** The study put
-///    it on the right so the dominant drag — pack → member — travelled one
-///    column instead of the window. It now travels the window. That was G1's
-///    margin on the **W-A2** script.
+/// 1. **The party stopped being a column at all.** The study put it on the
+///    right edge so the dominant drag — pack → member — travelled one column
+///    instead of the window; it went to the left edge, and is now a band across
+///    the top. The drag travels up rather than sideways, and every portrait is
+///    the same distance from the backpack. That was G1's margin on the **W-A2**
+///    script, and it is spent. ⚠️ It also makes G1's chrome the same shape as
+///    G2's, which is one fewer thing the two variants disagree about.
 /// 2. **The numbers stopped being pinned.** Measured, the band cost ~750 points
 ///    and left 78 for the backpack at 1280 × 860 — R1's pin was bought at the
 ///    price of the thing it sat above. **W-A6** is a scroll again.
@@ -66,10 +70,10 @@ import 'package:flutter/services.dart';
 import 'package:wand_of_saves/ui/character/character_sheet_view.dart';
 import 'package:wand_of_saves/ui/character/command_palette.dart';
 import 'package:wand_of_saves/ui/character/findings.dart';
-import 'package:wand_of_saves/ui/character/portrait_rail.dart';
 import 'package:wand_of_saves/ui/character/side_sheet.dart';
 import 'package:wand_of_saves/ui/grid_spikes/compact_numbers.dart';
 import 'package:wand_of_saves/ui/grid_spikes/grid_spike_host.dart';
+import 'package:wand_of_saves/ui/grid_spikes/member_switcher.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 
 /// The panels that sit beside the items because equipment moves them, and how
@@ -88,9 +92,6 @@ const Map<String, CompactStyle> _numbers = {
 /// twice the height of the right; twenty-four pip meters is the one block big
 /// enough to move the other way.
 const List<String> _record = ['Character', 'Abilities', 'Skills'];
-
-/// How wide the party column is. **Authored, not computed.**
-const double _partyColumnWidth = 232;
 
 /// How wide the two columns together run before they stop growing.
 ///
@@ -172,13 +173,10 @@ class _G1BodyState extends State<_G1Body> {
       inlineEditor: _editorFor,
     );
 
-    return Row(
+    return Column(
       children: [
-        SizedBox(
-          width: _partyColumnWidth,
-          child: _PartyColumn(model: model, onFindings: _palette.openView),
-        ),
-        const VerticalDivider(width: 1),
+        _PartyBand(model: model, onFindings: _palette.openView),
+        const Divider(height: 1),
         Expanded(
           child: CallbackShortcuts(
             bindings: <ShortcutActivator, VoidCallback>{
@@ -375,19 +373,36 @@ class _Items extends StatelessWidget {
   );
 }
 
-/// The left column: who else is in the party, who this is, and the chrome.
-class _PartyColumn extends StatelessWidget {
-  const _PartyColumn({required this.model, required this.onFindings});
+/// The band across the top: who this is, who else is in the party, and the
+/// chrome.
+///
+/// ⚠️ **`MemberSwitcher` rather than `PortraitRail`, and it is G2's.**
+/// `NavigationRail` is vertical by construction, so a party laid across a band
+/// needs the other widget — the one G2 already had. Writing a second horizontal
+/// switcher for G1 would be two answers to "which portraits will take a drop",
+/// which is the bug this project keeps paying for.
+class _PartyBand extends StatelessWidget {
+  const _PartyBand({required this.model, required this.onFindings});
 
   final GridSpikeModel model;
   final VoidCallback onFindings;
 
+  /// How wide the identity gets. Stated, because the switcher beside it must
+  /// not move when a character with a longer name is selected.
+  static const double _identityWidth = 300;
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: PortraitRail(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: _identityWidth,
+            child: SheetIdentity(character: model.sheet),
+          ),
+          const SizedBox(width: 16),
+          MemberSwitcher(
             state: model.state,
             slotDirectoryName: model.slotDirectoryName,
             onItemDropped: (drag, to) => model.moveItem(
@@ -397,24 +412,10 @@ class _PartyColumn extends StatelessWidget {
               resref: drag.resref,
             ),
           ),
-        ),
-        const Divider(height: 1),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-          child: SheetIdentity(character: model.sheet),
-        ),
-        const Divider(height: 1),
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: spikeChrome(context, model, onFindings: onFindings),
-          ),
-        ),
-      ],
+          const Spacer(),
+          ...spikeChrome(context, model, onFindings: onFindings),
+        ],
+      ),
     );
   }
 }
