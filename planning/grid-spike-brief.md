@@ -104,3 +104,158 @@ Per the study's map, a fixed three-column grid, authored positions, no `MediaQue
 
 The captures go back to the review session / the user; **the user's eyes close D19**. Nothing
 in this brief decides which grid wins.
+
+---
+
+## Build report
+
+**Built 2026-08-14 on branch `spike/grid-variants`.** `fvm flutter analyze` clean, `dart format`
+a no-op across 242 files, **844 app tests + 399 format tests green**, zero suppressions
+(the D8 grep returns nothing). Both spikes reachable, and everything the brief calls "working"
+was exercised before hand-over — see *What was proved* below.
+
+### ⚠️ The one deviation, and it was brought back as a question
+
+**G1's pinned band could not exist as the brief drew it.** Measured, the three panels the brief
+pins are:
+
+| panel | height at 520 pt wide |
+|---|---|
+| Combat | **934** |
+| Resistances | **604** |
+| Condition | 163 |
+
+**≈ 1,700 pt** — about twice the whole window, before the item search and the backpack start.
+(Combat alone is eighteen rows; Resistances is eleven.) So the band was put to the user with
+three options, and the user chose: **draw the pinned numbers compactly.** That is
+`lib/ui/grid_spikes/compact_numbers.dart` — one line per number (label · stored · `in game`),
+without the arithmetic line, the two limits, the ⓘ and the finding's sentence, all of which stay
+one tap away in the editor.
+
+⚠️ **It is a second *rendering* and not a second *copy*.** R1 of the study forbids a summary
+strip, and the reason it gives is duplication. On G1 these three panels appear **nowhere else** —
+the slow bench holds Character, Abilities, Skills and Proficiencies and nothing more — so each
+number still exists exactly once, and it sits where the items are, which is what R1 asks for. The
+rows are read out of `indexOf()`, so a field added to the projection appears in the band without
+that file being touched.
+
+Two densities, because two kinds of panel: **Combat keeps a line per number** (its rows carry
+what the engine draws instead, which is the comparison the pin is *for*); **Resistances and
+Condition flow** as captioned pills, because eleven rows saying `0%` is three hundred points
+spent on nothing. That flowing style still promotes an `in game` value to its own pill if one
+ever appears.
+
+### Measurements — reported, not acted on
+
+⚠️ **Every width below is an over-estimate.** `flutter test` draws with a font whose every glyph
+is a full em square, so labels wrap earlier than they will on screen; heights are close to true,
+widths are pessimistic. The real minimum is somewhere at or below each figure. **The window
+minimum in `linux/runner/my_application.cc` was not touched** — it is still 900 × 600, default
+1280 × 720.
+
+| | smallest window with no overflow | driven by |
+|---|---|---|
+| **G1** | **940 × 740** (740 measured at 1600 wide; at 1280 wide the floor is ≈ 785) | the pinned band's height; the 480 + 232 fixed columns |
+| **G2** | **1240 × 360** | the top band's row — 260 identity + ~550 switcher + ~340 chrome; the columns themselves scroll, so height barely binds |
+
+⚠️ **G1's minimum height is not a constant**, because the band's labels rewrap as the centre
+column changes width. That is text reflow inside a fixed cell rather than the layout rearranging,
+so it does not break the no-`LayoutBuilder` rule — but it means "the minimum window" is a curve
+for G1 and a point for G2.
+
+**Does G1's pinned band leave the backpack usable height?** This is the brief's second
+measurement and the answer is **no, not until the window is very tall**:
+
+| window | pinned band | left for search + backpack |
+|---|---|---|
+| 1280 × 720 *(the app's own default)* | 753 | **−62 — it does not fit at all** |
+| 1280 × 860 *(the study's estimate)* | 753 | **78** — less than one row of cells (a cell is 84 tall) |
+| 1440 × 900 | 725 | 146 |
+| 1920 × 1080 | 697 | 354 — about three of the four rows |
+| 2560 × 1440 | 669 | 742 — all four, with room |
+
+So even compacted by a thousand points, **the numbers G1 pins cost most of the window.** The
+lower region scrolls, so nothing is lost or clipped — but G1's central claim (an equip changes a
+number you can already see, with the items right there) is only true on a large monitor. That is
+a finding for D19 rather than something to fix here.
+
+### The entry point — which option was taken
+
+A debug-only block at the bottom of the home screen (`_LayoutSpikes` in
+`lib/ui/saves/home_screen.dart`, guarded by `kDebugMode`), with `G1 — Two benches` and
+`G2 — Ledger grid`. **It opens the most recently modified save** — the browser already sorts that
+way, and that is `000000023-Conan Inventory Move`, the six-member party the study asks for. The
+row names the save, so it is never a guess which file is open. Each button is a plain
+`Navigator.push`; **no route was added**, per the brief.
+
+### Reused · extracted · stubbed
+
+**Reused unchanged:** `PortraitRail`, `PortraitTile`, `CommandPalette`, `SideSheet`, `PanelCard`,
+`Tag`/`stateTagFor`, `ScreenTone`, `SaveButton`, `RulesToggle`, `FindingsBadge`, `PipMeter`,
+`ItemDrag`/`ItemDragFeedback`, `ItemMenu`, `InventoryCell`, `sheetCharacterFrom`, `indexOf`,
+`findingsFor`, `partyProvider` and every `EditCommand`.
+
+**Extracted — mechanical, behaviour-preserving, and all 844 tests still pass:**
+
+| what | where | why |
+|---|---|---|
+| `sheetPanelsOf()` + `sheetPanelOrder` | `character_sheet_view.dart` | the panels, by name, so a grid can put named panels in named cells. `CharacterSheetView` now draws `.values`; the ordering rule stays one copy. Gained an optional `inlineEditor` hook, which the single column passes as `null` |
+| `_Identity` → `SheetIdentity` | same | G1's party column names the character |
+| `SubjectEditor` | `side_sheet.dart` | the editor lifted out of the `Drawer`. `SideSheet` is now `Drawer(SafeArea(SubjectEditor))` and nothing else. `fillsHeight: false` is what lets G1 expand it beneath a row. **Every rule about what an edit means stays in one place** |
+| `subjectKey()` | same | was the private `_identityOf`; G1 needs the same answer to decide which row is open |
+| `subjectsMatching()`, `PaletteRow`, `PaletteEmpty`, `canOpenSubject()` | `command_palette.dart` | G2's unified find **composes** the palette's matcher rather than writing a second one |
+| `InventoryPanels` + `ItemSearchField`, `ItemResults`, `CarriedSections`, `CarriedPanel`, `BackpackGrid` | `inventory_screen.dart` | everything `InventoryScreen` held except its Scaffold. `InventoryScreen` now renders `InventoryPanels` inside the same scroll shell. Two new parameters, both defaulting to today's behaviour: `query` (for a surface whose search box lives elsewhere — G2) and `autofocusSearchField` (two boxes on one grid cannot both take focus) |
+| `firstFreePackSlot()` / `hasPackRoom()` | **new** `lib/ui/inventory/pack_slots.dart` | ⚠️ the free-slot rule had two copies already (the inventory's and the rail's) and G2 would have made a third. It is now one, which also does §7 constraint 4c of the merge review ahead of time |
+
+**Stubbed or omitted — nothing was invented:**
+
+- **No weight, no capacity, no equip effects.** The app does not compute them, so they appear
+  nowhere on either grid. `known-defects.md` §8 still owns them.
+- **No item detail/properties panel.** Same reason — §8's third open item.
+- **G1's party column has no Export button.** It is not in the brief's list for that cell and it
+  is not part of what D19 decides.
+- **`SelectionArea` covers the record columns only**, not the item cells, on both grids —
+  a drag and a selection gesture over the same cell is a fight neither spike needs to pick.
+
+### Interpretations worth flagging, none of them silent
+
+1. **A pinned row's editor opens below the band, not inside it** (G1). Expanding it inside would
+   change the band's height, which is the one thing a pin may not do. It opens at the top of the
+   scrolling region immediately beneath — still inline, still adjacent, and the numbers stay put.
+   Slow-bench rows expand beneath themselves exactly as the brief says.
+2. **G2 shows item results twice, from one search**: in the find's own dropdown (labelled by
+   kind) and in column 3, which the study's map draws as "item results". Both read the same
+   `ItemCatalogue.search(query)` call — one engine, two views — and choosing an item closes the
+   box **on the query rather than on the item's name**, so the results the column is showing
+   survive the add.
+3. **G2's switcher makes a drop target of all six portraits; G1's rail makes five.** Not a
+   difference in behaviour — the rail simply does not build a target for the selected member,
+   because that is always the one the item is leaving, and G2's target refuses a self-drop. Worth
+   knowing if you count them in a capture.
+4. **Neither spike has an app bar.** The chrome lives in the cell the study puts it in, and a bar
+   above that would both duplicate it and steal 56 points from the height being measured. The way
+   out is the ✕ in each grid's own chrome.
+
+### What was proved before hand-over
+
+⚠️ **The window is native Wayland and this session cannot drive it or capture it**, so the
+interactions were exercised as throwaway widget tests, run green, and then deleted (spike screens
+are exempt from test-first; leaving tests behind for code that is about to be deleted is not). All
+eight passed:
+
+- **G1** — the compact band renders; a band row (`THAC0 (base)`) opens `SubjectEditor` and **no**
+  `SideSheet`; a slow-bench row (`Strength`) expands the editor inline, `18 → 17` applies, the row
+  redraws and **Save goes live**; Ctrl+K opens the field palette; an added item is a
+  `Draggable<ItemDrag>` with five live portrait targets.
+- **G2** — one query (`strength`) returns **both kinds under both headings** — *On this record*
+  and *In the item catalogue* — with a field and an item matching at once; choosing the field
+  opens the `SideSheet`; an edit through it applies and Save goes live; there is **no**
+  `ItemSearchField` anywhere, so the band's one box really is the only way in; adding through it
+  puts the item in the backpack; six switcher targets.
+
+### Owed to the user
+
+The captures. Per spike: the full window at the measured minimum and at a comfortable size;
+mid-drag over the party tiles; the editor open (G1 inline / G2 sheet); and the find showing
+results for a query matching both a field and an item — `strength` is the one to type, and on G2
+it is the whole result-mixing question in one picture.
