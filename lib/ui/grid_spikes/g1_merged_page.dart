@@ -427,6 +427,13 @@ class _Items extends StatelessWidget {
     // hold it was removed at the seventh change, and an autofocused search box
     // would open the page with a cursor blinking mid-column.
     autofocusSearchField: false,
+    // ⚠️ **Vertical here, horizontal on the pushed screen, and the difference
+    // is where the targets are.** The party is a band across the TOP of this
+    // page and the equipment slots sit BELOW the backpack, so both of the drops
+    // this arrangement offers are vertical ones. The price is Flutter's own:
+    // a vertical draggable out-competes the scrollable, so a pull that starts
+    // on an item picks the item up instead of scrolling the page.
+    dragAffinity: Axis.vertical,
   );
 }
 

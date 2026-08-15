@@ -110,6 +110,34 @@ Future<void> pump(
   await tester.pumpAndSettle();
 }
 
+/// The panels on their own, the way a grid places them — no Scaffold, no rail.
+Future<void> pumpPanels(
+  WidgetTester tester, {
+  required Character character,
+  Axis dragAffinity = Axis.horizontal,
+}) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        itemCatalogueProvider.overrideWith((ref) async => _catalogue),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: InventoryPanels(
+              character: () => character,
+              onAdd: (_, _) {},
+              partyPosition: 0,
+              dragAffinity: dragAffinity,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
     '⚠️ the scrollbar has a position on the platform the app ships on',
@@ -426,6 +454,55 @@ void main() {
       await tester.pump();
 
       expect(find.byType(ItemDragFeedback), findsOneWidget);
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('⚠️ but the geometry is the SURFACE’s to name', (
+      tester,
+    ) async {
+      // ⚠️ **Because the party is not always to the left.** On the merged page
+      // the portraits are a band across the TOP and the equipment slots sit
+      // BELOW the backpack, so both of the drops that page will offer are
+      // vertical. The direction is a property of where the targets are, which
+      // only the surface knows — so it is a parameter, and the default is what
+      // the production screen has always done.
+      await pumpPanels(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+        dragAffinity: Axis.vertical,
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('BOOT01')),
+      );
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+
+      expect(find.byType(ItemDragFeedback), findsOneWidget);
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('the default is still horizontal when nobody names one', (
+      tester,
+    ) async {
+      await pumpPanels(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 21),
+        ]),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('BOOT01')),
+      );
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump();
+
+      expect(find.byType(ItemDragFeedback), findsNothing);
       await gesture.up();
       await tester.pumpAndSettle();
     });

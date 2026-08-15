@@ -222,6 +222,7 @@ class InventoryPanels extends ConsumerStatefulWidget {
     this.groups = CarriedGroup.values,
     this.showSearchField = true,
     this.autofocusSearchField = true,
+    this.dragAffinity = Axis.horizontal,
     super.key,
   });
 
@@ -260,6 +261,10 @@ class InventoryPanels extends ConsumerStatefulWidget {
   /// whichever built last, which is not a decision the layout should make by
   /// accident.
   final bool autofocusSearchField;
+
+  /// Which way an item has to be pulled before it is picked up. See
+  /// [CarriedSections.dragAffinity].
+  final Axis dragAffinity;
 
   @override
   ConsumerState<InventoryPanels> createState() => _InventoryPanelsState();
@@ -370,6 +375,7 @@ class _InventoryPanelsState extends ConsumerState<InventoryPanels> {
           items: _items,
           groups: widget.groups,
           from: widget.partyPosition,
+          dragAffinity: widget.dragAffinity,
           // ⚠️ Cross-referenced from the catalogue: the creature record says
           // nothing about droppability, so a carried row can only explain
           // itself by asking the item.
@@ -553,6 +559,7 @@ class CarriedSections extends StatelessWidget {
     required this.canMove,
     this.groups = CarriedGroup.values,
     this.from,
+    this.dragAffinity = Axis.horizontal,
     super.key,
   });
 
@@ -581,6 +588,22 @@ class CarriedSections extends StatelessWidget {
 
   /// The owner's party position, when there is somebody to hand items to.
   final int? from;
+
+  /// Which way an item has to be pulled before it is picked up.
+  ///
+  /// ⚠️ **A property of where the drop targets are, so only the surface can
+  /// name it.** On the pushed inventory screen the party rail is down the
+  /// left-hand side and the answer is [Axis.horizontal] — which is also the
+  /// default, because it is the one this widget has always had.
+  ///
+  /// ⚠️ **And it is not free either way.** Flutter's own documentation on
+  /// `Draggable.affinity`: a draggable with null or vertical affinity "will
+  /// out-compete the Scrollable for vertical gestures". So [Axis.horizontal]
+  /// buys a scrollable list at the price of a sideways pull, and
+  /// [Axis.vertical] buys the natural pull towards a party band overhead at the
+  /// price of scrolling by dragging an item. Whichever a surface picks, it is
+  /// spending one of the two.
+  final Axis dragAffinity;
 
   /// Whether [item] can be dragged to another character.
   ///
@@ -659,16 +682,18 @@ class CarriedSections extends StatelessWidget {
 
   /// [row] made draggable, when the item may be handed to somebody else.
   ///
-  /// ⚠️ **`affinity: Axis.horizontal`, and the suite would not have caught
-  /// this.** Flutter's own documentation on the parameter: a draggable with
-  /// null or vertical affinity "will out-compete the Scrollable for vertical
-  /// gestures" — which would leave this list unscrollable, with every attempt
-  /// to scroll picking an item up instead. Horizontal keeps both alive, and it
-  /// is the natural direction anyway: the portraits are to the LEFT of here.
+  /// ⚠️ **The affinity matters and the suite would not have caught it.**
+  /// Flutter's own documentation on the parameter: a draggable with null or
+  /// vertical affinity "will out-compete the Scrollable for vertical gestures".
+  /// Naming an axis is therefore choosing which gesture survives, and the right
+  /// answer depends on where the drop targets are — a party rail down the left
+  /// wants [Axis.horizontal] and keeps scrolling; a party band across the top,
+  /// with equipment slots below, wants [Axis.vertical] and spends it. Whoever
+  /// places these panels decides; see [dragAffinity].
   Widget _row(CarriedItem item, Widget row) {
     if (!_movable(item)) return row;
     return Draggable<ItemDrag>(
-      affinity: Axis.horizontal,
+      affinity: dragAffinity,
       data: ItemDrag(
         from: from!,
         itemIndex: item.index,
