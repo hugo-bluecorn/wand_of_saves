@@ -903,7 +903,14 @@ spells it — with the pinning test updated.
    defaulting to `Axis.horizontal` (production unchanged — test-first on the default); the merged
    page passes `Axis.vertical`. Rewrite the "portraits are to the LEFT of here" comment to cover
    both geometries.
-6. Definition of done unchanged: `analyze` clean, `dart format` a no-op, both suites green, zero
+6. **Mark unidentified items at glance distance** (`InventoryCell`, production-shared) — the
+   user's resolution of the Belt/Belt collision, decided 2026-08-15: an unidentified item is a
+   **valid state the record already holds**, so the cell says so visibly — the item's *name*
+   takes a distinct treatment (muted or role-coloured per the theme's meaning-bearing rules — a
+   role colour, never another surface tone), in addition to the existing `unidentified` tag chip.
+   One rule, one place; the caption collision then dissolves because a slot caption and an
+   unidentified item stop reading as the same kind of word. **Test-first: production behaviour.**
+7. Definition of done unchanged: `analyze` clean, `dart format` a no-op, both suites green, zero
    suppressions, commits on this branch, **not pushed**, a report appended here, the app left
    running for the captures.
 
@@ -913,6 +920,7 @@ spells it — with the pinning test updated.
 2. Empty equipment cells toned — beside filled ones, and beside the backpack's untoned empties.
 3. Mid-drag, twice: backpack → band portrait (the vertical start), and backpack → a toned
    equipment cell, where nothing should invite the drop yet.
-4. The unidentified belt beside the empty *Belt* slot caption.
+4. The unidentified belt beside the empty *Belt* slot caption — now verifying the collision
+   **dissolves** under the glance-distance marking, rather than asking whether it matters.
 5. An inline editor open from a compact row, once per column.
 6. Dark and light of the same view.
