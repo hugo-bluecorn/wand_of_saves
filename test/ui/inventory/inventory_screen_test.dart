@@ -140,9 +140,10 @@ void main() {
     expect(find.text('Aard · Inventory'), findsOneWidget);
     // ⚠️ No "Nothing yet." any more, and that is the point of the grid: an
     // empty backpack shows sixteen empty slots and an empty Equipped shows its
-    // twenty-two, so the capacity is countable rather than merely asserted to
-    // be unused.
-    expect(find.byType(InventoryCell), findsNWidgets(16 + 22));
+    // twenty-one, so the capacity is countable rather than merely asserted to
+    // be unused. Twenty-one and not twenty-two: `magicWeapon` is the engine's
+    // own slot and appears only when the engine has filled it.
+    expect(find.byType(InventoryCell), findsNWidgets(16 + 21));
   });
 
   testWidgets('lists what the character carries', (tester) async {
@@ -734,6 +735,47 @@ void main() {
         findsOneWidget,
         reason: 'BOOT01 only — fourteen empties and BOW99 must not drag',
       );
+    });
+  });
+
+  group('⚠️ the slot the engine fills itself', () {
+    /// The cells of the Equipped grid, in the order they are drawn.
+    Finder cells() => find.descendant(
+      of: find.ancestor(
+        of: find.text('Equipped'),
+        matching: find.byType(SlotGrid),
+      ),
+      matching: find.byType(InventoryCell),
+    );
+
+    testWidgets('is not offered while it is empty', (tester) async {
+      // ⚠️ **Nobody puts anything there.** `magicWeapon` is filled by the
+      // engine, so an empty cell captioned "Magic weapon" offers an operation
+      // that is not merely unbuilt — it is not the player's to perform at all.
+      await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
+
+      expect(find.text('Magic weapon'), findsNothing);
+      expect(cells(), findsNWidgets(21));
+    });
+
+    testWidgets('⚠️ but an item the engine PUT there still draws', (
+      tester,
+    ) async {
+      // ⚠️ **The trap the inventory seed recorded.** A slot missing from the
+      // drawn list does not hide a caption, it hides an *item* — silently, on
+      // a screen whose whole job is to show the record. Slot 37 is
+      // `magicWeapon`.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'SW1H06', index: 0, slotIndex: 37),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      expect(find.text('Magic weapon'), findsOneWidget);
+      expect(find.text('SW1H06'), findsWidgets);
+      expect(cells(), findsNWidgets(22));
     });
   });
 

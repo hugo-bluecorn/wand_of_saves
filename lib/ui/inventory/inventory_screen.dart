@@ -630,13 +630,13 @@ class CarriedSections extends StatelessWidget {
         //
         // ⚠️ **Drawn whether anything is worn or not**, where the list it
         // replaced appeared only once something was. That inverted with the
-        // grid: a list of nothing is nothing, but twenty-two empty cells say
+        // grid: a list of nothing is nothing, but twenty-one empty cells say
         // *these are the places things go and all of them are free*, which is
         // the same thing the sixteen backpack cells have always said.
         if (groups.contains(CarriedGroup.equipped))
           SlotGrid(
             title: 'Equipped',
-            slots: equipmentSlots,
+            slots: equipmentSlotsFor(worn),
             items: worn,
             row: _row,
             describe: describe,
@@ -838,12 +838,20 @@ class CarriedPanel extends StatelessWidget {
   );
 }
 
-/// The twenty-two slots that are not the backpack, in an authored order.
+/// The twenty-one slots a player may put something in, in an authored order.
 ///
 /// ⚠️ **Not the record's order.** `CreItemSlot` stores the cloak between the
 /// fourth quiver and the first quick item; nobody reads what a person is
-/// wearing that way. Worn things first, then the weapons, the quivers, the
-/// quick slots, and last the one the engine fills itself.
+/// wearing that way. Worn things first, then the weapons, the quivers, and the
+/// quick slots.
+///
+/// ⚠️ **`magicWeapon` is deliberately absent, and [equipmentSlotsFor] is why
+/// that is safe.** The engine fills that slot itself, so an empty cell headed
+/// *Magic weapon* offers an operation which is not merely unbuilt — it is not
+/// the player's to perform at all. Drawing the list flat would then hide an
+/// item the engine really had put there, which is the trap this project
+/// recorded before the inventory was written: a slot missing from the drawn
+/// list does not hide a caption, it hides a row of the record.
 const List<CreItemSlot> equipmentSlots = [
   CreItemSlot.helmet,
   CreItemSlot.amulet,
@@ -866,8 +874,27 @@ const List<CreItemSlot> equipmentSlots = [
   CreItemSlot.quick1,
   CreItemSlot.quick2,
   CreItemSlot.quick3,
-  CreItemSlot.magicWeapon,
 ];
+
+/// [equipmentSlots], plus any slot [worn] actually occupies that the authored
+/// list does not name.
+///
+/// ⚠️ **The record wins over the list.** Today that means exactly one slot —
+/// `magicWeapon`, which is drawn when the engine has put something in it and
+/// not otherwise — but the rule is written against *any* omission, because the
+/// failure it prevents is silent. Appended at the end, in the record's own
+/// order, so the authored reading order is untouched when nothing is amiss.
+List<CreItemSlot> equipmentSlotsFor(Iterable<CarriedItem> worn) {
+  final extra = <CreItemSlot>{
+    for (final item in worn)
+      if (item.isInASlot) CreItemSlot.values[item.slotIndex],
+  }..removeAll(equipmentSlots);
+  if (extra.isEmpty) return equipmentSlots;
+  return [
+    ...equipmentSlots,
+    ...extra.toList()..sort((a, b) => a.index.compareTo(b.index)),
+  ];
+}
 
 /// A named run of slots, as cells rather than as a list of what is in them.
 ///
