@@ -26,7 +26,7 @@ import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/ui/character/portrait_image.dart';
 import 'package:wand_of_saves/ui/core/palette_finish.dart';
-import 'package:wand_of_saves/ui/grid_spikes/g1_two_benches.dart';
+import 'package:wand_of_saves/ui/grid_spikes/g1_merged_page.dart';
 import 'package:wand_of_saves/ui/saves/save_browser_viewmodel.dart';
 
 /// The lineup — the application's front door, and the Workbench structure D15
@@ -480,7 +480,7 @@ class _LayoutSpikes extends StatelessWidget {
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) =>
-                      G1TwoBenches(slotDirectoryName: slot.directoryName),
+                      G1MergedPage(slotDirectoryName: slot.directoryName),
                 ),
               ),
               child: const Text('G1 — the merged page'),

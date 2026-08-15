@@ -327,3 +327,18 @@ now derived from a corrected task inventory, not generated from pattern memory. 
 *Not done here, deliberately: no code was changed; engine-side assertions inside recorded claims
 were not re-tested against BG:EE; screen-reader behaviour was inferred from code shape, not
 heard. The fix work above enters plan mode as its own phase.*
+
+---
+
+## ⚠️ §7's recommendation is superseded — 2026-08-15
+
+Option A was recommended above on paper. The user instead required a **grid** (amended in place),
+commissioned `planning/tool-first-study.md`, had both grids built, reshaped one of them ten times
+and deleted the other. **D19 now decides on a single page — `G1MergedPage`, "the merged page" —
+recorded in `planning/grid-spike-brief.md`.**
+
+By arriving there through building rather than argument, the page landed close to option A anyway:
+one page per character with the inventory among its panels, a party rail turned into a band. **The
+findings in §1–§6 of this document stand;** only §7's recommendation is stale. §7 constraint 4c —
+the free-slot rule to one copy — was **done early** as `lib/ui/inventory/pack_slots.dart`, and the
+820-vs-900 reconciliation was settled at 900 by the first surface holding both.

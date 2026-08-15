@@ -229,3 +229,31 @@ Build both variants as real spikes with real data (Conan's six-member save), cap
 the user's eyes close D19 into `planning/decisions.md`. That is implementation: **it opens in
 plan mode, as its own phase.** The prep slice may still run first — it deletes the duplication
 both variants would otherwise inherit.
+
+---
+
+## What building settled — 2026-08-15
+
+⚠️ **The paper scores above are historical, and so are both variants' names.** Both were built
+(`planning/grid-spike-brief.md`), the user then made **ten changes to G1**, and **G2 was deleted at
+their asking**. D19 decides on one page.
+
+- **G1 is now `G1MergedPage`, "the merged page"** — `Two benches` named a structure it lost at the
+  second change. The `G1` token is kept because this document, the brief, the commit trail and D19
+  all address the page by it.
+- **G2 "Ledger grid" no longer exists.** Its horizontal `MemberSwitcher` survives inside G1, which
+  adopted a party band.
+- **The walkthrough costs — W-A2, W-A6, W-C1, W-X1 — no longer describe either page**, and two of
+  them stopped being axes at all: the party band gave G1 G2's chrome (W-X1), and G2's deletion took
+  the rest.
+- **R1's pin was abandoned and then recovered by ordering.** The three panels the study wanted
+  pinned measure **~1,700 pt** as the sheet draws them — twice the window — so nothing is pinned;
+  moving Combat to the head of the scroll put the moving numbers above the backpack at every
+  window height instead, which is what R1 was for.
+- **R5 — one find surface or two — was settled by deletion, not by comparison.** The user removed
+  G1's field palette, so the page has one find over the item catalogue and no way to search the
+  record.
+
+⚠️ **The method held even though the outcome did not.** Every one of those is a fact the paper
+phase could not have produced, and each was measured rather than argued — which is what the study
+said building was for.

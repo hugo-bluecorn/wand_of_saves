@@ -14,8 +14,18 @@
 
 /// ⚠️ **THROWAWAY** — see `grid_spike_host.dart`.
 ///
-/// **G1, as the user has reshaped it: a party band, and one page in two
-/// columns.**
+/// **The merged page — one character, one page: their record and what they
+/// carry, together.** That merge is what D19 decides and is the one thing about
+/// this page that never moved; the arrangement below moved nine times in a day.
+///
+/// ⚠️ **`G1` is kept as a lineage marker, and `Two benches` is not.** The study
+/// derived two grids on paper and this is the first; the benches it was named
+/// for stopped existing at the fourth change, and a name for a structure the
+/// page does not have is the stale-comment defect this project treats as a bug
+/// report. Everything that addresses this page — `planning/tool-first-study.md`,
+/// `planning/grid-spike-brief.md`, the commit trail and D19 — says G1.
+///
+/// **Its arrangement, as the user left it:**
 ///
 /// - **Across the top, the party**: portraits that accept a dropped item, who
 ///   this is, and the chrome — one band the width of the page.
@@ -47,14 +57,17 @@
 /// proficiency palette — the Ctrl+K box that used to head the left column —
 /// was removed at the user's asking. On a page that draws every field at once
 /// there is less for it to reach, and the record's own panels are the index.
-/// **This is the last axis the study had G1 and G2 disagreeing about**, so the
-/// paper's R5 question is no longer a question these two spikes put: G2 has one
-/// box over both corpora, G1 has one box over the items and no way to search
-/// the record at all.
+/// ⚠️ **The record cannot be searched at all**, and the findings badge counts
+/// without navigating, because the palette was where it went. That removal also
+/// settled **R5** — one find surface or two, the deepest question the two
+/// spikes existed to put to the user — by deletion rather than by comparison,
+/// and G2 was deleted the day after.
 ///
-/// ⚠️ **The name is historical**, and so are the study's scores for this
-/// variant. Six changes, all the user's, all made after looking at the built
-/// spike, none of them what the paper derived:
+/// ⚠️ **The study's scores for this variant are historical.** Ten changes to
+/// the page and one to the theme, all the user's, all made after looking at the
+/// built spike, none of them what the paper derived —
+/// `planning/grid-spike-brief.md` carries each with the measurement that
+/// prompted or followed it. The load-bearing ones:
 ///
 /// 1. **The party stopped being a column at all.** The study put it on the
 ///    right edge so the dominant drag — pack → member — travelled one column
@@ -72,7 +85,10 @@
 ///    above the fold: stacked under the record it began 1,438 points down, and
 ///    about 2,500 with a real installation's proficiencies.
 /// 5. **Condition stopped being a panel**, and Combat became a band across
-///    both columns — first at the foot of the page, then at its head.
+///    both columns — first at the foot of the page, then at its head. ⚠️ Moving
+///    it to the head is what **got R1 back**: the numbers equipment moves are
+///    what an unscrolled window opens on, twenty points above the backpack, at
+///    every window height the application allows — and it cost nothing.
 /// 6. **The field palette is gone**, and with it Ctrl+K and the findings
 ///    badge's destination — see above.
 ///
@@ -132,9 +148,9 @@ const double _pageWidth = 1600;
 const double _columnGap = 24;
 
 /// G1 over the savegame in [slotDirectoryName].
-class G1TwoBenches extends StatelessWidget {
+class G1MergedPage extends StatelessWidget {
   /// Opens the spike on that save slot.
-  const G1TwoBenches({required this.slotDirectoryName, super.key});
+  const G1MergedPage({required this.slotDirectoryName, super.key});
 
   /// The save slot directory the entry point picked.
   final String slotDirectoryName;

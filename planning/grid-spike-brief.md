@@ -1,5 +1,11 @@
 # Build brief — the two grid spikes, G1 and G2
 
+> ⚠️ **Status, 2026-08-15 — the brief below is the plan as approved and is kept unedited; what was
+> built and then reshaped is `## Build report` onwards.** Both spikes were built; the user made ten
+> changes to G1 and had **G2 deleted**. D19 now decides on one page, **`G1MergedPage` — "the merged
+> page"** — and the brief's `G1 — "Two benches"` section describes a structure it lost at the
+> second change. **Jump to `## G2 deleted — G1 is what D19 decides on` for what exists.**
+
 **2026-08-14.** This brief is a hand-off: it is written to be executed by a session that has no
 other context, and it is **the approved plan** — build what it says; do not re-litigate the
 design. A deviation you believe necessary is a question to bring back, not a decision to make.
@@ -308,7 +314,8 @@ instead of a long one.
   `inlineEditor` hook `sheetPanelsOf` does. A *flowing* panel opens its editor under the whole run
   of pills rather than under one — "beneath the row" has no meaning for a pill sharing its line
   with five others.
-- The doc comments on `g1_two_benches.dart` and `compact_numbers.dart` were rewritten rather than
+- The doc comments on `g1_two_benches.dart` (now `g1_merged_page.dart`) and `compact_numbers.dart`
+  were rewritten rather than
   left describing a pin that no longer exists.
 
 **Re-proved after the change**, as throwaway widget tests, run green and deleted: the party is the
@@ -721,7 +728,7 @@ the spike.**
 
 ## G2 deleted — G1 is what D19 decides on
 
-**2026-08-15.** The user looked at the built pages, kept shaping G1 over nine changes, and then
+**2026-08-15.** The user looked at the built pages, kept shaping G1 over ten changes, and then
 **asked for G2 to be removed.** So the comparison this brief was written to set up did not happen:
 D19 is no longer a choice between two arrangements, it is a judgement on one page.
 
@@ -757,22 +764,27 @@ is more churn than the smell is worth. Worth knowing rather than worth fixing to
              ↕ ONE scrollbar moves the whole page
 ```
 
-**Nine changes, all the user's, all made after seeing it built** — and **none of them what the
-study derived on paper.** `planning/tool-first-study.md`'s walkthrough scores (W-A2, W-A6, W-C1,
-W-X1) and its R1/R5 requirements describe a page that no longer exists. Read this section, not
-those scores.
+**Ten changes to the page and one to the theme, all the user's, all made after seeing it built** —
+and **none of them what the study derived on paper.** `planning/tool-first-study.md`'s walkthrough
+scores (W-A2, W-A6, W-C1, W-X1) and its R1/R5 requirements describe a page that no longer exists.
+Read this section, not those scores.
 
-| # | change | what it spent |
+⚠️ **Change 0 was not the user's instruction but their answer to a blocking question**, and it is
+the one that made everything after it possible: the band the brief specified could not be built.
+
+| # | change | the finding |
 |---|---|---|
-| 1 | the pinned numbers band became a compact rendering | the band measured ~1,700 pt as the sheet draws those panels — twice the window |
-| 2 | party column right edge → left edge | **W-A2**'s margin, which was G1's win on the manipulation flow |
-| 3 | the numbers stopped being pinned | **R1**'s pin — bought back later by ordering, see 8 |
-| 4 | the two benches became one page in two columns | two independent scrollbars |
-| 5 | Proficiencies ↔ the numbers swapped columns | got the columns from 2.1 : 1 to 1.48 : 1 |
-| 6 | the party column became a band across the top | **W-X1** as an axis, and 880 → **1,260** minimum width |
-| 7 | Condition folded into Character; Combat became a full-width band in three columns | a panel heading, and the last of the column imbalance |
-| 8 | Combat moved from the page's foot to its head | nothing — and it is what **got R1 back** |
-| 9 | the field-and-proficiency palette removed | **R5**, the deepest question the spikes existed to settle, and the record is no longer searchable at all |
+| 0 | the pinned numbers band became a **compact** rendering | Combat 934 + Resistances 604 + Condition 163 = **~1,700 pt** as the sheet draws them, against an 860 pt window. The band could not exist as briefed |
+| 1 | party column right edge → left edge | spends **W-A2**'s margin, which was G1's only win on the manipulation flow |
+| 2 | the fast bench's two parts merged, items on top | unpins the numbers. Minimum window **940 × 740 → 720 × 300** — the pin had been bought at the price of the thing it sat above (78 pt of backpack at 1280 × 860) |
+| 3 | the middle and right columns merged | ⚠️ **built wrong first** — read as *stack them*, which put the inventory 1,438 pt down (≈2,500 with real proficiencies). Rebuilt as one page in two columns: **780 × 300**, backpack above the fold |
+| 4 | Proficiencies → right; In-no-slot and the numbers → left | columns **2.1 : 1 → 1.48 : 1**. ⚠️ Every earlier height figure had run on an *empty* proficiency catalogue and so had no Proficiencies panel at all |
+| 5 | the party column became a band across the top | **880 → 1,260** minimum width, the first time G1 asked for more than the app's own 900 pt floor. G1 inherits **G2's** switcher, so **W-X1** stops being an axis |
+| 6 | Condition folded into Character; Resistances under Skills; Combat a full-width band in three columns | columns to **1,802 / 1,622**. `sheetPanelsOf` gained `foldInto` so the production sheet keeps its Condition panel |
+| 7 | the field-and-proficiency palette removed | settles **R5** — the deepest question the spikes existed to put — by deletion. The record cannot be searched, and the findings badge loses its destination |
+| 8 | Combat moved from the page's foot to its head | ⚠️ **the smallest change and the largest effect: R1 is back.** The numbers open the page, 20 pt above the backpack, at every window height — and it cost nothing |
+| 9 | Resistances above Skills | a resistance is something the character *is*, like an ability score |
+| 10 | the type scale returned to Flutter's *(production)* | the base was **already right** — `bodyMedium` 13.5 against this desktop's 13.33 px. What was under platform size was the small end. Page +2–4 % |
 
 **Four things about it are deliberate and will look like defects to a fresh eye:**
 
@@ -788,6 +800,20 @@ those scores.
    (`linux/runner/my_application.cc`, untouched). A window can be dragged narrower than the page
    needs and the band will overflow. `min_width` wants raising to about 1,280 — one line, reserved
    for the user by this brief.
+
+### Renamed — `G1MergedPage` in `g1_merged_page.dart`
+
+⚠️ **`Two benches` named a structure the page lost at change 2**, which is the stale-comment defect
+this project treats as a bug report. The descriptive half is replaced; **`G1` is kept as a lineage
+marker**, because the study, this brief, the commit trail, the memories and D19 all address the page
+by that token and severing it would leave the next session unable to connect the page to its own
+build report.
+
+**What D19 should call the arrangement is "the merged page."** Every other candidate considered —
+*the Record* (the game's own word, but it names only half of what is merged), *the Workbench page*
+(D15 already uses Workbench for the whole UI), *the banded page*, *one page two columns* — names
+part of an arrangement that moved ten times in a day. The **merge** is the decision, and it never
+moved.
 
 **Still owed:** the captures, and D19 itself. `analyze` clean, `dart format` a no-op, zero
 suppressions, **844 + 399 green**, branch `spike/grid-variants`, not pushed, no PR.
