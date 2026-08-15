@@ -694,11 +694,12 @@ void main() {
         onAdd: (_, _) {},
       );
 
-      // ⚠️ **Two of them now, and only one is the item.** The Equipped grid
+      // ⚠️ **Two of them, and only one is the item.** The Equipped grid
       // captions its cells with the slot's own name, and BG:EE calls the belt
       // slot "Belt" — so an unidentified Belt of Antipode really does put the
-      // word on screen twice. The one that matters is the one in the backpack
-      // cell; the other is the empty equipment slot.
+      // word on screen twice. They no longer read as the same kind of word:
+      // the item's name carries a role colour and an `unidentified` chip, the
+      // slot's caption is an unlit empty cell. See the glance-distance group.
       expect(find.text('Belt'), findsNWidgets(2));
       expect(find.text('Belt of Antipode'), findsNothing);
       // And the identified neighbour is unaffected.
@@ -734,6 +735,116 @@ void main() {
         find.byType(Draggable<ItemDrag>),
         findsOneWidget,
         reason: 'BOOT01 only — fourteen empties and BOW99 must not drag',
+      );
+    });
+  });
+
+  group('⚠️ an unidentified item says so at glance distance', () {
+    /// The colour the [Text] reading [words] inside [panel] is drawn in.
+    ///
+    /// ⚠️ **Scoped, because "Belt" is on screen twice and only one of them is
+    /// the item** — the other is the empty *Belt* equipment slot's caption,
+    /// which is the collision this group is about.
+    Color? inkOf(WidgetTester tester, String words, {required Finder panel}) =>
+        tester
+            .widget<Text>(
+              find.descendant(of: panel, matching: find.text(words)),
+            )
+            .style
+            ?.color;
+
+    Finder backpack() => find.ancestor(
+      of: find.text('Inventory'),
+      matching: find.byType(SlotGrid),
+    );
+
+    testWidgets('the NAME carries a role colour, not the body ink', (
+      tester,
+    ) async {
+      // ⚠️ **The Belt/Belt collision, resolved by saying more rather than
+      // less.** An unidentified Belt of Antipode is drawn "Belt" — the name the
+      // engine draws — in the cell beside an empty equipment slot also
+      // captioned "Belt". They stop reading as the same kind of word once one
+      // of them is marked, and *unidentified* is a valid state the record
+      // already holds, so marking it is stating a fact rather than dressing a
+      // collision.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(
+            resref: 'BELT16',
+            index: 0,
+            slotIndex: 21,
+            isIdentified: false,
+          ),
+          CarriedItem(resref: 'BOOT01', index: 1, slotIndex: 22),
+        ]),
+        onAdd: (_, _) {},
+        theme: AppTheme.light,
+      );
+
+      // ⚠️ A ROLE colour — `tertiary`, the same ink this application already
+      // uses for *worth knowing, and not wrong*. Never another surface tone:
+      // the theme reserves those for the surface ladder.
+      expect(
+        inkOf(tester, 'Belt', panel: backpack()),
+        AppTheme.light.colorScheme.tertiary,
+      );
+      expect(
+        inkOf(tester, 'The Paws of the Cheetah', panel: backpack()),
+        isNot(AppTheme.light.colorScheme.tertiary),
+        reason: 'the identified neighbour is untouched',
+      );
+    });
+
+    testWidgets('⚠️ the chip stays, because colour alone says nothing', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(
+            resref: 'BELT16',
+            index: 0,
+            slotIndex: 21,
+            isIdentified: false,
+          ),
+        ]),
+        onAdd: (_, _) {},
+        theme: AppTheme.light,
+      );
+
+      expect(find.text('unidentified'), findsOneWidget);
+    });
+
+    testWidgets('⚠️ the mark reaches the In-no-slot row too', (tester) async {
+      // One rule, one place. A loose item and a backpack item sit in different
+      // columns of the merged page, and a rule that reached only one of them
+      // is the defect this project keeps paying for.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(
+            resref: 'BELT16',
+            index: 0,
+            slotIndex: -1,
+            isIdentified: false,
+          ),
+        ]),
+        onAdd: (_, _) {},
+        theme: AppTheme.light,
+      );
+
+      expect(
+        inkOf(
+          tester,
+          'Belt',
+          panel: find.ancestor(
+            of: find.text('In no slot'),
+            matching: find.byType(CarriedPanel),
+          ),
+        ),
+        AppTheme.light.colorScheme.tertiary,
       );
     });
   });
@@ -871,8 +982,9 @@ void main() {
 
       // ⚠️ Twice, and that is not a defect: an unidentified BELT16 is called
       // "Belt" and it sits in the slot the game also calls "Belt", so the title
-      // and the slot tag read the same. The claim under test is the absence of
-      // the identified name.
+      // and the slot tag read the same word — one of them now marked as
+      // unidentified. The claim under test is the absence of the identified
+      // name.
       expect(find.text('Belt'), findsNWidgets(2));
       expect(find.text('Belt of Antipode'), findsNothing);
     });

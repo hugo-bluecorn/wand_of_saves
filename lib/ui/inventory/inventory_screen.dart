@@ -745,6 +745,61 @@ String slotLabel(CreItemSlot slot) => switch (slot) {
   _ => 'Inventory', // 6671 — the sixteen backpack slots
 };
 
+/// The name an item is drawn under, marked when the record has not identified
+/// it.
+///
+/// ⚠️ **One rule, one widget, because both surfaces draw a name.** A cell in a
+/// grid and a row in the *In no slot* panel sit in different columns of the
+/// same page; a mark that reached only one of them would be the second, wrong
+/// copy this project keeps paying for.
+///
+/// **Why the name and not a chip alone.** With the identified flag clear the
+/// engine draws the *plain* name — "Belt", never "Belt of Antipode" — and the
+/// equipment grid captions its empty belt slot "Belt" as well. Two identical
+/// words a few cells apart read as the same kind of thing until one of them
+/// says what it is. Unidentified is a valid state the record already holds, so
+/// the cell states it rather than working around it.
+///
+/// ⚠️ **A role colour — [ColorScheme.tertiary], never another surface tone.**
+/// That is the theme's own rule for anything meaning-bearing, and `tertiary` is
+/// already this application's ink for *worth knowing, and not wrong*. Colour
+/// alone would say nothing to a reader who cannot see it, which is why the
+/// `unidentified` chip stays beside it.
+class ItemName extends StatelessWidget {
+  /// Draws [name], marking it when [isIdentified] is false.
+  const ItemName({
+    required this.name,
+    required this.isIdentified,
+    this.style,
+    this.maxLines,
+    super.key,
+  });
+
+  /// What the game would call it, or the resref when nothing else is known.
+  final String name;
+
+  /// Whether the record has identified the item.
+  final bool isIdentified;
+
+  /// The surrounding style, or `null` to inherit it.
+  final TextStyle? style;
+
+  /// How many lines it may take before eliding.
+  final int? maxLines;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    name,
+    maxLines: maxLines,
+    overflow: maxLines == null ? null : TextOverflow.ellipsis,
+    // ⚠️ `copyWith(color: null)` leaves the colour alone, so an identified
+    // name keeps whatever ink its surface gives it.
+    style: (style ?? const TextStyle()).copyWith(
+      color: isIdentified ? null : Theme.of(context).colorScheme.tertiary,
+    ),
+  );
+}
+
 /// One titled group of rows.
 class CarriedPanel extends StatelessWidget {
   /// Draws [items] under [title].
@@ -812,7 +867,10 @@ class CarriedPanel extends StatelessWidget {
             // ⚠️ The code is the subtitle only when there is a name above it;
             // with no game installed the row would otherwise say the code
             // twice.
-            title: Text(_named(item) ?? item.resref),
+            title: ItemName(
+              name: _named(item) ?? item.resref,
+              isIdentified: item.isIdentified,
+            ),
             subtitle: _named(item) == null ? null : Text(item.resref),
             trailing: Wrap(
               spacing: 8,
@@ -1085,10 +1143,10 @@ class InventoryCell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Text(
-                    _name ?? carried.resref,
+                  child: ItemName(
+                    name: _name ?? carried.resref,
+                    isIdentified: carried.isIdentified,
                     maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),
