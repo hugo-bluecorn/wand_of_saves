@@ -1,7 +1,8 @@
 # Build brief — the two grid spikes, G1 and G2
 
 > ⚠️ **Status, 2026-08-15 — the brief below is the plan as approved and is kept unedited; what was
-> built and then reshaped is `## Build report` onwards.** Both spikes were built; the user made ten
+> built and then reshaped is `## Build report` onwards.** Both spikes were built; the user made
+> eleven
 > changes to G1 and had **G2 deleted**. D19 now decides on one page, **`G1MergedPage` — "the merged
 > page"** — and the brief's `G1 — "Two benches"` section describes a structure it lost at the
 > second change. **Jump to `## G2 deleted — G1 is what D19 decides on` for what exists.**
@@ -728,7 +729,7 @@ the spike.**
 
 ## G2 deleted — G1 is what D19 decides on
 
-**2026-08-15.** The user looked at the built pages, kept shaping G1 over ten changes, and then
+**2026-08-15.** The user looked at the built pages, kept shaping G1 over eleven changes, and then
 **asked for G2 to be removed.** So the comparison this brief was written to set up did not happen:
 D19 is no longer a choice between two arrangements, it is a judgement on one page.
 
@@ -764,7 +765,8 @@ is more churn than the smell is worth. Worth knowing rather than worth fixing to
              ↕ ONE scrollbar moves the whole page
 ```
 
-**Ten changes to the page and one to the theme, all the user's, all made after seeing it built** —
+**Eleven changes to the page and one to the theme, all the user's, all made after seeing it built**
+—
 and **none of them what the study derived on paper.** `planning/tool-first-study.md`'s walkthrough
 scores (W-A2, W-A6, W-C1, W-X1) and its R1/R5 requirements describe a page that no longer exists.
 Read this section, not those scores.
@@ -785,6 +787,7 @@ the one that made everything after it possible: the band the brief specified cou
 | 8 | Combat moved from the page's foot to its head | ⚠️ **the smallest change and the largest effect: R1 is back.** The numbers open the page, 20 pt above the backpack, at every window height — and it cost nothing |
 | 9 | Resistances above Skills | a resistance is something the character *is*, like an ability score |
 | 10 | the type scale returned to Flutter's *(production)* | the base was **already right** — `bodyMedium` 13.5 against this desktop's 13.33 px. What was under platform size was the small end. Page +2–4 % |
+| 11 | **Equipped became a slot grid** | ⚠️ **a list of nothing is nothing; a grid of nothing is capacity** — so the panel now draws even when nothing is worn, reversing a rule a test pinned. See the section below |
 
 **Four things about it are deliberate and will look like defects to a fresh eye:**
 

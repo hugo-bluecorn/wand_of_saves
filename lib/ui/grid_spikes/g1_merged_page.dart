@@ -16,7 +16,8 @@
 ///
 /// **The merged page — one character, one page: their record and what they
 /// carry, together.** That merge is what D19 decides and is the one thing about
-/// this page that never moved; the arrangement below moved nine times in a day.
+/// this page that never moved; the arrangement below moved eleven times in a
+/// day.
 ///
 /// ⚠️ **`G1` is kept as a lineage marker, and `Two benches` is not.** The study
 /// derived two grids on paper and this is the first; the benches it was named
@@ -63,7 +64,7 @@
 /// spikes existed to put to the user — by deletion rather than by comparison,
 /// and G2 was deleted the day after.
 ///
-/// ⚠️ **The study's scores for this variant are historical.** Ten changes to
+/// ⚠️ **The study's scores for this variant are historical.** Eleven changes to
 /// the page and one to the theme, all the user's, all made after looking at the
 /// built spike, none of them what the paper derived —
 /// `planning/grid-spike-brief.md` carries each with the measurement that
