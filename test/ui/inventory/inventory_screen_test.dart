@@ -20,6 +20,7 @@ import 'package:wand_of_saves/config/providers.dart';
 import 'package:wand_of_saves/domain/carried_item.dart';
 import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/item_catalogue.dart';
+import 'package:wand_of_saves/ui/core/screen_tone.dart';
 import 'package:wand_of_saves/ui/core/theme.dart';
 import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 import 'package:wand_of_saves/ui/inventory/item_drag.dart';
@@ -733,6 +734,58 @@ void main() {
         findsOneWidget,
         reason: 'BOOT01 only — fourteen empties and BOW99 must not drag',
       );
+    });
+  });
+
+  group('⚠️ an empty equipment cell promises nothing yet', () {
+    /// The cell captioned [slot], wherever on the page it is.
+    Finder cellFor(String slot) => find.byWidgetPredicate(
+      (widget) => widget is InventoryCell && widget.slotLabel == slot,
+    );
+
+    /// The first backpack cell, which is captioned by nothing.
+    Finder packCell() => find
+        .descendant(
+          of: find.ancestor(
+            of: find.text('Inventory'),
+            matching: find.byType(SlotGrid),
+          ),
+          matching: find.byType(InventoryCell),
+        )
+        .first;
+
+    bool unlit(Finder cell) => find
+        .descendant(of: cell, matching: find.byType(ScreenTone))
+        .evaluate()
+        .isNotEmpty;
+
+    testWidgets('an empty one is drawn unlit, a filled one is not', (
+      tester,
+    ) async {
+      // ⚠️ **The promise gap.** Twenty-one captioned empty cells look like
+      // twenty-one places an item may be dropped, and equipping does not exist
+      // — it waits on Recalculate Stats, because the engine reads a *stored*
+      // effective armour class. Until it does, the cells say *this is where a
+      // helmet goes* without also saying *put one here*.
+      await pump(
+        tester,
+        character: characterWith(const [
+          CarriedItem(resref: 'BOOT01', index: 0, slotIndex: 8),
+        ]),
+        onAdd: (_, _) {},
+      );
+
+      expect(unlit(cellFor('Helmet')), isTrue, reason: 'empty');
+      expect(unlit(cellFor('Boots')), isFalse, reason: 'the boots are worn');
+    });
+
+    testWidgets('⚠️ an empty BACKPACK cell is not toned', (tester) async {
+      // The backpack's empties are capacity, not a promise: adding an item
+      // really does put it in one, today. Only the captioned cells offer an
+      // operation this application cannot yet perform.
+      await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
+
+      expect(unlit(packCell()), isFalse);
     });
   });
 

@@ -21,6 +21,7 @@ import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/item_catalogue.dart';
 import 'package:wand_of_saves/ui/core/panel_card.dart';
 import 'package:wand_of_saves/ui/core/save_button.dart';
+import 'package:wand_of_saves/ui/core/screen_tone.dart';
 import 'package:wand_of_saves/ui/core/tag.dart';
 import 'package:wand_of_saves/ui/inventory/item_drag.dart';
 import 'package:wand_of_saves/ui/inventory/pack_slots.dart';
@@ -973,12 +974,21 @@ class SlotGrid extends StatelessWidget {
   }
 }
 
-/// One backpack slot, filled or not.
+/// One slot, filled or not.
 ///
 /// ⚠️ **Both the name and the code, and both earn their place.** The name is
 /// what a person recognises; the code is the only thing that tells items apart,
 /// because `BOOT01`, `BOOTDRIZ`, `DASBOOT` and `TROLLBOO` all resolve to "The
 /// Paws of the Cheetah" and one of them is the immovable one.
+///
+/// ⚠️ **An empty *captioned* cell is drawn unlit**, on the same plate the sheet
+/// puts an unavailable field on. Twenty-one cells headed *Helmet*, *Amulet*,
+/// *Armor* read as twenty-one places an item may be dropped, and **equipping
+/// does not exist yet** — it waits on Recalculate Stats, because the engine
+/// reads a *stored* effective armour class rather than deriving it from what is
+/// worn. The cell still says where a helmet goes; it no longer offers to take
+/// one. An empty *backpack* cell stays lit, because adding really does put an
+/// item in one today.
 class InventoryCell extends StatelessWidget {
   /// Draws [item], or an empty slot when it is `null`.
   const InventoryCell({
@@ -1022,22 +1032,12 @@ class InventoryCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final carried = item;
+    // An empty slot that names itself is an operation this application cannot
+    // perform yet — see the class comment.
+    final promises = carried == null && slotLabel != null;
 
-    return Container(
-      constraints: const BoxConstraints(minHeight: 84),
+    final content = Padding(
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        borderRadius: const BorderRadius.all(Radius.circular(8)),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-          // A filled slot is stated; an empty one is a quieter outline, so the
-          // remaining capacity reads as space rather than as missing content.
-          width: carried == null ? 1 : 1.5,
-        ),
-        color: carried == null
-            ? null
-            : theme.colorScheme.surfaceContainerHighest,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1094,6 +1094,26 @@ class InventoryCell extends StatelessWidget {
           ],
         ],
       ),
+    );
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 84),
+      // The plate has to stop at the cell's own corner, and `Container` clips
+      // to whatever shape its decoration draws.
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant,
+          // A filled slot is stated; an empty one is a quieter outline, so the
+          // remaining capacity reads as space rather than as missing content.
+          width: carried == null ? 1 : 1.5,
+        ),
+        color: carried == null
+            ? null
+            : theme.colorScheme.surfaceContainerHighest,
+      ),
+      child: promises ? ScreenTone(child: content) : content,
     );
   }
 }
