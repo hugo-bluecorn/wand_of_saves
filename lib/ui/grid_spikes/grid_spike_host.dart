@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// ⚠️ **THROWAWAY.** Everything under `lib/ui/grid_spikes/` exists so the two
-/// grid arrangements of `planning/tool-first-study.md` can be looked at with
-/// real data, and is **deleted once D19 is decided** — the winning grid is
-/// rebuilt test-first in the merge slice. Nothing here is production code and
-/// nothing production depends on it, except the debug-only entry on the home
-/// screen.
+/// ⚠️ **THROWAWAY.** Everything under `lib/ui/grid_spikes/` exists so the
+/// merged character-and-inventory page can be looked at with real data, and is
+/// **deleted once D19 is decided** — the chosen arrangement is rebuilt
+/// test-first in the merge slice. Nothing here is production code and nothing
+/// production depends on it, except the debug-only entry on the home screen.
 ///
-/// This file is what both spikes share: opening the savegame, projecting the
-/// selected member, and issuing the edit commands. Written once because two
-/// copies of the wiring would be two chances for one spike to be quietly more
-/// capable than the other — and the comparison is the whole point.
+/// ⚠️ **There were two arrangements and now there is one.** G2, the
+/// audit-biased "ledger grid", was built, looked at and **deleted at the
+/// user's asking**;
+/// G1 is what D19 is deciding on. Its own file records the nine changes the
+/// user made to it after seeing it built, and why the study's paper scores no
+/// longer describe it.
+///
+/// This file is the wiring: opening the savegame, projecting the selected
+/// member, and issuing the edit commands.
 library;
 
 import 'package:flutter/material.dart';
@@ -164,10 +168,10 @@ class _GridSpikeHostState extends ConsumerState<GridSpikeHost> {
     final party = ref.watch(partyProvider(widget.slotDirectoryName));
 
     return Scaffold(
-      // ⚠️ **No app bar, deliberately.** Each grid carries its own chrome in
-      // the cell the study puts it in, and a second bar above that would both
-      // duplicate it and steal 56 points from the height these spikes exist to
-      // measure. The way back is a button in that same chrome.
+      // ⚠️ **No app bar, deliberately.** The page carries its own chrome in
+      // the party band, and a second bar above that would both duplicate it
+      // and steal 56 points from the height this spike exists to measure. The
+      // way back is the ✕ in that same band.
       body: party.when(
         data: (state) {
           final selected = state.selected;
@@ -220,16 +224,13 @@ class _GridSpikeHostState extends ConsumerState<GridSpikeHost> {
 /// **A list rather than a bar**, because the two grids put it in differently
 /// shaped cells — down the right-hand column on G1, across the top band on G2
 /// — and only the arrangement should differ between them.
-/// [onFindings] is `null` on a surface with nowhere to send the reader —
-/// `FindingsBadge` still shows the count and simply is not pressable, which is
-/// what it documents itself as doing rather than an enabled button that does
-/// nothing.
-List<Widget> spikeChrome(
-  BuildContext context,
-  GridSpikeModel model, {
-  VoidCallback? onFindings,
-}) => [
-  FindingsBadge(findings: model.findings, onPressed: onFindings),
+/// ⚠️ **The badge counts and does not navigate.** It used to open the field
+/// palette; the palette is gone, so there is nowhere to send anybody.
+/// `FindingsBadge` documents a null `onPressed` for exactly this — the count is
+/// still worth showing, and an enabled button that does nothing is the dead
+/// control this project keeps deleting.
+List<Widget> spikeChrome(BuildContext context, GridSpikeModel model) => [
+  FindingsBadge(findings: model.findings, onPressed: null),
   RulesToggle(
     binding: model.rulesBind,
     onChanged: model.onRulesBindChanged,

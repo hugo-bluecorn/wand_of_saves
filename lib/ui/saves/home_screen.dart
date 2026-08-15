@@ -27,7 +27,6 @@ import 'package:wand_of_saves/domain/save_slot.dart';
 import 'package:wand_of_saves/ui/character/portrait_image.dart';
 import 'package:wand_of_saves/ui/core/palette_finish.dart';
 import 'package:wand_of_saves/ui/grid_spikes/g1_two_benches.dart';
-import 'package:wand_of_saves/ui/grid_spikes/g2_ledger_grid.dart';
 import 'package:wand_of_saves/ui/saves/save_browser_viewmodel.dart';
 
 /// The lineup — the application's front door, and the Workbench structure D15
@@ -465,11 +464,11 @@ class _LayoutSpikes extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Layout spikes', style: theme.textTheme.titleMedium),
+        Text('Layout spike', style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
-          'Debug only. Two grid arrangements of the merged character and '
-          'inventory page, over ${slot.label}.',
+          'Debug only. The merged character and inventory page — D19\u2019s '
+          'candidate — over ${slot.label}.',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -484,17 +483,7 @@ class _LayoutSpikes extends StatelessWidget {
                       G1TwoBenches(slotDirectoryName: slot.directoryName),
                 ),
               ),
-              child: const Text('G1 — Two benches'),
-            ),
-            const SizedBox(width: 12),
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      G2LedgerGrid(slotDirectoryName: slot.directoryName),
-                ),
-              ),
-              child: const Text('G2 — Ledger grid'),
+              child: const Text('G1 — the merged page'),
             ),
           ],
         ),

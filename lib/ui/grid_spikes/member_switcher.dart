@@ -14,9 +14,14 @@
 
 /// ⚠️ **THROWAWAY** — see `grid_spike_host.dart`.
 ///
-/// G2's switcher: the same party the rail draws, laid across a band instead of
-/// down an edge. `NavigationRail` is vertical by construction, so this is the
-/// one piece of G2 that could not simply be reused.
+/// The party, laid across a band instead of down an edge — the same party the
+/// rail draws. `NavigationRail` is vertical by construction, so a band needs
+/// its own widget.
+///
+/// ⚠️ **Written for G2 and inherited by G1** when the party column became a
+/// band. Both spikes used this one widget rather than each getting a switcher,
+/// which is why there was never a question of the two lighting up for
+/// different drops.
 ///
 /// ⚠️ **What it does NOT re-decide is which portraits will take a drop.** That
 /// rule is `hasPackRoom`, shared with the rail — a second copy here is exactly

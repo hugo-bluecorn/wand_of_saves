@@ -218,7 +218,6 @@ class InventoryPanels extends ConsumerStatefulWidget {
     this.onRemove,
     this.party = const [],
     this.onMoveTo,
-    this.query,
     this.groups = CarriedGroup.values,
     this.showSearchField = true,
     this.autofocusSearchField = true,
@@ -244,13 +243,6 @@ class InventoryPanels extends ConsumerStatefulWidget {
   /// Hands the item to the member at that party position.
   final void Function(CarriedItem item, int to)? onMoveTo;
 
-  /// The query these panels answer to, when the box holding it is elsewhere.
-  ///
-  /// A surface with one search box serving both the record and the catalogue
-  /// owns the text itself; supplying it here is what keeps the results and the
-  /// box that produced them the same query rather than two.
-  final TextEditingController? query;
-
   /// Which of the three groups of carried items to draw.
   ///
   /// A page that balances two columns puts some of them on one side and the
@@ -273,14 +265,11 @@ class InventoryPanels extends ConsumerStatefulWidget {
 }
 
 class _InventoryPanelsState extends ConsumerState<InventoryPanels> {
-  /// Used only when the caller supplies no controller of its own.
-  final TextEditingController _owned = TextEditingController();
-
-  TextEditingController get _query => widget.query ?? _owned;
+  final TextEditingController _query = TextEditingController();
 
   @override
   void dispose() {
-    _owned.dispose();
+    _query.dispose();
     super.dispose();
   }
 

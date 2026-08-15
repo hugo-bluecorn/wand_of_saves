@@ -716,3 +716,78 @@ and both spikes. 844 + 399 still green, `analyze` clean, `dart format` a no-op, 
 but the suite cannot see type: the two defects this project has shipped from text metrics were both
 found by looking at a capture. **Worth a look at the home screen and the creation flow, not only
 the spike.**
+
+---
+
+## G2 deleted — G1 is what D19 decides on
+
+**2026-08-15.** The user looked at the built pages, kept shaping G1 over nine changes, and then
+**asked for G2 to be removed.** So the comparison this brief was written to set up did not happen:
+D19 is no longer a choice between two arrangements, it is a judgement on one page.
+
+**Deleted:** `g2_ledger_grid.dart`, `unified_find.dart`, and the second button on the home screen's
+debug block. Three things G2 alone kept alive went with it — `spikeChrome`'s `onFindings`
+parameter, `InventoryPanels.query`, and the second entry point.
+
+**Kept, because G1 inherited it:** `MemberSwitcher`. G1's party band is G2's widget — written for
+the ledger grid, reused when G1's party column became a band, which is why there was never a
+question of two switchers lighting up for different drops.
+
+⚠️ **One thing left behind, and it is small but real.** `command_palette.dart` was made partly
+public *for* G2's unified find — `subjectsMatching`, `PaletteRow`, `PaletteEmpty`,
+`canOpenSubject`. Every one still has a caller inside its own file, so nothing is dead and nothing
+lints, but four symbols are public with no external user. **Left public deliberately**: a merged
+page that wants a find again is the most likely next request, and re-privatising and un-privatising
+is more churn than the smell is worth. Worth knowing rather than worth fixing today.
+
+### What G1 is, for whoever evaluates it next
+
+```
+┌──────────────────────────── PARTY BAND ────────────────────────────┐
+│ Conan · Fighter 1 · 325 XP  [Con][Imo][Jah][Kha][Xza]  ⚑3 ↶ ↷ Save │
+├────────────────────────────────────────────────────────────────────┤
+│ Combat            (three columns, full width, top of the scroll)   │
+├───────────────────────────────┬────────────────────────────────────┤
+│ Character  … Fatigue · Intox. │ Inventory  ⌕ Find an item · 4 × 4   │
+│ Abilities                     │ Equipped                           │
+│ Resistances  [pills]          │ Proficiencies                      │
+│ Skills                        │                                    │
+│ In no slot                    │                                    │
+└───────────────────────────────┴────────────────────────────────────┘
+             ↕ ONE scrollbar moves the whole page
+```
+
+**Nine changes, all the user's, all made after seeing it built** — and **none of them what the
+study derived on paper.** `planning/tool-first-study.md`'s walkthrough scores (W-A2, W-A6, W-C1,
+W-X1) and its R1/R5 requirements describe a page that no longer exists. Read this section, not
+those scores.
+
+| # | change | what it spent |
+|---|---|---|
+| 1 | the pinned numbers band became a compact rendering | the band measured ~1,700 pt as the sheet draws those panels — twice the window |
+| 2 | party column right edge → left edge | **W-A2**'s margin, which was G1's win on the manipulation flow |
+| 3 | the numbers stopped being pinned | **R1**'s pin — bought back later by ordering, see 8 |
+| 4 | the two benches became one page in two columns | two independent scrollbars |
+| 5 | Proficiencies ↔ the numbers swapped columns | got the columns from 2.1 : 1 to 1.48 : 1 |
+| 6 | the party column became a band across the top | **W-X1** as an axis, and 880 → **1,260** minimum width |
+| 7 | Condition folded into Character; Combat became a full-width band in three columns | a panel heading, and the last of the column imbalance |
+| 8 | Combat moved from the page's foot to its head | nothing — and it is what **got R1 back** |
+| 9 | the field-and-proficiency palette removed | **R5**, the deepest question the spikes existed to settle, and the record is no longer searchable at all |
+
+**Four things about it are deliberate and will look like defects to a fresh eye:**
+
+1. **No way to search the record.** One find, over the item catalogue. The findings badge counts
+   and does not navigate, because the palette was where it went.
+2. **Two densities on one page.** Character, Abilities, Skills, the inventory and Proficiencies are
+   full panels; **Combat and the Resistances are compact** — a leftover from the pin that now only
+   buys a shorter scroll. Making the page uniform is a one-line change either way.
+3. **The columns do not balance themselves.** 2,013 against 1,995 at the fixture measured — near
+   level, but by two named blocks having been moved, never by an algorithm. Balancing by height is
+   D17's zigzag.
+4. **The party band sets a 1,260 pt minimum width against the application's own 900 × 600 floor**
+   (`linux/runner/my_application.cc`, untouched). A window can be dragged narrower than the page
+   needs and the band will overflow. `min_width` wants raising to about 1,280 — one line, reserved
+   for the user by this brief.
+
+**Still owed:** the captures, and D19 itself. `analyze` clean, `dart format` a no-op, zero
+suppressions, **844 + 399 green**, branch `spike/grid-variants`, not pushed, no PR.
