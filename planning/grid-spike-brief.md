@@ -855,3 +855,64 @@ settles.
 
 **Still owed:** the captures, and D19 itself. `analyze` clean, `dart format` a no-op, zero
 suppressions, **844 + 399 green**, branch `spike/grid-variants`, not pushed, no PR.
+
+---
+
+## The evaluation's decisions — 2026-08-15
+
+The review session put its critique to the user as eight questions, and every one was answered.
+**This section is the approved work package for the next builder session** — the resolutions are
+decisions, not suggestions; a necessary deviation is a question to bring back.
+
+| # | criticism | decision |
+|---|---|---|
+| 1 | empty equipment cells promise an operation that does not exist | **Tone empty equipment cells down** until equip exists, and **remove the Magic weapon cell**. Future contract recorded: equip/unequip arrives as **drag/drop + menu** with the Recalculate Stats phase |
+| 2 | the findings badge counts and cannot navigate | **Remove the badge from the page.** A discrepancy-finding aid is a feature deliberately not being built now |
+| 3 | the record cannot be searched | **Stands as designed.** The whole picture is the index — the user scrolls to see everything, so field jumping serves nothing |
+| 4 | drags must start sideways while the targets sit above | **Vertical affinity on this page** — the party is *up*, and the equipment slots are *down* as future drop targets. Per-surface parameter; the production screen's left rail keeps horizontal |
+| 5 | two densities, unstated | **Compact everything.** The whole page renders in the compact style, Proficiencies included. ⚠️ Knowingly spends the recorded sums-on-screen preference — the arithmetic lines move behind the tap, into the editor. Spent, not overlooked |
+| 6 | the new surfaces carry no Semantics | **A merge-slice requirement**, written: every cell and switcher tile carries a Semantics label. The spike stays as-is |
+| 7 | the 1,260 pt band vs the 900 pt window floor | **Undecided, on purpose.** Recorded open; the merge slice forces it |
+| 8 | the type scale changed production sight-unseen | **Accepted sight-unseen** — the user's call against the recommendation, recorded as accepted risk (both prior text-metric defects were capture-found) |
+
+Fixed by the review session on this branch, being plain bugs by the project's own doctrine: the
+stale autofocus comment in `g1_merged_page.dart` (it described the removed palette), and the
+quick-item captions now carry the game's own casing — **"Quick Item"**, exactly as strref 12012
+spells it — with the pinning test updated.
+
+### The work package, itemized
+
+1. **Compact everything** (`g1_merged_page.dart`, spike-only): every panel renders through
+   `CompactNumbers` — Character, Abilities and Skills as **lines** (they carry in-game values);
+   Resistances stays **pills**; **Proficiencies as flowing pills carrying the name and its pips**
+   — keep the dot language, drawn small, never a bare numeral. The head band, the two columns and
+   the single scroll stay exactly as they are; only the panel renderings change. Inline editing
+   must keep working from every compact row.
+2. **Tone empty equipment cells** (`SlotGrid`/`InventoryCell`, production-shared): an empty,
+   captioned cell draws on the unlit plate (the `ScreenTone` mechanism the sheet uses for
+   unavailable fields) with a muted caption; filled cells unchanged. One rule in one place — the
+   production Equipped grid gets it too, because the promise-gap exists there as well.
+   **Test-first: this is production behaviour.**
+3. **Remove the Magic weapon cell**: drop `CreItemSlot.magicWeapon` from `equipmentSlots`
+   (21 cells; the last row pads). ⚠️ **An item the engine has put in that slot must still
+   surface** — `CarriedSections` counts it as worn, and a slot missing from the drawn list would
+   make it silently invisible, the exact trap the seed recorded. The rule to build, test-first: a
+   **filled** magic-weapon slot draws its cell; an empty one draws nothing.
+4. **Remove the findings badge** from the spike chrome (`grid_spike_host.dart`, spike-only).
+5. **Vertical drag affinity on this page**: `CarriedSections` gains a drag-affinity parameter
+   defaulting to `Axis.horizontal` (production unchanged — test-first on the default); the merged
+   page passes `Axis.vertical`. Rewrite the "portraits are to the LEFT of here" comment to cover
+   both geometries.
+6. Definition of done unchanged: `analyze` clean, `dart format` a no-op, both suites green, zero
+   suppressions, commits on this branch, **not pushed**, a report appended here, the app left
+   running for the captures.
+
+### The captures, superseding the earlier list where they overlap
+
+1. The full page, compact everywhere, at ≥1,260 wide and once at 900 (the band's overflow).
+2. Empty equipment cells toned — beside filled ones, and beside the backpack's untoned empties.
+3. Mid-drag, twice: backpack → band portrait (the vertical start), and backpack → a toned
+   equipment cell, where nothing should invite the drop yet.
+4. The unidentified belt beside the empty *Belt* slot caption.
+5. An inline editor open from a compact row, once per column.
+6. Dark and light of the same view.

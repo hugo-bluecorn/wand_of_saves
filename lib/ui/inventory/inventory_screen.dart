@@ -734,9 +734,10 @@ String slotLabel(CreItemSlot slot) => switch (slot) {
   CreItemSlot.quiver3 => 'Quiver 3',
   // ⚠️ Real, and unreachable from the game's own interface.
   CreItemSlot.quiver4 => 'Quiver 4',
-  CreItemSlot.quick1 => 'Quick item 1', // 12012
-  CreItemSlot.quick2 => 'Quick item 2',
-  CreItemSlot.quick3 => 'Quick item 3',
+  // The game's own casing — 12012 is exactly "Quick Item".
+  CreItemSlot.quick1 => 'Quick Item 1', // 12012
+  CreItemSlot.quick2 => 'Quick Item 2',
+  CreItemSlot.quick3 => 'Quick Item 3',
   // IESDP's name for it, not a string the game shows: the engine fills this
   // slot itself.
   CreItemSlot.magicWeapon => 'Magic weapon',

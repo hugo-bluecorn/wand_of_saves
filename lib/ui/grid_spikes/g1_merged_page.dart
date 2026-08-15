@@ -423,8 +423,9 @@ class _Items extends StatelessWidget {
     ),
     groups: groups,
     showSearchField: withSearch,
-    // ⚠️ The palette holds the focus, so Ctrl+K works the moment the grid
-    // opens. Two boxes cannot both have it.
+    // ⚠️ Nothing on this page takes focus on open. The palette that used to
+    // hold it was removed at the seventh change, and an autofocused search box
+    // would open the page with a cursor blinking mid-column.
     autofocusSearchField: false,
   );
 }

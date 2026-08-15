@@ -467,7 +467,7 @@ void main() {
       expect(find.text('Inventory'), findsOneWidget);
       // Every slot, none of them filled.
       expect(find.text('Helmet'), findsOneWidget);
-      expect(find.text('Quick item 3'), findsOneWidget);
+      expect(find.text('Quick Item 3'), findsOneWidget);
     });
 
     testWidgets('⚠️ an item in NO slot is still shown', (tester) async {
