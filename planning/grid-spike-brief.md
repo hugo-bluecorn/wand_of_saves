@@ -924,3 +924,225 @@ spells it — with the pinning test updated.
    **dissolves** under the glance-distance marking, rather than asking whether it matters.
 5. An inline editor open from a compact row, once per column.
 6. Dark and light of the same view.
+
+---
+
+## Build report — the evaluation's eight decisions, executed 2026-08-15
+
+**All seven items of the work package are done.** `fvm flutter analyze` clean, `dart format` a
+no-op across 240 files, **853 app tests + 399 format tests green**, zero suppressions (the D8 grep
+returns nothing), six commits on `spike/grid-variants`, **not pushed, no PR**. The app is running
+on Linux and is waiting for the captures.
+
+**853, up from 844**, and all nine new tests are **production** behaviour written test-first — the
+spike's own eight were written, run green and deleted, as the recorded practice for a screen that
+is about to be deleted.
+
+| # | decision | where it landed |
+|---|---|---|
+| 1 | compact everything | `compact_numbers.dart`, `g1_merged_page.dart`, `pip_meter.dart` — spike, plus one behaviour-preserving extraction |
+| 2 | tone empty equipment cells | `InventoryCell` — **production**, test-first |
+| 3 | remove the Magic weapon cell | `equipmentSlots` + new `equipmentSlotsFor` — **production**, test-first |
+| 4 | remove the findings badge | `spikeChrome` — spike |
+| 5 | vertical drag affinity on this page | `CarriedSections`/`InventoryPanels` — **production** default unchanged, test-first |
+| 6 | mark unidentified at a glance | new `ItemName` — **production**, test-first |
+| 7 | definition of done | below |
+
+### What the page is now
+
+```
+┌──────────────────────────── PARTY BAND ────────────────────────────┐
+│ Conan · Fighter 1 · 325 XP  [Con][Imo][Jah][Kha][Xza]   ⚖ ↶ ↷ Save │
+├────────────────────────────────────────────────────────────────────┤
+│ Combat   THAC0 (base) 20 │ Save vs. death 14 │ AC crushing 0  …    │
+├───────────────────────────────┬────────────────────────────────────┤
+│ Character  … Fatigue · Intox. │ ⌕ Find an item                     │
+│ Abilities                     │ Inventory   4 × 4, sixteen cells    │
+│ Resistances  [pills]          │ Equipped    21 cells, empties unlit │
+│ Skills                        │ Proficiencies                      │
+│ In no slot                    │  ⟨Long Sword ●●○⟩ ⟨Axe ●●○⟩ …      │
+└───────────────────────────────┴────────────────────────────────────┘
+             ↕ ONE scrollbar moves the whole page
+```
+
+Every panel is drawn compactly. The head band, the two columns and the single scroll are exactly
+where they were; only the renderings changed.
+
+### 1 — Compact everything
+
+**Character, Abilities and Skills are lines**; **the Resistances are pills**; **Combat keeps its
+three columns of lines** at the head. `sheetPanelsOf` is no longer called by this page at all —
+`CompactNumbers` gained the `foldInto` parameter it needed (so Condition still folds into
+Character) and it now reads the same projection directly.
+
+**Proficiencies are flowing pills, and the dot language survived intact.** ⚠️ **`PipRow` is
+extracted out of `PipMeter`** — same dots, filled/empty/surplus/ceiling, with a `pipSize`
+parameter defaulting to today's 13. A second rendering of *what a pip means* is the recurring
+defect this project pays for, so there is one copy and the pill asks for it at 8.
+
+**What a pill drops, and why each is safe:**
+
+| dropped | why |
+|---|---|
+| the `2/5` numeral | the dots *are* the reading; a numeral beside them is the picture said twice |
+| `at ceiling` | a pill whose dots are all filled is at its ceiling — the dots say it |
+| `not for this class` | a `0/0` proficiency draws **no dots at all** and goes muted, which is the dot language's own way of saying there is nowhere to go. ⚠️ The ceiling mark alone would have read as a limit *spent* |
+| **nothing else** | ⚠️ **`over ceiling` keeps its word.** It is a conflict, and a conflict a reader has to infer from a red dot is one this project would ship |
+
+⚠️ **What the whole compaction spends, named rather than discovered later.** A full row carries a
+second line — the arithmetic **with its amount**, the two limits under D16, the ⓘ, the finding's
+own sentence. All of it is now one tap away in the editor. That is the recorded sums-on-screen
+preference, spent deliberately, exactly as decision 5 says.
+
+**What it does not spend**, and all four are pinned by the throwaway suite:
+
+- **the group's own note** — *"Fighter/Mage has no thief skills — the greyed rows are what the
+  class cannot allocate."* It is not arithmetic and it is not per row; it says what a whole panel
+  means. `CompactNumbers` now carries `group.note` through to the card.
+- **the unlit plate** on a row the class cannot allocate.
+- **the finding's coloured left rule**, in place, on the row it is about.
+- **inline editing from every row**, in either column and in the head band.
+
+### 2 · 3 · 5 · 6 — the four production changes, each test-first
+
+**Empty equipment cells are drawn unlit.** An empty cell that *names its slot* now sits on the
+`ScreenTone` plate — the same widget the sheet puts an unavailable field on. It still says where a
+helmet goes; it no longer offers to take one. ⚠️ **An empty backpack cell stays lit**, and that is
+the whole distinction: its emptiness is capacity, and adding really does put an item in one today.
+
+**The Magic weapon cell is gone — and `equipmentSlotsFor` is why that is safe.** Dropping a slot
+from the drawn list does not hide a caption, it hides an *item*, silently, on a screen whose only
+job is to show the record. So the drawn list is `equipmentSlots` **plus any slot the record
+actually occupies that the authored list does not name**. Today that is exactly `magicWeapon`,
+which appears only when the engine has filled it; the rule is written against any omission,
+because the failure it prevents cannot be seen. Twenty-one cells, last row padded.
+
+**Drag affinity is a per-surface parameter.** ⚠️ It is a trade in both directions, not a fix:
+Flutter's own note on `Draggable.affinity` is that a vertical draggable "will out-compete the
+Scrollable for vertical gestures". `Axis.horizontal` — the default, and the pushed inventory
+screen's, unchanged — buys a scrollable list at the price of a sideways pull. `Axis.vertical`,
+which the merged page passes, buys the natural pull towards a party band overhead **at the price
+of scrolling by dragging an item**. ⚠️ **The merged page is one long scroll, so that price is
+real: a pull that starts on a backpack cell picks the item up rather than scrolling the page.**
+Worth a look during the captures; it is the decision as written, not a deviation.
+
+**An unidentified item's name carries a role colour.** `ColorScheme.tertiary` — the ink this
+application already uses for *worth knowing, and not wrong*, and a **role** colour rather than
+another surface tone, which is the theme's own rule for anything meaning-bearing. The
+`unidentified` chip stays beside it, because colour alone says nothing. ⚠️ **One rule in one
+widget**: `ItemName` serves the grid cell **and** the In-no-slot row, which sit in *different
+columns of this page* — a mark reaching only one of them is the second, wrong copy this project
+keeps paying for. That is one line wider than decision 6 asked for and is stated here rather than
+done quietly.
+
+### 4 — the findings badge
+
+Gone from `spikeChrome`, and `GridSpikeModel.findings` went with it — no other caller.
+⚠️ **What did not go: a finding still marks its own row**, in place, with the coloured rule and
+the sentence in the editor. That is the sheet's own rendering, shared with production, and it is
+where a finding was always most use. Only the *count with nowhere to go* was removed.
+
+### Measured — with the installation's real twenty-four proficiencies
+
+⚠️ **Every earlier figure in this report except the last two rounds ran with a synthetic
+catalogue.** This one did not: `weapprof.2da` was read out of the player's own copy on
+2026-08-15 — ids 89–115, twenty-four live rows, every FIGHTER_MAGE cap 2 except `2WEAPON`'s 3 —
+and all twenty-four names were resolved against the real talk table (strrefs 25000–25023). A
+fixture with short invented names under-measures a column of pills.
+
+⚠️ **Widths are still over-estimates**: `flutter test` draws with a font whose every glyph is a
+full em square, so labels wrap earlier than they will on screen. Heights are close to true.
+
+**At 1,700 × 1,400, six-member party, no items carried:**
+
+| panel | compact | the full rendering, same 788 pt width | saved |
+|---|---|---|---|
+| Character *(+ Condition folded)* | **230** | 309 + 183 | 262 |
+| Abilities | **254** | 472 | 218 |
+| Resistances | 120 *(already pills)* | 624 | — |
+| Skills | **330** | 575 | 245 |
+| Combat | 228 *(already compact, 3 columns)* | 935 | — |
+| **Proficiencies** | **288** | **1,046** | **758** |
+
+| | before | after |
+|---|---|---|
+| left column | 439 → 1,963 = **1,524** | 439 → 1,409 = **970** |
+| right column | 439 → 2,673 = **2,234** | 439 → 1,895 = **1,456** |
+| the page's own height | **2,673** | **1,895** — 29 % shorter |
+| minimum window | 1,260 × 180 | **1,260 × 180**, unchanged |
+
+⚠️ **The minimum window did not move, and that is decision 7 standing open.** The party band still
+sets it — identity 300 + six portraits + chrome — against the application's own 900 × 600 floor in
+`linux/runner/my_application.cc`, untouched. A window can still be dragged narrower than the page
+needs and the band will overflow. Removing the findings badge bought nothing here; the portraits
+are what costs it.
+
+### ⚠️ Compacting flipped which column is longer, and that unmakes change 4
+
+**The right column is now half again the left: 1,456 against 970.** Before today it was the other
+way about.
+
+This is the arithmetic behind it. Change 4 moved Proficiencies to the right column *because it was
+the one block big enough to balance a record column twice the height of the items*. As pills it is
+**288 points rather than 1,046** — a quarter of what it was — so the reason it went right no
+longer exists, and the swap now unbalances the page in the opposite direction.
+
+⚠️ **And one of the numbers change 4 was justified by is stale.** This report's earlier
+"2,013 against 1,995 — near level" was measured **before change 11 made Equipped a slot grid**.
+Twenty-one cells is **622 points** that appeared in the right column and was never re-measured, so
+the columns were already about 2,013 : 2,633 by last night.
+
+**The single move that balances it, if the user wants it: send Proficiencies back to the left
+column.** 288 + a 20 pt gap = 308, which lands it at **1,278 left against 1,148 right — 1.11 : 1**,
+the closest any one move gets. The left column would then read Character · Abilities ·
+Resistances · Skills · Proficiencies · In no slot, which is also the sheet's own authored order.
+**Not done unasked** — the map is authored and it is the user's, and balancing by measurement
+rather than by an algorithm is the whole point of doing it by hand.
+
+⚠️ **What compaction cannot touch is why the right column is long at all**: 438 + 622 = **1,060
+points of slot grid**, which is 73 % of that column and is 37 empty-or-filled cells drawn at
+their `minHeight: 84`. No density change reaches it.
+
+### A defect the measurement found on the way
+
+⚠️ **A `Wrap` hands every child the run's full width and no less**, so a pill wider than the
+column overflows rather than wrapping — and *Scimitar / Wakizashi / Ninjatō* is a real BG:EE
+proficiency, twenty-nine characters. It overflowed by 41 points in a narrow window. The pill's
+**name** is `Flexible` with an ellipsis now; the dots are never the thing that gives way. This is
+the same fix `Tag` already documents, and it is only visible at a window narrower than the
+comfortable one — which is exactly the window a capture at the 1,260 floor will show.
+
+### What was proved before hand-over
+
+⚠️ **The window is native Wayland and this session cannot drive or capture it**, so the
+interactions were exercised as throwaway widget tests over a synthetic six-member savegame, run
+green, mutation-checked, and deleted. All eight passed:
+
+- every panel is compact, Condition is folded into Character, **no arithmetic line anywhere on the
+  page** — and the Skills group note *is* there, with the unlit rows under it;
+- proficiencies are `PipRow` pills and **no `PipMeter`**, no `2/5` numeral, `over ceiling` present
+  once, and a `0/0` proficiency draws no dots;
+- a compact row edits beneath itself in **both** columns — `Strength` on the left, `Flail /
+  Morning Star` on the right — with `SubjectEditor` and **no** `SideSheet`;
+- a head-band number (`THAC0 (base)`) opens the editor, `20 → 19` applies, and Save goes live;
+- no `FindingsBadge` anywhere;
+- an added item is a `Draggable<ItemDrag>` with **`affinity: Axis.vertical`** and a
+  `MemberSwitcher` above it;
+- no `Magic weapon` caption, `Helmet` present;
+- exactly one `Scrollbar` on the page.
+
+⚠️ **Two of them were mutation-checked**, because a test that passes the moment you write it is
+the failure mode this project records: deleting the panel note reddened the note assertion, and
+forcing `unavailable` false took the `PipRow` count from 2 to 3. One earlier version of the
+editing test was a **false green** — the proficiency pill was below the fold at that viewport, so
+the tap missed and the assertion was answered by the editor the previous line had opened. Fixed
+with `ensureVisible` and an assertion that the editor is the *proficiency's*.
+
+### Still owed
+
+**The captures, and D19 itself.** The list in the section above stands. Two things to look at
+particularly, both consequences of decisions rather than defects:
+
+1. **Scrolling by dragging a backpack item no longer works** — the vertical affinity spends it.
+2. **The right column is now the long one** — see the arithmetic above, and the one move that
+   would fix it.
