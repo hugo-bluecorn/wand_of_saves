@@ -123,23 +123,24 @@ import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 /// page twice as wide as it is tall is what the three columns answer.
 const Map<String, CompactStyle> _combat = {'Combat': CompactStyle.lines};
 
-/// The resistances, above Skills, as pills.
+/// The left column, in an authored order rather than the sheet's own.
 ///
-/// Eleven values, each a word and a percentage, none of which the engine draws
-/// differently. A line each would spend three hundred points saying `0%`.
-const Map<String, CompactStyle> _resistances = {
-  'Resistances': CompactStyle.flowing,
-};
-
-/// The left column, above and below the Resistances — an authored order, not
-/// the sheet's own.
-///
-/// ⚠️ **Proficiencies is in neither, and that is the balance.** Four panels on
+/// ⚠️ **Proficiencies is not here, and that is the balance.** Four panels on
 /// the left against a backpack on the right left the left column twice the
-/// height of the right; twenty-four pip meters is the one block big enough to
-/// move the other way.
-const List<String> _aboveResistances = ['Character', 'Abilities'];
-const List<String> _belowResistances = ['Skills'];
+/// height of the right; twenty-four proficiencies is the one block big enough
+/// to move the other way.
+///
+/// **The Resistances flow and the rest are lines**, because a resistance is one
+/// word and one percentage where a skill has a value the engine draws
+/// differently. Eleven lines saying `0%` would spend three hundred points on
+/// nothing. Resistances sit above Skills: a resistance is something the
+/// character *is*, like an ability score, rather than something they learnt.
+const Map<String, CompactStyle> _record = {
+  'Character': CompactStyle.lines,
+  'Abilities': CompactStyle.lines,
+  'Resistances': CompactStyle.flowing,
+  'Skills': CompactStyle.lines,
+};
 
 /// ⚠️ **Condition is not a panel any more.** Fatigue and intoxication are two
 /// values about the person, and a card of its own for two rows was a heading
@@ -216,13 +217,6 @@ class _G1BodyState extends State<_G1Body> {
   @override
   Widget build(BuildContext context) {
     final model = widget.model;
-    final panels = sheetPanelsOf(
-      character: model.sheet,
-      rulesBind: model.rulesBind,
-      onOpen: _open,
-      inlineEditor: _editorFor,
-      foldInto: _folded,
-    );
 
     return Column(
       children: [
@@ -267,7 +261,6 @@ class _G1BodyState extends State<_G1Body> {
                           Expanded(
                             child: _RecordColumn(
                               model: model,
-                              panels: panels,
                               onOpen: _open,
                               inlineEditor: _editorFor,
                             ),
@@ -276,7 +269,8 @@ class _G1BodyState extends State<_G1Body> {
                           Expanded(
                             child: _ItemsColumn(
                               model: model,
-                              panels: panels,
+                              onOpen: _open,
+                              inlineEditor: _editorFor,
                             ),
                           ),
                         ],
@@ -293,18 +287,16 @@ class _G1BodyState extends State<_G1Body> {
   }
 }
 
-/// The left-hand column: the read-once panels, the resistances among them, and
-/// whatever the record holds in no slot at all.
+/// The left-hand column: who the character is, what they can do, what they
+/// shrug off, and whatever the record holds in no slot at all.
 class _RecordColumn extends StatelessWidget {
   const _RecordColumn({
     required this.model,
-    required this.panels,
     required this.onOpen,
     required this.inlineEditor,
   });
 
   final GridSpikeModel model;
-  final Map<String, Widget> panels;
   final ValueChanged<Subject> onOpen;
 
   /// What to draw beneath a number that is open for editing.
@@ -318,37 +310,19 @@ class _RecordColumn extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Nothing in this block drags, so the whole run can sit inside one
+        // selectable region.
         SelectionArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final title in _aboveResistances)
-                if (panels[title] case final Widget panel) ...[
-                  panel,
-                  const SizedBox(height: 16),
-                ],
-              // Above Skills: a resistance is something the character *is*,
-              // like an ability score, rather than something they have learnt.
-              // Nothing in this block drags, so it can sit inside the
-              // selectable region with the panels around it.
-              CompactNumbers(
-                character: model.sheet,
-                panels: _resistances,
-                rulesBind: model.rulesBind,
-                onOpen: onOpen,
-                inlineEditor: inlineEditor,
-              ),
-              const SizedBox(height: 16),
-              for (final title in _belowResistances)
-                if (panels[title] case final Widget panel) ...[
-                  panel,
-                  const SizedBox(height: 16),
-                ],
-            ],
+          child: CompactNumbers(
+            character: model.sheet,
+            panels: _record,
+            rulesBind: model.rulesBind,
+            onOpen: onOpen,
+            inlineEditor: inlineEditor,
+            foldInto: _folded,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 16),
         // ⚠️ **Items no slot points at, over here with the record rather than
         // with the backpack.** They are not a place anything can be put and
         // the game will not draw them at all, so they read as something wrong
@@ -365,12 +339,17 @@ class _RecordColumn extends StatelessWidget {
 /// under the record they began fourteen hundred points down; at the top of
 /// their own column they are the first thing in it.
 class _ItemsColumn extends StatelessWidget {
-  const _ItemsColumn({required this.model, required this.panels});
+  const _ItemsColumn({
+    required this.model,
+    required this.onOpen,
+    required this.inlineEditor,
+  });
 
   final GridSpikeModel model;
+  final ValueChanged<Subject> onOpen;
 
-  /// The sheet's panels by name — this column takes exactly one of them.
-  final Map<String, Widget> panels;
+  /// What to draw beneath a proficiency that is open for editing.
+  final Widget? Function(Subject subject) inlineEditor;
 
   @override
   Widget build(BuildContext context) {
@@ -384,8 +363,13 @@ class _ItemsColumn extends StatelessWidget {
           withSearch: true,
         ),
         const SizedBox(height: 20),
-        if (panels['Proficiencies'] case final Widget proficiencies)
-          SelectionArea(child: proficiencies),
+        SelectionArea(
+          child: CompactProficiencies(
+            character: model.sheet,
+            onOpen: onOpen,
+            inlineEditor: inlineEditor,
+          ),
+        ),
       ],
     );
   }

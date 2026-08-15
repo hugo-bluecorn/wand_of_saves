@@ -60,7 +60,6 @@ class PipMeter extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final pips = pending ?? proficiency.pips;
     final maximum = proficiency.maximum;
-    final drawn = math.max(pips, maximum);
     final over = pips > maximum;
 
     final meter = Padding(
@@ -71,11 +70,7 @@ class PipMeter extends StatelessWidget {
             Expanded(child: Text(proficiency.name, style: text.bodyLarge)),
             const SizedBox(width: 12),
           ],
-          for (var i = 0; i < drawn; i++) ...[
-            if (i == maximum) _CeilingMark(reached: pips >= maximum),
-            _Pip(filled: i < pips, surplus: i >= maximum),
-          ],
-          if (drawn == maximum) _CeilingMark(reached: pips >= maximum),
+          PipRow(pips: pips, maximum: maximum),
           const SizedBox(width: 10),
           SizedBox(
             width: 40,
@@ -136,6 +131,53 @@ class PipMeter extends StatelessWidget {
   }
 }
 
+/// The dots on their own: filled up to the pips taken, empty up to the ceiling,
+/// surplus beyond it, with the ceiling itself marked.
+///
+/// ⚠️ **Extracted so the dot language has exactly one copy.** A surface that
+/// draws proficiencies compactly — a flowing pill rather than a full-width
+/// meter — needs the same dots at a smaller size, and a second rendering of
+/// *what a pip means* is the recurring defect this project pays for. The name,
+/// the `pips/maximum` numeral and the state word stay with [PipMeter], because
+/// those are what a compact surface is trading away.
+class PipRow extends StatelessWidget {
+  /// Draws [pips] taken out of a ceiling of [maximum].
+  const PipRow({
+    required this.pips,
+    required this.maximum,
+    this.pipSize = 13,
+    super.key,
+  });
+
+  /// How many are taken, including any above the ceiling.
+  final int pips;
+
+  /// Where the rules stop.
+  final int maximum;
+
+  /// The diameter of one dot. The gaps and the ceiling mark scale with it.
+  final double pipSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final drawn = math.max(pips, maximum);
+    final reached = pips >= maximum;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < drawn; i++) ...[
+          if (i == maximum) _CeilingMark(reached: reached, pipSize: pipSize),
+          _Pip(filled: i < pips, surplus: i >= maximum, size: pipSize),
+        ],
+        // ⚠️ **A ceiling nothing has passed still gets its mark**, which is how
+        // an untouched proficiency says where it would stop. It is also the
+        // whole of a `0/0` row: no dots, one mark, nowhere to go.
+        if (drawn == maximum) _CeilingMark(reached: reached, pipSize: pipSize),
+      ],
+    );
+  }
+}
+
 /// One pip: filled in `primary`, surplus in `error`, empty as an outline ring
 /// — and, under a palette that carries one, an empty ring **screened** rather
 /// than left hollow.
@@ -145,34 +187,45 @@ class PipMeter extends StatelessWidget {
 /// absence. [ScreenTone.fill] draws nothing where the palette supplies no
 /// screen, which leaves the ring exactly as it was.
 class _Pip extends StatelessWidget {
-  const _Pip({required this.filled, required this.surplus});
+  const _Pip({
+    required this.filled,
+    required this.surplus,
+    required this.size,
+  });
 
   final bool filled;
   final bool surplus;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    // The ring, and the inset that keeps a screen off it, are fractions of the
+    // dot rather than constants — a pip drawn at eight points with a
+    // 1.5-point ring is mostly ring.
+    final ring = size * 1.5 / 13;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: EdgeInsets.symmetric(horizontal: size * 2 / 13),
       child: Container(
-        width: 13,
-        height: 13,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: filled
               ? (surplus ? colors.error : colors.primary)
               : Colors.transparent,
-          border: filled ? null : Border.all(color: colors.outline, width: 1.5),
+          border: filled
+              ? null
+              : Border.all(color: colors.outline, width: ring),
         ),
         // ⚠️ Inset by the ring's own width. `BoxDecoration` paints its border
         // *behind* the child, so a screen drawn edge to edge would punch dots
         // through the ring that is holding the pip together.
         child: filled
             ? null
-            : const Padding(
-                padding: EdgeInsets.all(1.5),
-                child: ClipOval(child: ScreenTone.fill()),
+            : Padding(
+                padding: EdgeInsets.all(ring),
+                child: const ClipOval(child: ScreenTone.fill()),
               ),
       ),
     );
@@ -183,18 +236,21 @@ class _Pip extends StatelessWidget {
 /// first one they do not. It fills when the ceiling has been reached, so
 /// *"this is as far as this class goes"* is visible without counting.
 class _CeilingMark extends StatelessWidget {
-  const _CeilingMark({required this.reached});
+  const _CeilingMark({required this.reached, required this.pipSize});
 
   final bool reached;
+  final double pipSize;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3),
+      padding: EdgeInsets.symmetric(horizontal: pipSize * 3 / 13),
       child: SizedBox(
-        width: 2,
-        height: 15,
+        // A hair proud of the dots it stands between, so it reads as a stop
+        // rather than as another mark in the row.
+        width: math.max(1.5, pipSize * 2 / 13),
+        height: pipSize * 15 / 13,
         child: ColoredBox(color: reached ? colors.primary : colors.outline),
       ),
     );

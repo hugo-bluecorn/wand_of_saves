@@ -14,25 +14,31 @@
 
 /// ⚠️ **THROWAWAY** — see `grid_spike_host.dart`.
 ///
-/// G1's numbers, drawn compactly, and **the one thing in these spikes that was
+/// G1's record, drawn compactly, and **the one thing in these spikes that was
 /// not in the brief.** The brief pinned the Combat, Resistances and Condition
 /// panels as the sheet already draws them; measured, those three come to about
 /// 1,700 points — roughly twice the whole window, before the item search and
 /// the backpack start. So the band could not exist as specified, and the user
 /// chose this: the same rows, one line each, without the sum line and the ⓘ.
 ///
-/// ⚠️ **The pin itself is gone now, and this is still what these panels
-/// want.** They sit directly beneath the items in one scrolling column, so
-/// density is what keeps them a short scroll away rather than a long one — 700
-/// points of numbers instead of 1,700.
+/// ⚠️ **The pin is long gone, and the page is now compact everywhere.** For a
+/// day the page carried two densities — Combat and the Resistances drawn this
+/// way, everything around them at full height — which read as an accident
+/// rather than as a decision. The user's resolution was to make it one: **every
+/// panel on the merged page comes through this file**, Proficiencies included.
+///
+/// ⚠️ **What that spends, knowingly.** A full row carries a second line — the
+/// arithmetic *with its amount*, the two limits, the ⓘ, the finding's own
+/// sentence — and this project's recorded preference is that a sum belongs on
+/// screen. Compact keeps the value and the disagreement and moves the rest
+/// **one tap away, into the editor**, which is where somebody asking *why*
+/// already goes. Spent, not overlooked.
 ///
 /// ⚠️ **A second rendering, and deliberately not a second copy.** R1 of the
 /// study forbids a summary strip, and the reason it gives is duplication — a
 /// strip showing armour class beside a Combat panel also showing armour class.
-/// On G1 these three panels appear **nowhere else**: the slow bench holds
-/// Character, Abilities, Skills and Proficiencies and nothing more. The number
-/// still exists exactly once, and it sits where the items are, which is what R1
-/// actually asks for.
+/// Nothing on the merged page is drawn twice: this *is* the page's rendering of
+/// the record, not a précis sitting above one.
 ///
 /// The rows are read out of [indexOf] rather than authored, so a field added to
 /// the projection appears here without this file being touched.
@@ -40,7 +46,9 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:wand_of_saves/ui/character/findings.dart';
+import 'package:wand_of_saves/ui/character/pip_meter.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
+import 'package:wand_of_saves/ui/core/palette_finish.dart';
 import 'package:wand_of_saves/ui/core/panel_card.dart';
 import 'package:wand_of_saves/ui/core/screen_tone.dart';
 import 'package:wand_of_saves/ui/core/tag.dart';
@@ -68,6 +76,7 @@ class CompactNumbers extends StatelessWidget {
     required this.rulesBind,
     required this.onOpen,
     this.inlineEditor,
+    this.foldInto = const {},
     this.columns = 1,
     super.key,
   });
@@ -89,6 +98,14 @@ class CompactNumbers extends StatelessWidget {
   /// takes — so a number edits where it lives, exactly as a full row does.
   final Widget? Function(Subject subject)? inlineEditor;
 
+  /// Groups that join another panel's rows instead of getting a panel of their
+  /// own, exactly as `sheetPanelsOf` means it.
+  ///
+  /// `{'Condition': 'Character'}` puts fatigue and intoxication at the end of
+  /// the Character panel and leaves no Condition panel at all. Empty by
+  /// default.
+  final Map<String, String> foldInto;
+
   /// How many columns a [CompactStyle.lines] panel splits its rows across.
   ///
   /// One by default. More is for a panel drawn across the full width of a page
@@ -109,18 +126,31 @@ class CompactNumbers extends StatelessWidget {
         if (finding.subject case FieldSubject(:final entry)) entry.key: finding,
     };
 
+    // ⚠️ Gathered before anything is drawn, because folding means one panel
+    // can hold more than one group's worth of rows.
+    final gathered = <String, List<FieldEntry>>{};
+    final notes = <String, String?>{};
+    for (final entry in index) {
+      final panel = foldInto[entry.group.title] ?? entry.group.title;
+      if (!panels.containsKey(panel)) continue;
+      (gathered[panel] ??= []).add(entry);
+      notes[panel] ??= entry.group.note;
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 12,
       children: [
         for (final MapEntry(key: title, value: style) in panels.entries)
-          if ([
-                for (final entry in index)
-                  if (entry.group.title == title) entry,
-              ]
-              case final List<FieldEntry> rows when rows.isNotEmpty)
+          if (gathered[title] case final List<FieldEntry> rows
+              when rows.isNotEmpty)
             PanelCard(
               title: title,
+              // ⚠️ The group's own qualifier is kept. It is not arithmetic and
+              // it is not per row — it says what a whole panel means, and
+              // dropping it for density would silently take a sentence off the
+              // page rather than move it behind a tap.
+              note: notes[title],
               children: switch (style) {
                 CompactStyle.lines => _lines(rows, flagged),
                 CompactStyle.flowing => [
@@ -191,6 +221,152 @@ class CompactNumbers extends StatelessWidget {
         ],
       ),
     ];
+  }
+}
+
+/// Every proficiency the tables know, as pills that flow across and wrap.
+///
+/// ⚠️ **The dot language survives the compaction; the numeral does not.** A
+/// pip meter is a picture — filled, empty, ceiling, surplus — and replacing
+/// twenty-four of them with `2/5` twenty-four times would trade the one
+/// rendering on this page that is read at a glance for the one thing a glance
+/// cannot do, which is arithmetic. So the dots are the same dots
+/// ([PipRow], one copy), drawn small.
+///
+/// **What each pill drops** is what the full meter says in words beside the
+/// dots: `at ceiling`, `not for this class`, the `pips/maximum` numeral. Two of
+/// those the dots already state — a row with no dots at all is a proficiency
+/// with nowhere to go, and a row whose dots are all filled is one at its
+/// ceiling. The third, `over ceiling`, is a **conflict**, so it keeps its word:
+/// it is the one state a reader must not have to infer.
+class CompactProficiencies extends StatelessWidget {
+  /// Draws [character]'s proficiencies.
+  const CompactProficiencies({
+    required this.character,
+    required this.onOpen,
+    this.inlineEditor,
+    super.key,
+  });
+
+  /// Whose record this is.
+  final SheetCharacter character;
+
+  /// Called when a pill is opened for editing.
+  final ValueChanged<Subject> onOpen;
+
+  /// What to draw beneath the run when one of them is open.
+  final Widget? Function(Subject subject)? inlineEditor;
+
+  @override
+  Widget build(BuildContext context) {
+    final all = character.proficiencies;
+    if (all.isEmpty) return const SizedBox.shrink();
+
+    return PanelCard(
+      title: 'Proficiencies',
+      trailing: Tag('${all.length}', caption: 'all editable'),
+      children: [
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final proficiency in all)
+              _ProficiencyPill(
+                proficiency: proficiency,
+                onTap: () => onOpen(ProficiencySubject(proficiency)),
+              ),
+          ],
+        ),
+        // Under the whole run, for the same reason the flowing numbers do it:
+        // "beneath the row" means nothing to a pill sharing its line with five
+        // others.
+        for (final proficiency in all)
+          ?inlineEditor?.call(ProficiencySubject(proficiency)),
+      ],
+    );
+  }
+}
+
+/// One proficiency as a pill: its name, and its pips as dots.
+class _ProficiencyPill extends StatelessWidget {
+  const _ProficiencyPill({required this.proficiency, required this.onTap});
+
+  final SheetProficiency proficiency;
+  final VoidCallback onTap;
+
+  /// How big a dot is here. The full meter draws 13; this is a pill in a
+  /// wrapping run, and the name beside it is `labelMedium`.
+  static const double _pipSize = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final over = proficiency.pips > proficiency.maximum;
+    // ⚠️ **A ceiling of zero is not a ceiling reached** — it is how
+    // `weapprof.2da` says *not this class*. Muted, and drawn with no dots at
+    // all, which is the dot language's own way of saying there is nowhere to
+    // go. Drawing the ceiling mark alone would read as a spent limit.
+    final unavailable = proficiency.maximum == 0 && !over;
+    final ink = switch ((over, unavailable)) {
+      (true, _) => colors.error,
+      (false, true) => colors.onSurfaceVariant,
+      (false, false) => colors.onSurface,
+    };
+
+    return Semantics(
+      button: true,
+      label:
+          '${proficiency.name}, ${proficiency.pips} of '
+          '${proficiency.maximum} pips${over ? ', above the ceiling' : ''}',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: PaletteFinish.of(context).radiusOf(8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            // The same outline-and-corner a neutral `Tag` wears, so a
+            // proficiency reads as one of the page's pills rather than as a
+            // control of its own kind.
+            borderRadius: PaletteFinish.of(context).radiusOf(8),
+            border: Border.all(color: over ? colors.error : colors.outline),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ⚠️ **Flexible, and the measurement harness is what caught
+                // it.** A `Wrap` hands each child the run's full width and no
+                // less, so a pill wider than the column overflows rather than
+                // wrapping — and *Scimitar / Wakizashi / Ninjatō* is a real
+                // proficiency name twenty-nine characters long. The dots must
+                // never be the thing that gives way, so the name is.
+                Flexible(
+                  child: Text(
+                    proficiency.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.labelMedium?.copyWith(color: ink),
+                  ),
+                ),
+                if (!unavailable) ...[
+                  const SizedBox(width: 6),
+                  PipRow(
+                    pips: proficiency.pips,
+                    maximum: proficiency.maximum,
+                    pipSize: _pipSize,
+                  ),
+                ],
+                if (over) ...[
+                  const SizedBox(width: 6),
+                  const Tag('over ceiling', tone: TagTone.conflict),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
