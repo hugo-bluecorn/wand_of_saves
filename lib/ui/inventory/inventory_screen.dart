@@ -614,24 +614,33 @@ class CarriedSections extends StatelessWidget {
         // strings** — that word was this project's, and so is "pack" in
         // `CreItemSlot.pack`.
         if (groups.contains(CarriedGroup.backpack))
-          BackpackGrid(
+          SlotGrid(
+            title: 'Inventory',
+            slots: CreItemSlot.pack,
             items: carried,
             row: _row,
             describe: describe,
             menu: menu,
           ),
-        if (groups.contains(CarriedGroup.equipped) && worn.isNotEmpty)
-          // ⚠️ Not a heading the game itself uses — its own screen is a paper
-          // doll, not a list — but "equipped" is its word, running right
-          // through the item descriptions ("when equipped", "cannot be
-          // equipped"). Borrowed, not coined.
-          CarriedPanel(
+        // ⚠️ Not a heading the game itself uses — its own screen is a paper
+        // doll, not a list — but "equipped" is its word, running right through
+        // the item descriptions ("when equipped", "cannot be equipped").
+        // Borrowed, not coined.
+        //
+        // ⚠️ **Drawn whether anything is worn or not**, where the list it
+        // replaced appeared only once something was. That inverted with the
+        // grid: a list of nothing is nothing, but twenty-two empty cells say
+        // *these are the places things go and all of them are free*, which is
+        // the same thing the sixteen backpack cells have always said.
+        if (groups.contains(CarriedGroup.equipped))
+          SlotGrid(
             title: 'Equipped',
+            slots: equipmentSlots,
             items: worn,
             row: _row,
-            isStuck: isStuck,
             describe: describe,
             menu: menu,
+            named: true,
           ),
         if (groups.contains(CarriedGroup.inNoSlot) && loose.isNotEmpty)
           CarriedPanel(
@@ -827,29 +836,71 @@ class CarriedPanel extends StatelessWidget {
   );
 }
 
-/// The sixteen backpack slots, as cells rather than a list of what is there.
+/// The twenty-two slots that are not the backpack, in an authored order.
 ///
-/// ⚠️ **Sixteen always, and addressed by SLOT rather than by list position.**
-/// An item in `pack10` draws in cell 10 with 7 to 9 left empty. Holes are
+/// ⚠️ **Not the record's order.** `CreItemSlot` stores the cloak between the
+/// fourth quiver and the first quick item; nobody reads what a person is
+/// wearing that way. Worn things first, then the weapons, the quivers, the
+/// quick slots, and last the one the engine fills itself.
+const List<CreItemSlot> equipmentSlots = [
+  CreItemSlot.helmet,
+  CreItemSlot.amulet,
+  CreItemSlot.armor,
+  CreItemSlot.cloak,
+  CreItemSlot.gloves,
+  CreItemSlot.leftRing,
+  CreItemSlot.rightRing,
+  CreItemSlot.belt,
+  CreItemSlot.boots,
+  CreItemSlot.shield,
+  CreItemSlot.weapon1,
+  CreItemSlot.weapon2,
+  CreItemSlot.weapon3,
+  CreItemSlot.weapon4,
+  CreItemSlot.quiver1,
+  CreItemSlot.quiver2,
+  CreItemSlot.quiver3,
+  CreItemSlot.quiver4,
+  CreItemSlot.quick1,
+  CreItemSlot.quick2,
+  CreItemSlot.quick3,
+  CreItemSlot.magicWeapon,
+];
+
+/// A named run of slots, as cells rather than as a list of what is in them.
+///
+/// ⚠️ **Every slot always, and addressed by SLOT rather than by list
+/// position.** An item in `pack10` draws in cell 10 with 7 to 9 left empty, and
+/// an empty helmet slot draws as an empty cell headed *Helmet*. Holes are
 /// ordinary — a real character fills packs 1–7 and 9 — so a grid that packed
 /// items leftward would be a prettier lie than the list it replaces, and would
-/// hide the one thing an inventory has to convey: that capacity is finite.
+/// hide the one thing a slot grid has to convey: **where a thing can go, and
+/// whether anything is there.**
 ///
-/// **Four `Row`s of four `Expanded` cells, not a `GridView`.** These land in a
+/// **Rows of four `Expanded` cells, not a `GridView`.** These land in a
 /// `Column` inside a `SingleChildScrollView`, where a `GridView` needs
-/// `shrinkWrap` and `NeverScrollableScrollPhysics` and behaves awkwardly.
-/// Sixteen is a fixed count, so rows are deterministic and carry none of that.
-class BackpackGrid extends StatelessWidget {
-  /// Draws the sixteen slots, filling them from [items].
-  const BackpackGrid({
+/// `shrinkWrap` and `NeverScrollableScrollPhysics` and behaves awkwardly. The
+/// slot count is fixed, so the rows are deterministic and carry none of that.
+class SlotGrid extends StatelessWidget {
+  /// Draws every slot of [slots], filling them from [items].
+  const SlotGrid({
+    required this.title,
+    required this.slots,
     required this.items,
     required this.row,
     required this.describe,
     required this.menu,
+    this.named = false,
     super.key,
   });
 
-  /// What the character carries in a backpack slot.
+  /// The panel's heading.
+  final String title;
+
+  /// Which slots to draw, in the order to draw them.
+  final List<CreItemSlot> slots;
+
+  /// What the character holds in them.
   final List<CarriedItem> items;
 
   /// Wraps a cell in whatever gesture it may take part in.
@@ -861,18 +912,26 @@ class BackpackGrid extends StatelessWidget {
   /// What can be done with an item, or `null` when nothing is on offer.
   final Widget? Function(CarriedItem item) menu;
 
+  /// Whether each cell says which slot it is.
+  ///
+  /// ⚠️ **False for the backpack, and that is not an oversight.** Its sixteen
+  /// slots are interchangeable and the game calls every one of them
+  /// *Inventory*, so a caption on each would be the panel's own heading said
+  /// sixteen more times. An equipment slot is the opposite: *Helmet* is the
+  /// only thing that tells an empty cell from the empty cell beside it.
+  final bool named;
+
   static const int _columns = 4;
 
   @override
   Widget build(BuildContext context) {
-    final slots = CreItemSlot.pack;
     final held = {
       for (final item in items)
         if (item.isInASlot) item.slotIndex: item,
     };
 
     return PanelCard(
-      title: 'Inventory',
+      title: title,
       children: [
         for (var start = 0; start < slots.length; start += _columns)
           Padding(
@@ -894,10 +953,16 @@ class BackpackGrid extends StatelessWidget {
                           item: item,
                           entry: item == null ? null : describe(item.resref),
                           menu: item == null ? null : menu(item),
+                          slotLabel: named ? slotLabel(slot) : null,
                         );
                         return item == null ? cell : row(item, cell);
                       }(),
                     ),
+                  // ⚠️ The last row is short unless the count divides by four,
+                  // and without these the two cells left over would stretch to
+                  // half the panel each.
+                  for (var pad = slots.length - start; pad < _columns; pad++)
+                    const Expanded(child: SizedBox.shrink()),
                 ],
               ),
             ),
@@ -919,6 +984,7 @@ class InventoryCell extends StatelessWidget {
     required this.item,
     required this.entry,
     this.menu,
+    this.slotLabel,
     super.key,
   });
 
@@ -930,6 +996,13 @@ class InventoryCell extends StatelessWidget {
 
   /// What can be done with it, or `null` when nothing is on offer.
   final Widget? menu;
+
+  /// Which slot this cell is, or `null` where the slot has no name worth
+  /// giving — see [SlotGrid.named].
+  ///
+  /// ⚠️ **Drawn even when the cell is empty**, because that is the whole point:
+  /// an unnamed empty cell says only that something could go somewhere.
+  final String? slotLabel;
 
   /// The name the *game* would draw for [item].
   ///
@@ -964,51 +1037,62 @@ class InventoryCell extends StatelessWidget {
             ? null
             : theme.colorScheme.surfaceContainerHighest,
       ),
-      child: carried == null
-          ? null
-          : Column(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (slotLabel case final String where) ...[
+            Text(
+              where,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (carried != null) const SizedBox(height: 4),
+          ],
+          if (carried != null) ...[
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _name ?? carried.resref,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ),
-                    ?menu,
-                  ],
-                ),
-                if (_name != null)
-                  Text(
-                    carried.resref,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                Expanded(
+                  child: Text(
+                    _name ?? carried.resref,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
                   ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    // ⚠️ What explains a cell that will not drag when its
-                    // neighbours will. `ItemEntry` already carries the answer,
-                    // read from the ITM header's Movable bit.
-                    if (entry?.isMovable == false)
-                      const Tag('cannot be moved', tone: TagTone.muted),
-                    if (carried.quantity > 1)
-                      Tag('${carried.quantity}', caption: 'quantity'),
-                    if (!carried.isIdentified)
-                      const Tag('unidentified', tone: TagTone.muted),
-                  ],
                 ),
+                ?menu,
               ],
             ),
+            if (_name != null)
+              Text(
+                carried.resref,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                // ⚠️ What explains a cell that will not drag when its
+                // neighbours will. `ItemEntry` already carries the answer,
+                // read from the ITM header's Movable bit.
+                if (entry?.isMovable == false)
+                  const Tag('cannot be moved', tone: TagTone.muted),
+                if (carried.quantity > 1)
+                  Tag('${carried.quantity}', caption: 'quantity'),
+                if (!carried.isIdentified)
+                  const Tag('unidentified', tone: TagTone.muted),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

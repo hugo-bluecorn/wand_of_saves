@@ -815,5 +815,40 @@ build report.
 part of an arrangement that moved ten times in a day. The **merge** is the decision, and it never
 moved.
 
+### Equipped became a slot grid — ⚠️ and it changed a tested behaviour
+
+**Eleventh change, the user's, and the first that alters what a test pinned.**
+
+Equipped was a list of only what is worn, each row led by a tag naming its slot. It is now **the
+same grid the backpack is**: `BackpackGrid` became **`SlotGrid`**, taking the run of slots to draw,
+and `InventoryCell` gained an always-drawn `slotLabel`. Two groups, one cell widget, one grid
+widget — the alternative was a second rendering of an item, which is the disease this project keeps
+paying for.
+
+- **Twenty-two cells, in an authored order** (`equipmentSlots`): the worn things, the four weapons,
+  the four quivers, the three quick slots, then the magic-weapon slot the engine fills itself.
+  ⚠️ **Not the record's order** — `CreItemSlot` stores the cloak between quiver 4 and quick 1.
+- **The backpack's cells stay unlabelled.** Its sixteen slots are interchangeable and the game
+  calls all of them *Inventory*; a caption on each would be the panel's heading said sixteen more
+  times. An equipment slot is the opposite — *Helmet* is the only thing telling one empty cell from
+  the next.
+- The last row is padded, so two leftover cells do not stretch to half the panel each.
+
+⚠️ **`no Equipped panel when nothing is worn` was a test, and it is now the reverse.** The
+reversal follows from the grid rather than overriding it: a *list* of nothing is nothing, so hiding
+the panel was right; twenty-two empty *cells* say **these are the places things go and all of them
+are free**, which is exactly what the sixteen backpack cells have always said. The test now pins
+the new rule and carries the reason.
+
+⚠️ **This changes the production inventory screen too**, not only the spike — `CarriedSections` is
+shared, and giving the spike its own Equipped rendering would have been the second copy. That
+screen is due for deletion in the merge slice anyway.
+
+⚠️ **One thing a capture should be looked at for**, surfaced by a test: an **unidentified Belt of
+Antipode in the backpack now puts the word "Belt" on screen twice** — once as the item's own name
+(the engine draws the plain name when the identified flag is clear) and once as the empty *Belt*
+equipment slot's caption. Not wrong, but it reads oddly, and it is the kind of thing only looking
+settles.
+
 **Still owed:** the captures, and D19 itself. `analyze` clean, `dart format` a no-op, zero
 suppressions, **844 + 399 green**, branch `spike/grid-variants`, not pushed, no PR.

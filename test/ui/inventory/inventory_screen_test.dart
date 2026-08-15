@@ -138,9 +138,10 @@ void main() {
     await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
     expect(find.text('Aard · Inventory'), findsOneWidget);
     // ⚠️ No "Nothing yet." any more, and that is the point of the grid: an
-    // empty backpack shows sixteen empty slots, so the capacity is countable
-    // rather than merely asserted to be unused.
-    expect(find.byType(InventoryCell), findsNWidgets(16));
+    // empty backpack shows sixteen empty slots and an empty Equipped shows its
+    // twenty-two, so the capacity is countable rather than merely asserted to
+    // be unused.
+    expect(find.byType(InventoryCell), findsNWidgets(16 + 22));
   });
 
   testWidgets('lists what the character carries', (tester) async {
@@ -447,7 +448,14 @@ void main() {
       expect(find.text('BOOT01'), findsOneWidget);
     });
 
-    testWidgets('no Equipped panel when nothing is worn', (tester) async {
+    testWidgets('⚠️ Equipped is drawn even when nothing is worn', (
+      tester,
+    ) async {
+      // ⚠️ **This assertion is the reverse of what it used to be**, and the
+      // reversal came with the grid. A *list* of nothing is nothing, so the
+      // panel used to be hidden; twenty-two empty *cells* say "these are the
+      // places things go and all of them are free", which is exactly what the
+      // sixteen backpack cells have always said.
       await pump(
         tester,
         character: characterWith(const [
@@ -455,8 +463,11 @@ void main() {
         ]),
         onAdd: (_, _) {},
       );
-      expect(find.text('Equipped'), findsNothing);
+      expect(find.text('Equipped'), findsOneWidget);
       expect(find.text('Inventory'), findsOneWidget);
+      // Every slot, none of them filled.
+      expect(find.text('Helmet'), findsOneWidget);
+      expect(find.text('Quick item 3'), findsOneWidget);
     });
 
     testWidgets('⚠️ an item in NO slot is still shown', (tester) async {
@@ -594,7 +605,17 @@ void main() {
 
   group('the backpack is sixteen cells, not a list', () {
     /// The cells of the Inventory grid, in slot order.
-    Finder cells() => find.byType(InventoryCell);
+    ///
+    /// ⚠️ **Scoped to that grid.** Equipped is a slot grid too now, so an
+    /// unscoped finder counts thirty-eight cells and this group stops being
+    /// about the backpack at all.
+    Finder cells() => find.descendant(
+      of: find.ancestor(
+        of: find.text('Inventory'),
+        matching: find.byType(SlotGrid),
+      ),
+      matching: find.byType(InventoryCell),
+    );
 
     testWidgets('sixteen cells whatever is carried', (tester) async {
       await pump(tester, character: characterWith(const []), onAdd: (_, _) {});
@@ -671,7 +692,12 @@ void main() {
         onAdd: (_, _) {},
       );
 
-      expect(find.text('Belt'), findsOneWidget);
+      // ⚠️ **Two of them now, and only one is the item.** The Equipped grid
+      // captions its cells with the slot's own name, and BG:EE calls the belt
+      // slot "Belt" — so an unidentified Belt of Antipode really does put the
+      // word on screen twice. The one that matters is the one in the backpack
+      // cell; the other is the empty equipment slot.
+      expect(find.text('Belt'), findsNWidgets(2));
       expect(find.text('Belt of Antipode'), findsNothing);
       // And the identified neighbour is unaffected.
       expect(find.text('The Paws of the Cheetah'), findsOneWidget);
