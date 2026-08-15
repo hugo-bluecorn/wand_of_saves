@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:wand_of_saves/ui/core/palette.dart';
 import 'package:wand_of_saves/ui/core/palette_finish.dart';
@@ -499,45 +500,31 @@ ThemeData _themeFor(WorkbenchPalette palette, Brightness brightness) {
   );
 }
 
-/// The M3 phone scale retuned for a desktop window: smaller, tighter, and with
-/// a line height that lets a wrapping caveat read as a paragraph.
+/// **Flutter's own Material 3 type scale, unretuned.**
+///
+/// ⚠️ **This used to be a hand-tuned desktop ramp and is not any more** — every
+/// size, weight, letter spacing and line height was authored, running about a
+/// point and a half under the M3 scale on the argument that a desktop window
+/// wants tighter text than a phone. Measured against the machine it runs on,
+/// the *base* was already right — Flutter's default `Text` style is
+/// `bodyMedium`, that was 13.5, and this desktop's own UI font is Noto Sans
+/// 10 pt = 13.33 px at 96 DPI. What was under platform size was the small end:
+/// captions at 11 and pill values at 12. So the ramp is Flutter's now, and
+/// nothing in this application states a font size anywhere.
+///
+/// **Built rather than left null**, because the sub-themes below need a
+/// `TextTheme` to derive their own styles from — and this is exactly what
+/// `ThemeData` would have computed: `Typography.material2021` for the platform,
+/// the set that matches the brightness, and, because it is handed the
+/// `ColorScheme`, `onSurface` already applied as both body and display colour.
 TextTheme _textThemeFor(ColorScheme colors) {
-  const body = TextStyle(height: 1.35);
-  return TextTheme(
-    displaySmall: const TextStyle(fontSize: 30, fontWeight: FontWeight.w300),
-    headlineSmall: const TextStyle(
-      fontSize: 22,
-      fontWeight: FontWeight.w500,
-      letterSpacing: -0.2,
-    ),
-    titleLarge: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
-    titleMedium: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-    titleSmall: const TextStyle(
-      fontSize: 13.5,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.1,
-    ),
-    bodyLarge: body.copyWith(fontSize: 14.5, letterSpacing: 0.1),
-    bodyMedium: body.copyWith(fontSize: 13.5, letterSpacing: 0.1),
-    bodySmall: body.copyWith(fontSize: 12.5, letterSpacing: 0.15),
-    labelLarge: const TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    ),
-    labelMedium: const TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    ),
-    labelSmall: const TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.4,
-    ),
-    // Without this every unstyled slot falls back to `black87`, which in the
-    // dark theme is unreadable and in the light theme is not `onSurface`.
-  ).apply(bodyColor: colors.onSurface, displayColor: colors.onSurface);
+  final typography = Typography.material2021(
+    platform: defaultTargetPlatform,
+    colorScheme: colors,
+  );
+  return colors.brightness == Brightness.dark
+      ? typography.white
+      : typography.black;
 }
 
 // ---------------------------------------------------------------------------

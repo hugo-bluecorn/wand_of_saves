@@ -656,3 +656,63 @@ a no-op, 844 + 399 green.
 behaviour the code no longer has is a bug report: the file still said "four changes" over a list of
 six, and still described the compact rendering as sitting "under an inventory drawn at full
 height".
+
+### Resistances above Skills — and ⚠️ the type scale went back to Flutter's
+
+Two more, and **the second is production, not spike**: it changes every screen in the application.
+
+**Resistances moved above Skills.** A resistance is something the character *is*, like an ability
+score, rather than something they have learnt. The left column reads Character · Abilities ·
+Resistances · Skills · In no slot.
+
+**The hand-tuned type scale is gone.** `_textThemeFor` had authored every size, weight, letter
+spacing and line height — roughly M3 minus a point and a half, on the argument that a desktop
+window wants tighter text than a phone. It is now `Typography.material2021` for the platform,
+unretuned, and **nothing in this application states a font size anywhere.**
+
+⚠️ **Why the old ramp was half right, measured on the machine it runs on.** Flutter's default
+`Text` style is `bodyMedium`; that was **13.5**, and this desktop's own UI font is Noto Sans 10 pt
+= **13.33 px** at 96 DPI (`gtk-xft-dpi 98304`, `text-scaling-factor 1.0`). The *base* was already
+within a fifth of a pixel of the platform. What sat under platform size was the small end —
+captions at 11, pill values at 12 — which is what a page now carrying eleven resistance pills and
+an eighteen-row compact footer put on screen in quantity.
+
+| role | was | now (M3 default) |
+|---|---|---|
+| displaySmall · headlineSmall · titleLarge | 30 · 22 · 19 | **36 · 24 · 22** |
+| titleMedium · titleSmall | 16 · 13.5 | **16 · 14** |
+| bodyLarge · bodyMedium · bodySmall | 14.5 · 13.5 · 12.5 | **16 · 14 · 12** |
+| labelLarge · labelMedium · labelSmall | 13 · 12 · 11 | **14 · 12 · 11** |
+| body line height | 1.35 flat | M3's own — 1.5 / 1.43 / 1.33 |
+| weights | w500–w600 throughout | M3's w400 / w500 |
+
+**It is built rather than left null on purpose**: the sub-themes below it derive their own styles
+from a `TextTheme`, and this is exactly what `ThemeData` would have computed — the typography for
+the platform, the set matching the brightness, and `onSurface` already applied as body and display
+colour because `Typography.material2021` is handed the `ColorScheme`. Verified from inside a
+pumped tree, where the geometry is actually merged: **36/24/22 · 16/14/12 · 14/12/11**, M3 heights,
+M3 weights, text still `onSurface`.
+
+**What it cost the page**, same fixture and window as before:
+
+| | before | after |
+|---|---|---|
+| Combat band | 219 | **228** |
+| columns start at | 409 | 439 |
+| left column ends | 1,969 | 2,013 |
+| minimum window | 1,260 × 160 | **1,260 × 180** |
+
+**About 2–4 %, which is less than the +10 % on `bodyLarge` suggests** — because the sheet's
+secondary text did not grow: `bodySmall` went *down* (12.5 → 12) and the two label roles the tags
+use are unchanged at 12 and 11. Primary text is bigger, secondary text is the same or smaller, and
+the page is barely taller.
+
+⚠️ **`iconTheme` was left at 20** against Material's 24. The ask was font sizes; icons are a
+separate call, and 24 would grow every chrome row.
+
+⚠️ **This is the first production change in this branch that is not a behaviour-preserving
+extraction.** It touches the home screen, the character sheet, the character-file editor, creation
+and both spikes. 844 + 399 still green, `analyze` clean, `dart format` a no-op, zero suppressions —
+but the suite cannot see type: the two defects this project has shipped from text metrics were both
+found by looking at a capture. **Worth a look at the home screen and the creation flow, not only
+the spike.**
