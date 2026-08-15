@@ -58,11 +58,18 @@
 /// proficiency palette — the Ctrl+K box that used to head the left column —
 /// was removed at the user's asking. On a page that draws every field at once
 /// there is less for it to reach, and the record's own panels are the index.
-/// ⚠️ **The record cannot be searched at all**, and the findings badge counts
-/// without navigating, because the palette was where it went. That removal also
+/// ⚠️ **The record cannot be searched at all**, and that stands as designed:
+/// the page draws every field at once, so the whole picture is the index and
+/// jumping to a field serves nothing a scroll does not. That removal also
 /// settled **R5** — one find surface or two, the deepest question the two
 /// spikes existed to put to the user — by deletion rather than by comparison,
 /// and G2 was deleted the day after.
+///
+/// ⚠️ **The findings badge went with it.** It had counted without navigating
+/// once the palette it opened was gone, and a count with nowhere to go is a
+/// discrepancy-finding aid half-built — a feature this project is deliberately
+/// not building now. What a finding still does is **mark its own row**, in
+/// place, which is where it was always most use.
 ///
 /// ⚠️ **The study's scores for this variant are historical.** Eleven changes to
 /// the page and one to the theme, all the user's, all made after looking at the
@@ -90,8 +97,8 @@
 ///    it to the head is what **got R1 back**: the numbers equipment moves are
 ///    what an unscrolled window opens on, twenty points above the backpack, at
 ///    every window height the application allows — and it cost nothing.
-/// 6. **The field palette is gone**, and with it Ctrl+K and the findings
-///    badge's destination — see above.
+/// 6. **The field palette is gone**, and with it Ctrl+K and the findings badge
+///    — see above.
 ///
 /// The one thing left over from the pin is the **compact** rendering: it was
 /// what made a pinned band possible at all, and the user chose it. Combat and
@@ -219,11 +226,6 @@ class _G1BodyState extends State<_G1Body> {
 
     return Column(
       children: [
-        // ⚠️ **The badge counts and does not navigate.** With the palette gone
-        // there is nowhere for it to send anybody, and `FindingsBadge` takes a
-        // null `onPressed` for exactly this — the count is still worth showing,
-        // and an enabled button that does nothing is the dead control this
-        // project keeps deleting.
         _PartyBand(model: model),
         const Divider(height: 1),
         Expanded(

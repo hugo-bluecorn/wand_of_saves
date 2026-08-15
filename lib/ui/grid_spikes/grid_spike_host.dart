@@ -38,7 +38,6 @@ import 'package:wand_of_saves/domain/character.dart';
 import 'package:wand_of_saves/domain/edit_command.dart';
 import 'package:wand_of_saves/domain/rules/character_sheet.dart';
 import 'package:wand_of_saves/ui/character/findings.dart';
-import 'package:wand_of_saves/ui/character/findings_badge.dart';
 import 'package:wand_of_saves/ui/character/rules_toggle.dart';
 import 'package:wand_of_saves/ui/character/sheet_projection.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
@@ -80,9 +79,6 @@ class GridSpikeModel {
 
   /// Where that record starts in the savegame.
   int get creOffset => character.creOffset;
-
-  /// Everything this application noticed about the open record.
-  List<Finding> get findings => findingsFor(sheet);
 
   /// Writes one field of the record.
   void applyField(FieldEntry entry, String value) {
@@ -218,19 +214,20 @@ class _GridSpikeHostState extends ConsumerState<GridSpikeHost> {
   }
 }
 
-/// The chrome both grids carry, in the order it reads: what is wrong, what
-/// mode we are in, undo, redo, save, and the way out.
+/// The chrome the page carries, in the order it reads: what mode we are in,
+/// undo, redo, save, and the way out.
 ///
-/// **A list rather than a bar**, because the two grids put it in differently
-/// shaped cells — down the right-hand column on G1, across the top band on G2
-/// — and only the arrangement should differ between them.
-/// ⚠️ **The badge counts and does not navigate.** It used to open the field
-/// palette; the palette is gone, so there is nowhere to send anybody.
-/// `FindingsBadge` documents a null `onPressed` for exactly this — the count is
-/// still worth showing, and an enabled button that does nothing is the dead
-/// control this project keeps deleting.
+/// **A list rather than a bar**, because the page puts it in a cell of its own
+/// choosing — it was down a right-hand column, then across a top band — and
+/// only the arrangement should change when it moves.
+///
+/// ⚠️ **The findings badge is gone, and its absence is a decision.** It counted
+/// and could not navigate: the field palette was where it sent people, and that
+/// was removed at the seventh change. A count with nowhere to go is a
+/// discrepancy-finding aid half-built, and finding discrepancies is a feature
+/// this project is deliberately not building now — so the half goes too rather
+/// than sitting on the page implying the whole.
 List<Widget> spikeChrome(BuildContext context, GridSpikeModel model) => [
-  FindingsBadge(findings: model.findings, onPressed: null),
   RulesToggle(
     binding: model.rulesBind,
     onChanged: model.onRulesBindChanged,
