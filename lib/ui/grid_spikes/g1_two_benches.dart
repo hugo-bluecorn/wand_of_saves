@@ -25,7 +25,7 @@
 ///   above both rather than inside either, and at the top of the scroll it is
 ///   what an unscrolled window opens on.
 /// - **Left column**: Character — which now ends with fatigue and
-///   intoxication — Abilities, Skills, the Resistances as pills, and anything
+///   intoxication — Abilities, the Resistances as pills, Skills, and anything
 ///   in no slot.
 /// - **Right column**: the **backpack**, what is **Equipped**, and the
 ///   **Proficiencies**.
@@ -99,7 +99,7 @@ import 'package:wand_of_saves/ui/inventory/inventory_screen.dart';
 /// page twice as wide as it is tall is what the three columns answer.
 const Map<String, CompactStyle> _combat = {'Combat': CompactStyle.lines};
 
-/// The resistances, under Skills, as pills.
+/// The resistances, above Skills, as pills.
 ///
 /// Eleven values, each a word and a percentage, none of which the engine draws
 /// differently. A line each would spend three hundred points saying `0%`.
@@ -107,13 +107,15 @@ const Map<String, CompactStyle> _resistances = {
   'Resistances': CompactStyle.flowing,
 };
 
-/// The panels the left-hand column leads with, in the sheet's own order.
+/// The left column, above and below the Resistances — an authored order, not
+/// the sheet's own.
 ///
-/// ⚠️ **Proficiencies is not among them, and that is the balance.** Four
-/// panels on the left against a backpack on the right left the left column
-/// twice the height of the right; twenty-four pip meters is the one block big
-/// enough to move the other way.
-const List<String> _record = ['Character', 'Abilities', 'Skills'];
+/// ⚠️ **Proficiencies is in neither, and that is the balance.** Four panels on
+/// the left against a backpack on the right left the left column twice the
+/// height of the right; twenty-four pip meters is the one block big enough to
+/// move the other way.
+const List<String> _aboveResistances = ['Character', 'Abilities'];
+const List<String> _belowResistances = ['Skills'];
 
 /// ⚠️ **Condition is not a panel any more.** Fatigue and intoxication are two
 /// values about the person, and a card of its own for two rows was a heading
@@ -272,8 +274,8 @@ class _G1BodyState extends State<_G1Body> {
   }
 }
 
-/// The left-hand column: the palette, the read-once panels, whatever is in no
-/// slot, and the numbers equipment moves.
+/// The left-hand column: the read-once panels, the resistances among them, and
+/// whatever the record holds in no slot at all.
 class _RecordColumn extends StatelessWidget {
   const _RecordColumn({
     required this.model,
@@ -302,7 +304,24 @@ class _RecordColumn extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final title in _record)
+              for (final title in _aboveResistances)
+                if (panels[title] case final Widget panel) ...[
+                  panel,
+                  const SizedBox(height: 16),
+                ],
+              // Above Skills: a resistance is something the character *is*,
+              // like an ability score, rather than something they have learnt.
+              // Nothing in this block drags, so it can sit inside the
+              // selectable region with the panels around it.
+              CompactNumbers(
+                character: model.sheet,
+                panels: _resistances,
+                rulesBind: model.rulesBind,
+                onOpen: onOpen,
+                inlineEditor: inlineEditor,
+              ),
+              const SizedBox(height: 16),
+              for (final title in _belowResistances)
                 if (panels[title] case final Widget panel) ...[
                   panel,
                   const SizedBox(height: 16),
@@ -310,18 +329,7 @@ class _RecordColumn extends StatelessWidget {
             ],
           ),
         ),
-        // Under Skills, because a resistance is a thing the character has
-        // rather than a thing they do. Selectable, and nothing here drags.
-        SelectionArea(
-          child: CompactNumbers(
-            character: model.sheet,
-            panels: _resistances,
-            rulesBind: model.rulesBind,
-            onOpen: onOpen,
-            inlineEditor: inlineEditor,
-          ),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 4),
         // ⚠️ **Items no slot points at, over here with the record rather than
         // with the backpack.** They are not a place anything can be put and
         // the game will not draw them at all, so they read as something wrong
