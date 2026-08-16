@@ -226,43 +226,60 @@ column, so reopen them deliberately.
 > assertion means anything. `planning/ui-review.md` is the critique; the widgets that answered it
 > are `lib/ui/core/` and `lib/ui/character/`.
 
-> ### 🔶 Where the last session stopped, 2026-08-14
+> ### 🔶 Where the last session stopped, 2026-08-16 — development is PAUSED here
 >
-> **844 app tests, 399 format tests**, `analyze` clean, `dart format` clean, zero suppressions, tree
-> clean. On branch **`feat/inventory-format-layer`**, not pushed, no PR.
+> **853 app tests, 399 format tests**, `analyze` clean, `dart format` clean, zero suppressions, tree
+> clean. On branch **`spike/grid-variants`**, 30 commits ahead of `main`, **not pushed, no PR** —
+> deliberately, per `planning/grid-spike-brief.md`. **The user called a halt; nothing is
+> half-finished.**
 >
-> ✅ **Flutter upgraded 3.44.8 → 3.47.0 (Dart 3.13.0), and Impeller is now the Linux renderer** —
-> the launch log prints `Using the Impeller rendering backend (OpenGLESSDF)`. The upgrade surfaced
-> one real defect: the home and inventory screens' `Scrollbar`s shared no controller with their
-> scroll views, which 3.47 turns into a first-frame assertion on desktop (the suite runs as
-> Android, where the primary controller hides it — the two new tests pin `TargetPlatform.linux`
-> with the real app theme). D8 gained an amendment: 3.47's `pub get` writes seven `exclude:` lines
-> into `analysis_options.yaml` itself, on every run.
+> ⚠️ **What is owed before anything else: the captures, then D19.** The window is native Wayland
+> and only the user can take them; the list is `planning/grid-spike-brief.md` §"The captures". D19's
+> agreed name is **"D19 — One character, one page: the merged page."**
 >
-> ✅ **THE ENGINE OPENED A RELOCATED SAVE — the project's oldest gate, closed 2026-08-13.** BG:EE
-> loaded a **six-member** save this app had resized (`SCRL75` added to Xzar, fourth in the array on
-> purpose), drew all six party members, and showed the scroll in his pack. Both hazardous header
-> encodings were live in that file and both survived — `familiarInfo` at file-length − 400, and two
-> sections parked at the **old EOF** carried to the new one. ⚠️ **Residual:** the engine *loaded*, it
-> did not *re-save*, so a field it silently corrects is still invisible. **A load-then-save gives the
-> byte diff** and is the cheapest strengthening left.
+> ✅ **The merged-page spike is complete and evaluated.** Eleven user changes, then eight criticisms
+> answered as eight decisions, then all seven items of the resulting work package built. The page:
+> a party band, Combat across the head, and two columns — the record left, the items and
+> proficiencies right — **every panel compact**, one scroll, no field palette, no findings badge.
+> `planning/grid-spike-brief.md` is the whole record, chronological, with the measurement behind
+> each move.
 >
-> ✅ **Inventory is now a real screen**: a 4 × 4 grid of sixteen cells addressed **by slot** (a hole
-> at `pack4` draws as a hole), each cell carrying the name the game would draw *and* the resref;
-> three panels — Inventory, Equipped, In no slot; the party rail and Save/undo/redo on its own app
-> bar; drag an item onto a portrait to hand it over; and a `…`/right-click menu per item with
-> **Remove** and **Move to**.
+> ⚠️ **Four of the eight decisions landed in SHARED code, not the spike**, so the pushed inventory
+> screen has them too and they survive the spike's deletion: an empty *captioned* slot cell is drawn
+> **unlit** (a backpack empty is not — that one is capacity); `magicWeapon` is off `equipmentSlots`
+> but `equipmentSlotsFor` still draws any slot the record occupies, because dropping a slot hides an
+> **item**; `dragAffinity` is a per-surface parameter (the merged page pays `Axis.vertical` by
+> losing scroll-by-dragging); and `ItemName` marks an unidentified item's name in a **role** colour.
 >
-> ⚠️ **The subject is Conan, and the fixtures are his.** Arduin was deleted entirely — his `.chr`
-> carried a `dialogFile` no code path explains, and his CRE resref was `*RDUIN` where an
-> engine-created character carries `*HARBASE`. Fixtures hold a **2/4/6-member progression** plus the
-> transfer pair, and `ConanEX.chr`. The old fixtures stay as regression data only.
+> ⚠️ **A tabbed proficiency panel was built and then undone** (`d73526d`, reverted by `3adbd85`).
+> **The research under it survived and must not be re-derived** — BG:EE really does say which
+> weapon type each proficiency is, in the **descriptions of `weapprof.2da`'s eight obsolete BG1
+> rows** (strrefs 9589–9596). See `planning/grid-spike-brief.md` §"Twelfth change": a Crossbow is
+> *Missile* not *Bow*; `NAME_REF` 8732 collides with a live proficiency; `stylbonu.2da`'s row labels
+> do not match `weapprof.2da`'s; and ⚠️ **`SLAYSH01` claims proficiency 116, a padding row** — the
+> first observed use of that band, in an *item*, which D18's creature-only wording does not cover.
 >
-> ⚠️ **The recurring fault of the day, four times over: a rule written twice, and the second copy
-> wrong.** The naming rule, the pack-slot rule, the movable rule, the identified-name rule — each
-> reached one surface correctly and another incorrectly. See
-> [[a-rule-with-two-copies-is-the-bug]]. Every fix was to make it **one** copy, not to correct the
-> second.
+> ⚠️ **One standing suggestion, measured and not taken:** move **Proficiencies to the left column**.
+> The columns are 970 : 1,456; that single named move lands them at 1,278 : 1,148 and restores the
+> sheet's authored order. Left for the user — the map is authored, and balancing by algorithm is
+> D17's zigzag.
+>
+> ⚠️ **THE ENGINE OPENED A RELOCATED SAVE — the project's oldest gate, closed 2026-08-13** — but it
+> *loaded*, it did not *re-save*, so a field it silently corrects is still invisible. **A
+> load-then-save gives the byte diff** and is the cheapest strengthening left. Ask for it next time
+> BG:EE is open.
+>
+> ⚠️ **The subject is Conan, and the fixtures are his.** Fixtures hold a **2/4/6-member progression**
+> plus the `Conan Full Party` → `Conan Inventory Move` transfer pair, and `ConanEX.chr`. The old
+> fixtures stay as regression data only.
+>
+> ⚠️ **Flutter is 3.47.0 (Dart 3.13.0) and Impeller is the Linux renderer.** D8's second amendment
+> is from that upgrade: `pub get` writes seven `exclude:` lines into `analysis_options.yaml` on
+> every run — not a violation to fix.
+>
+> ⚠️ **Two false greens this session, both the same cause**: a tap on a widget off-screen — once
+> below the fold, once *sideways* in a scrolling tab strip — misses silently, and Flutter reports it
+> as a **warning**. `ensureVisible` before every tap, and assert *which* thing opened.
 
 ### What exists
 
