@@ -109,4 +109,116 @@ void main() {
       expect(boundary.live.entries.keys, [89]);
     });
   });
+
+  group('⚠️ the eight weapon classes, and the game states them itself', () {
+    // ⚠️ **Not invented, and not inferred from the names either.** BG:EE's
+    // `weapprof.2da` still carries the eight obsolete BG1 rows, and each one's
+    // DESC_REF is a sentence naming exactly which weapons it covers. Resolved
+    // against the player's own talk table 2026-08-16:
+    //
+    //   9589 LARGE SWORD  — "Bastard Swords, Two handed swords, Long Swords,
+    //                        and Scimitars"
+    //   9590 SMALL SWORD  — "Daggers and Short swords"
+    //   9591 BOW          — "Longbows, Composite Longbows, and Shortbows"
+    //   9592 SPEAR        — "Spears and Halberds"
+    //   9593 BLUNT        — "Maces, Clubs, Warhammers, and the Staff"
+    //   9594 SPIKED       — "Morning Stars and Flails"
+    //   9595 AXE          — "Battle axes and Throwing axes"
+    //   9596 MISSILE      — "Slings, Darts, and Crossbows"
+    //
+    // Nineteen of the twenty live weapon proficiencies are named there. The
+    // twentieth is Katana, which did not exist in BG1 — see its own test.
+
+    test('the sentences are transcribed exactly', () {
+      // ⚠️ Large Sword is the sentence's four **plus 94, the Katana**, which
+      // no sentence names — see the next test. Every other class here is its
+      // sentence and nothing else.
+      expect(WeaponClass.largeSword.members, {89, 90, 93, 95, 94});
+      expect(
+        WeaponClass.largeSword.members.difference({94}),
+        {89, 90, 93, 95},
+        reason: 'strref 9589, transcribed',
+      );
+      expect(WeaponClass.smallSword.members, {91, 96});
+      expect(WeaponClass.bow.members, {104, 105});
+      expect(WeaponClass.spear.members, {98, 99});
+      expect(WeaponClass.blunt.members, {97, 101, 102, 115});
+      expect(WeaponClass.spiked.members, {100});
+      expect(WeaponClass.axe.members, {92});
+      expect(WeaponClass.missile.members, {103, 106, 107});
+    });
+
+    test('⚠️ Katana is the one the sentences do not cover', () {
+      // BG1 had no katanas, so no BG1 weapon class names one. It is placed by
+      // MEASUREMENT instead: all four katanas BioWare ships are `ITEMCAT`
+      // category `BGSWORD`, the same category as every bastard, long and
+      // two-handed sword. Evidence, not a guess — but weaker evidence than the
+      // other nineteen, and that is why it has its own test.
+      expect(WeaponClass.of(94), WeaponClass.largeSword);
+      expect(
+        WeaponClass.largeSword.members.contains(94),
+        isTrue,
+        reason: 'measured from the shipped items, not read from a sentence',
+      );
+    });
+
+    test('the classes are disjoint', () {
+      // Every proficiency has ONE class, so a tabbed reading of them shows
+      // each exactly once.
+      final seen = <int>{};
+      for (final each in WeaponClass.values) {
+        for (final id in each.members) {
+          expect(seen.add(id), isTrue, reason: '$id is in two classes');
+        }
+      }
+    });
+
+    test('⚠️ together they cover every live WEAPON and no style', () {
+      // The live band is 89–107 plus 111–115. The four styles — 111 to 114 —
+      // belong to no weapon class, which is what makes "unclassified" a safe
+      // definition of *style* rather than a second constant to keep in step.
+      final classified = {
+        for (final each in WeaponClass.values) ...each.members,
+      };
+      final live = {
+        for (var id = 89; id <= 107; id++) id,
+        111,
+        112,
+        113,
+        114,
+        115,
+      };
+      expect(
+        classified.difference(live),
+        isEmpty,
+        reason: 'no class claims an id the table does not have',
+      );
+      expect(
+        live.difference(classified),
+        {111, 112, 113, 114},
+        reason: 'exactly the four styles are left over',
+      );
+    });
+
+    test('an id no class claims answers null', () {
+      expect(WeaponClass.of(114), isNull, reason: 'Two-Weapon Style');
+      expect(WeaponClass.of(2), isNull, reason: 'the obsolete BOW row');
+      expect(WeaponClass.of(116), isNull, reason: 'a padding row');
+    });
+
+    test('⚠️ the labels are the game’s own words', () {
+      // 8668, 8733, 8734, 9400, 9401, 9402, 9403 are the NAME_REF strings.
+      expect(WeaponClass.largeSword.label, 'Large Sword');
+      expect(WeaponClass.bow.label, 'Bow');
+      expect(WeaponClass.blunt.label, 'Blunt Weapons');
+      expect(WeaponClass.missile.label, 'Missile Weapons');
+      // ⚠️ The exception, and it is deliberate: NAME_REF 8732 resolves to
+      // "Short Sword", which is ALSO live proficiency 91. A heading reading
+      // "Short Sword" over a list containing "Short Sword" and "Dagger" states
+      // the wrong thing. The class's own description (9590) heads itself
+      // "SMALL SWORD", so that is the word used — still the game's, and
+      // unambiguous.
+      expect(WeaponClass.smallSword.label, 'Small Sword');
+    });
+  });
 }

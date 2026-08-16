@@ -157,3 +157,105 @@ class ProficiencyCatalogue with ProficiencyCatalogueMappable {
 ///
 /// See [ProficiencyCatalogue.live] for the measurement.
 const int _liveFloor = 89;
+
+/// BG:EE's eight weapon classes, which is how the game itself groups the
+/// twenty weapon proficiencies.
+///
+/// ## ⚠️ Read from the game, not invented — and it took three sources
+///
+/// A player's `weapprof.2da` has no column saying what *kind* of weapon a
+/// proficiency is, `itemtype.2da` holds only sounds and a slot number, and
+/// `clasweap.2da` has the eight names as **columns** but says nothing about
+/// which proficiency belongs under which. So the grouping looks like something
+/// this project would have to invent. It is not:
+///
+/// 1. **The obsolete BG1 rows describe themselves.** `weapprof.2da` still
+///    carries ids 0–7 — `LARGE_SWORD`, `SMALL_SWORD`, `BOW`, `SPEAR`, `BLUNT`,
+///    `SPIKED`, `AXE`, `MISSILE`, the same eight names `clasweap.2da` columns
+///    by — and each one's `DESC_REF` is **a sentence naming the weapons it
+///    covers**. Resolved against the player's own talk table on 2026-08-16,
+///    those eight sentences name **nineteen of the twenty** live weapon
+///    proficiencies. That is the engine's own text, so this is a *reading*
+///    rather than a judgement.
+/// 2. **The shipped items place the twentieth.** BG1 had no katanas, so no BG1
+///    class names one. Every `ITM V1` header carries both its `ITEMCAT`
+///    category (`0x1c`) and its weapon proficiency (`0x31`), and a sweep of all
+///    **1,530 shipped items** puts all four katanas in `BGSWORD` — the category
+///    of every bastard, long and two-handed sword. Weaker evidence than a
+///    sentence, and marked as such in the test.
+/// 3. **The same sweep corroborates the other nineteen**, one category per
+///    proficiency with two instructive exceptions: `Flail / Morning Star`
+///    spans `FLAIL` and `MSTAR`, exactly as its own name says, and three of the
+///    twelve scimitar-family items are catalogued `SMSWORD` rather than
+///    `BGSWORD` — the short blades of that group. The sentence settles both.
+///
+/// ⚠️ **Per-game, like [ProficiencyCatalogue.live] and for the same reason.**
+/// A game that renumbered its proficiencies, or dropped the obsolete band that
+/// carries the descriptions, would need this read again.
+///
+/// ⚠️ **The four fighting styles are in no class here**, and that is load
+/// bearing rather than an omission: it makes *style* the residual, so a
+/// surface splitting proficiencies by class cannot lose one. Anything
+/// unclassified is visible in the leftover group whatever it turns out to be.
+///
+/// The order is the game's — `weapprof.2da` rows 0 through 7.
+enum WeaponClass {
+  /// "Bastard Swords, Two handed swords, Long Swords, and Scimitars" — strref
+  /// 9589. Plus the Katana, by measurement.
+  largeSword('Large Sword', {89, 90, 93, 94, 95}),
+
+  /// "Daggers and Short swords" — strref 9590.
+  ///
+  /// ⚠️ **Labelled from the description, not from `NAME_REF`, and only here.**
+  /// 8732 resolves to *"Short Sword"*, which is also live proficiency 91, so a
+  /// heading reading "Short Sword" over a group containing "Short Sword" and
+  /// "Dagger" would state something untrue. The class's own description heads
+  /// itself **"SMALL SWORD"**, which is equally the game's word and is not
+  /// ambiguous.
+  smallSword('Small Sword', {91, 96}),
+
+  /// "Longbows, Composite Longbows, and Shortbows" — strref 9591.
+  bow('Bow', {104, 105}),
+
+  /// "Spears and Halberds" — strref 9592.
+  spear('Spear', {98, 99}),
+
+  /// "Maces, Clubs, Warhammers, and the Staff" — strref 9593.
+  blunt('Blunt Weapons', {97, 101, 102, 115}),
+
+  /// "Morning Stars and Flails" — strref 9594, and one proficiency covers
+  /// both.
+  spiked('Spiked Weapons', {100}),
+
+  /// "Battle axes and Throwing axes" — strref 9595, and one proficiency covers
+  /// both.
+  axe('Axe', {92}),
+
+  /// "Slings, Darts, and Crossbows" — strref 9596. ⚠️ Crossbows are *missile*
+  /// rather than *bow*, which is the one placement a reader is likely to
+  /// dispute and the sentence settles outright.
+  missile('Missile Weapons', {103, 106, 107});
+
+  const WeaponClass(this.label, this.members);
+
+  /// What the game calls this class. See [smallSword] for the one label that
+  /// is not its `NAME_REF`.
+  final String label;
+
+  /// The proficiency ids it covers, by the `ID` column rather than the row
+  /// label — BG:EE labels two rows `AXE` and two `SPEAR`.
+  final Set<int> members;
+
+  /// Which class [proficiencyId] belongs to, or `null` when none claims it.
+  ///
+  /// `null` is the ordinary answer for a **fighting style**, and also for an
+  /// obsolete or padding row. A caller must show what it gets back rather than
+  /// drop it: a proficiency the record holds and no class claims is exactly
+  /// the anomaly worth seeing.
+  static WeaponClass? of(int proficiencyId) {
+    for (final each in values) {
+      if (each.members.contains(proficiencyId)) return each;
+    }
+    return null;
+  }
+}

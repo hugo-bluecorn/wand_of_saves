@@ -45,6 +45,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:wand_of_saves/domain/proficiency_catalogue.dart';
 import 'package:wand_of_saves/ui/character/findings.dart';
 import 'package:wand_of_saves/ui/character/pip_meter.dart';
 import 'package:wand_of_saves/ui/character/sheet_view_model.dart';
@@ -224,7 +225,59 @@ class CompactNumbers extends StatelessWidget {
   }
 }
 
-/// Every proficiency the tables know, as pills that flow across and wrap.
+/// One tab's worth of proficiencies: what to call it, and what is in it.
+typedef ProficiencyGroup = ({
+  String label,
+  List<SheetProficiency> members,
+  int conflicts,
+});
+
+/// [proficiencies] split into the game's eight weapon classes, with everything
+/// no class claims gathered last.
+///
+/// ⚠️ **The residual group is how nothing gets lost.** [WeaponClass.of] answers
+/// `null` for the four fighting styles — which is the intended case and is what
+/// the last tab holds — but it also answers `null` for an obsolete row, a
+/// padding row, or any id a future table introduces. All of them land in the
+/// same visible place rather than in no tab at all. **A proficiency the record
+/// holds and this code cannot classify is exactly the anomaly worth seeing.**
+///
+/// A class with nothing in it gets no tab: nine headings over a `.chr` with two
+/// proficiencies would be nine ways to find nothing.
+List<ProficiencyGroup> proficiencyGroups(List<SheetProficiency> proficiencies) {
+  final byClass = <WeaponClass?, List<SheetProficiency>>{};
+  for (final each in proficiencies) {
+    (byClass[WeaponClass.of(each.id)] ??= []).add(each);
+  }
+  return [
+    for (final weaponClass in [...WeaponClass.values, null])
+      if (byClass[weaponClass] case final List<SheetProficiency> members)
+        (
+          // ⚠️ **"Style" is borrowed, not coined** — it is the word in all four
+          // of these proficiencies' own names, and `stylbonu.2da` is the table
+          // that gives them their bonuses. Unlike the eight it is not a class
+          // name the game states, because the game has no name for *not a
+          // weapon*.
+          label: weaponClass?.label ?? 'Style',
+          members: members,
+          conflicts: members.where((each) => each.over).length,
+        ),
+  ];
+}
+
+/// Every proficiency the tables know, in tabs — one per weapon class the game
+/// itself defines, and one for the fighting styles.
+///
+/// ⚠️ **The eight tab names are read out of the game, not grouped by eye.** See
+/// [WeaponClass]: BG:EE's `weapprof.2da` still carries the obsolete BG1 rows,
+/// and each of those eight rows' description *names the weapons it covers*.
+///
+/// ⚠️ **Tabs hide things, and one of the things they can hide is a conflict.**
+/// This page has no findings badge and no way to search the record, both
+/// deliberately — which rests on the page drawing everything at once. Tabs
+/// break that, so **a tab whose group holds an over-ceiling proficiency says
+/// so on the tab itself.** Without that, a record could be wrong in a way the
+/// page showed no trace of.
 ///
 /// ⚠️ **The dot language survives the compaction; the numeral does not.** A
 /// pip meter is a picture — filled, empty, ceiling, surplus — and replacing
@@ -239,7 +292,7 @@ class CompactNumbers extends StatelessWidget {
 /// with nowhere to go, and a row whose dots are all filled is one at its
 /// ceiling. The third, `over ceiling`, is a **conflict**, so it keeps its word:
 /// it is the one state a reader must not have to infer.
-class CompactProficiencies extends StatelessWidget {
+class CompactProficiencies extends StatefulWidget {
   /// Draws [character]'s proficiencies.
   const CompactProficiencies({
     required this.character,
@@ -258,31 +311,116 @@ class CompactProficiencies extends StatelessWidget {
   final Widget? Function(Subject subject)? inlineEditor;
 
   @override
+  State<CompactProficiencies> createState() => _CompactProficienciesState();
+}
+
+class _CompactProficienciesState extends State<CompactProficiencies>
+    with TickerProviderStateMixin {
+  TabController? _tabs;
+  int _length = 0;
+
+  @override
+  void dispose() {
+    _tabs?.dispose();
+    super.dispose();
+  }
+
+  /// The controller for [length] tabs, keeping the chosen tab across rebuilds.
+  ///
+  /// ⚠️ **Editing a pip rebuilds this whole page**, so a controller made fresh
+  /// each build would snap back to the first tab every time a proficiency was
+  /// raised — the edit would work and the reader would be somewhere else. The
+  /// group *count* only changes when the character does, which is the one time
+  /// starting over is right.
+  TabController _controllerFor(int length) {
+    final existing = _tabs;
+    if (existing != null && _length == length) return existing;
+    existing?.dispose();
+    _length = length;
+    return _tabs = TabController(length: length, vsync: this)
+      ..addListener(() {
+        if (mounted) setState(() {});
+      });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final all = character.proficiencies;
+    final all = widget.character.proficiencies;
     if (all.isEmpty) return const SizedBox.shrink();
+
+    final groups = proficiencyGroups(all);
+    final tabs = _controllerFor(groups.length);
+    final shown = groups[tabs.index.clamp(0, groups.length - 1)];
 
     return PanelCard(
       title: 'Proficiencies',
       trailing: Tag('${all.length}', caption: 'all editable'),
       children: [
+        // ⚠️ Scrollable and start-aligned: nine tabs share this column with a
+        // 4 × 4 item grid, and stretching them to fill would make each one
+        // narrower than the words in it.
+        TabBar(
+          controller: tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [
+            for (final group in groups)
+              Tab(
+                height: 40,
+                child: _TabLabel(group: group),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 6,
           runSpacing: 6,
           children: [
-            for (final proficiency in all)
+            for (final proficiency in shown.members)
               _ProficiencyPill(
                 proficiency: proficiency,
-                onTap: () => onOpen(ProficiencySubject(proficiency)),
+                onTap: () => widget.onOpen(ProficiencySubject(proficiency)),
               ),
           ],
         ),
         // Under the whole run, for the same reason the flowing numbers do it:
         // "beneath the row" means nothing to a pill sharing its line with five
-        // others.
-        for (final proficiency in all)
-          ?inlineEditor?.call(ProficiencySubject(proficiency)),
+        // others. ⚠️ Only the shown group's — an editor open under a tab
+        // nobody is looking at is a card floating in another group.
+        for (final proficiency in shown.members)
+          ?widget.inlineEditor?.call(ProficiencySubject(proficiency)),
       ],
+    );
+  }
+}
+
+/// A tab's own heading, marked when its group holds something wrong.
+class _TabLabel extends StatelessWidget {
+  const _TabLabel({required this.group});
+
+  final ProficiencyGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final conflicts = group.conflicts;
+    return Semantics(
+      // ⚠️ **The word, for anyone the icon does not reach.** The mark itself
+      // is a shape and a colour; the sentence is what makes it a statement.
+      label: conflicts == 0
+          ? '${group.label}, ${group.members.length} proficiencies'
+          : '${group.label}, ${group.members.length} proficiencies, '
+                '$conflicts above the ceiling',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ExcludeSemantics(child: Text(group.label)),
+          if (conflicts > 0) ...[
+            const SizedBox(width: 6),
+            Icon(Icons.error_outline, size: 15, color: colors.error),
+          ],
+        ],
+      ),
     );
   }
 }
