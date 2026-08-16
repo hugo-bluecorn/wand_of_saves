@@ -11,7 +11,7 @@ the list can be treated as handled. An entry leaving this file means a fix, not 
 
 ## 1 ⚠️ The character sheet's proficiency pip ceiling is wrong
 
-**Where.** `lib/domain/rules/character_sheet.dart:148-149`.
+**Where.** `lib/domain/rules/character_sheet.dart:149-150`.
 
 ```dart
 int? maximumPipsFor(int proficiencyId) =>
@@ -36,8 +36,9 @@ whether BG:EE's copy has by-level columns at all. If `FIRST_LEVEL` is the whole 
 expression is creation's and no level input is needed. **Look before deciding.**
 
 Also needed: plumb the table into `CharacterSheet` the way `proficiencies` and `skills` already are
-(`character_sheet.dart:50-54`). `ResourceRepository` already reads it
-(`resource_repository.dart:266`, `GameTable.proficiencyRankCap`).
+(`character_sheet.dart:49-55`). `ResourceRepository` already reads it
+(`resource_repository.dart:267`, through its own `proficiencyRankCapTable` constant — the
+`GameTable.proficiencyRankCap` enum value exists but the repository does not use it).
 
 ---
 

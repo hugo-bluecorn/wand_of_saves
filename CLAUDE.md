@@ -307,7 +307,7 @@ column, so reopen them deliberately.
     read the player's own tables. Why that is necessary at all: **D11**.
 - **The app** — save browser → party shell, `go_router`, full MVVM, Material 3. **The whole
   character sheet is editable** and writes back: sealed `EditCommand`s over a curated
-  `CharacterStat` table of 49 fields, plus `SetProficiency` for the pips that live in effects;
+  `CharacterStat` table of 50 fields, plus `SetProficiency` for the pips that live in effects;
   undo/redo on immutable savegame snapshots, atomic write leaving a `.bak`. 697 tests.
   - **Only what the class can actually have is offered.** The seven thief skills are greyed out
     when the player's `thiefscl.2da` gives that class or kit 0% of them — a Fighter/Mage has none

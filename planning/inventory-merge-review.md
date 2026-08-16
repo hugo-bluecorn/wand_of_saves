@@ -166,6 +166,10 @@ copies are hover-only, invisible to the keyboard.
 
 ## 5 Record corrections owed
 
+*(2026-08-16: the CLAUDE.md counts and SDK line, the 50-field count and §1's drifted citations
+below have been applied to the record; §3b's re-diagnosis, §4's additions and the GameTable
+bare-string duplication remain open.)*
+
 From the reconciliation pass (verdicts spot-verified):
 
 - **§1 (pip ceiling) is confirmed live** — the one open rules defect. Citations drifted:

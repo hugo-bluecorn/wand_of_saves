@@ -1,5 +1,11 @@
 # The tool-first study — deriving the merged page from function
 
+> ⚠️ **Status, 2026-08-16 — the method ran and its gates stand; the derived page is historical.**
+> The user reshaped G1 through eleven built changes and eight evaluation decisions, and G2 was
+> deleted, so the walkthrough scores and the R1/R5 requirements below describe pages that no
+> longer exist. **The live description is `planning/grid-spike-brief.md`'s closing sections**,
+> distilled in the `d19-candidate-g1` memory. Do not score the built page against this document.
+
 **2026-08-14.** The user challenged the provenance of D15's option space: three spikes authored
 by one model from one prompt lineage are three samples from one prior — the canned Material
 desktop grammar — not three explorations of design space. Picking the best of three siblings is
