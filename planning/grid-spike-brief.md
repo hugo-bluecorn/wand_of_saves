@@ -1149,129 +1149,111 @@ particularly, both consequences of decisions rather than defects:
 
 ---
 
-## Twelfth change — proficiencies read in the game's own weapon classes
+## Twelfth change — proficiencies in tabs, built and then ⚠️ **undone**
 
-**2026-08-16, the user's: a tabbed view of the proficiencies, one tab per weapon type and one for
-style.** Asked with three groupings previewed; the user chose **the game's eight types + Style,
-nine tabs**, which is the option whose caveat was that the assignment would have to be measured.
+**2026-08-16.** The user asked for a tabbed view of the proficiencies — one tab per weapon type,
+one for style — chose **nine tabs in the game's own type names** from three previewed groupings,
+looked at the built result, and **asked for it to be undone**. It was, by
+`git revert` of `d73526d`; the page is back to one flowing run of pills.
 
-### ⚠️ It nearly had to be invented, and then it did not
+⚠️ **This section is kept, and the code is not, because the two are worth different amounts.** The
+arrangement was tried and rejected in an afternoon. The *facts underneath it* cost a research pass
+across three sources and are true whatever the page looks like — so they are written out here in
+full, and the next person to want any weapon grouping should start from this section rather than
+from `weapprof.2da`.
+
+**The code is in git**: `WeaponClass` and its six tests are commit `d73526d`, reverted by
+`3adbd85`. Nothing in `lib/` or `test/` refers to a weapon class now.
+
+### ⚠️ The grouping is in the game, and it is NOT where anyone would look
 
 **No table states it.** `weapprof.2da` has no type column. `itemtype.2da` is two sounds and a slot
 number. `clasweap.2da` has the eight names — `SMALL_SWORD`, `LARGE_SWORD`, `BLUNT`, `MISSILE`,
 `BOW`, `SPIKED`, `AXE`, `SPEAR` — but only as **columns**, saying which classes may use each; it
-never says a Katana is a Large Sword. That is the shape of a rule this project would have written
-by eye, which D13 forbids.
+never says a Katana is a Large Sword. That is exactly the shape of a rule this project would
+otherwise have written by eye, which D13 forbids.
 
-**Three sources together do state it, and the first is the game's own prose.**
+**It is in the prose of the obsolete rows.** `weapprof.2da` still carries ids 0–7 — the same eight
+names — and each one's `DESC_REF` is *a sentence naming the weapons it covers*. Resolved against
+the player's own talk table on 2026-08-16:
 
-1. ⚠️ **The obsolete BG1 rows describe themselves.** `weapprof.2da` still carries ids 0–7 — the
-   same eight names — and each one's `DESC_REF` is a sentence naming the weapons it covers.
-   Resolved against the player's own talk table:
+| id | strref | the game's own sentence |
+|---|---|---|
+| 0 | 9589 | LARGE SWORD: "Bastard Swords, Two handed swords, Long Swords, and Scimitars" |
+| 1 | 9590 | SMALL SWORD: "Daggers and Short swords" |
+| 2 | 9591 | BOW: "Longbows, Composite Longbows, and Shortbows" |
+| 3 | 9592 | SPEAR: "Spears and Halberds" |
+| 4 | 9593 | BLUNT WEAPONS: "Maces, Clubs, Warhammers, and the Staff" |
+| 5 | 9594 | SPIKED WEAPONS: "Morning Stars and Flails" |
+| 6 | 9595 | AXE: "Battle axes and Throwing axes" |
+| 7 | 9596 | MISSILE WEAPONS: "Slings, Darts, and Crossbows" |
 
-   | strref | the game's sentence |
-   |---|---|
-   | 9589 | LARGE SWORD: "Bastard Swords, Two handed swords, Long Swords, and Scimitars" |
-   | 9590 | SMALL SWORD: "Daggers and Short swords" |
-   | 9591 | BOW: "Longbows, Composite Longbows, and Shortbows" |
-   | 9592 | SPEAR: "Spears and Halberds" |
-   | 9593 | BLUNT WEAPONS: "Maces, Clubs, Warhammers, and the Staff" |
-   | 9594 | SPIKED WEAPONS: "Morning Stars and Flails" |
-   | 9595 | AXE: "Battle axes and Throwing axes" |
-   | 9596 | MISSILE WEAPONS: "Slings, Darts, and Crossbows" |
+**Nineteen of the twenty live weapon proficiencies are named outright**, and the placement a reader
+would most likely dispute — is a Crossbow a *Bow* or a *Missile*? — the sentences settle flatly:
+**Missile**. The resulting membership, by `ID` column:
 
-   **Nineteen of the twenty live weapon proficiencies are named outright.** The one placement a
-   reader would most likely dispute — is a Crossbow a *Bow* or a *Missile*? — the sentences settle
-   flatly: Missile.
+| class | ids |
+|---|---|
+| Large Sword | 89, 90, 93, 95 · **+ 94 by measurement** |
+| Small Sword | 91, 96 |
+| Bow | 104, 105 |
+| Spear | 98, 99 |
+| Blunt Weapons | 97, 101, 102, 115 |
+| Spiked Weapons | 100 |
+| Axe | 92 |
+| Missile Weapons | 103, 106, 107 |
+| *(no class)* | 111, 112, 113, 114 — the four styles |
 
-2. **The shipped items place the twentieth.** BG1 had no katanas, so no BG1 class names one. Every
-   `ITM V1` header carries both its `ITEMCAT` category (`0x1c`) and its weapon proficiency
-   (`0x31`), and a sweep of **all 1,530 items BioWare ships** puts all four katanas in `BGSWORD`,
-   the category of every bastard, long and two-handed sword. Weaker evidence than a sentence, so
-   it carries its own test saying so.
+**The twentieth is placed by the shipped items.** BG1 had no katanas, so no BG1 class names one.
+Every `ITM V1` header carries both its `ITEMCAT` category (`0x1c`, word) and its **weapon
+proficiency (`0x31`, byte — a field `ItmHeaderField` does not currently read)**. A sweep of all
+**1,530 items BioWare ships** puts all four katanas in `BGSWORD`, the category of every bastard,
+long and two-handed sword. Weaker evidence than a sentence, and marked as such.
 
-3. **The same sweep corroborates the other nineteen** — one category per proficiency, with two
-   instructive exceptions. `Flail / Morning Star` spans `FLAIL` and `MSTAR`, exactly as its own
-   name says; and three of the twelve scimitar-family items are catalogued `SMSWORD` rather than
-   `BGSWORD` — the wakizashi and ninjatō, which are short blades. The sentence settles both.
+**The same sweep corroborates the other nineteen** — one category per proficiency, with two
+instructive exceptions: `Flail / Morning Star` spans `FLAIL` and `MSTAR`, exactly as its own name
+says, and three of the twelve scimitar-family items are catalogued `SMSWORD` rather than `BGSWORD`
+(the wakizashi and ninjatō, which are short blades). The sentence settles both.
 
-⚠️ **And the sweep found something else: `SLAYSH01` claims proficiency 116** — `EXTRA2`, a
-**padding** row, with `ITEMCAT` category `MISC`. D18's measurement was over the 2,253 *creature*
-records and found nothing in the padding band; this is the first observed use of one, in an
-**item**. It changes nothing here (no character can have it offered) but it is the second time a
-padding id has turned up in real data, and it is recorded rather than filtered away.
+⚠️ **One label is not its `NAME_REF`.** 8732 resolves to *"Short Sword"*, which is **also live
+proficiency 91**, so a heading reading "Short Sword" over a group containing "Short Sword" and
+"Dagger" would state something untrue. The class's own description heads itself **"SMALL SWORD"**.
+Anyone labelling these groups hits this collision; both words are the game's.
 
-**Where it lives:** `WeaponClass` in `lib/domain/proficiency_catalogue.dart`, beside
-`ProficiencyCatalogue.live` — the D18 measured constant it most resembles. **Production, test-first:
-six tests, one of which was mutation-checked** (dropping Club from Blunt correctly made it appear
-in the residual).
+⚠️ **And "Style" is not a class name the game has.** The word is borrowed from all four of those
+proficiencies' own names, and `stylbonu.2da` — whose four rows are `TWOHANDED`, `SINGLEWEAPON`,
+`SWORDANDSHIELD`, `TWOWEAPON` — is the table that gives them their bonuses. ⚠️ Note those row
+labels do **not** match `weapprof.2da`'s (`2HANDED`, `2WEAPON`), so the two files cannot be joined
+on identifier without a normalising rule that would be this project's invention. Defining *style*
+as **whatever no weapon class claims** avoids needing one.
 
-### ⚠️ The four styles are in NO class, and that is load-bearing
+### ⚠️ A finding from the sweep, unrelated to tabs and worth keeping
 
-`WeaponClass.of` answers `null` for a style — and also for an obsolete row, a padding row, or any
-id a future table introduces. **The last tab holds everything unclassified**, so a proficiency this
-code cannot place is visible rather than in no tab at all. A test pins that, for the shipped table,
-the residual is exactly ids 111–114.
+**`SLAYSH01` claims proficiency 116** — `EXTRA2`, a **padding** row — with `ITEMCAT` category
+`MISC`. D18's measurement was over the 2,253 shipped *creature* records and found nothing in the
+padding band; **this is the first observed use of one, in an item.** It changes nothing about what
+is offered, but it is the second time a padding id has turned up in real data, and D18's wording —
+"the obsolete band is dead in the shipped data" — is about creatures and should not be read as
+covering items.
 
-"Style" is the one label the game does not state as a class name. It is **borrowed rather than
-coined** — the word is in all four of those proficiencies' own names, and `stylbonu.2da` is the
-table that gives them their bonuses.
-
-⚠️ **One label is not its `NAME_REF`.** 8732 resolves to *"Short Sword"* — which is also live
-proficiency 91 — so a heading reading "Short Sword" over a group containing "Short Sword" and
-"Dagger" would state something untrue. The class's own description heads itself **"SMALL SWORD"**,
-so that is the word used. Still the game's, and unambiguous.
-
-### ⚠️ Tabs hide things, and one of the things they hide is a conflict
-
-This was raised before building rather than discovered after. The page has **no findings badge and
-no way to search the record**, both decided yesterday, and both rest on the page drawing everything
-at once. Tabs break that premise for the one panel that can carry a conflict.
-
-**So a tab whose group holds an over-ceiling proficiency marks itself** — an error-role icon on the
-tab, with the *word* in its `Semantics` label, and the `over ceiling` chip still on the pill one tap
-away. Pinned by a test that puts the conflict on an **unselected** tab.
-
-**Not done, and offered rather than taken:** opening on the conflicted tab instead of the first.
-It would make the conflict unmissable and it is two lines, but it is a surprising default and it
-was not asked for.
-
-### Measured, same fixture and window as the rest of this report
+### What the built version measured, before it was undone
 
 | | |
 |---|---|
-| Proficiencies panel | **174** tall — down from 288 as one flowing run, and 1,046 as full meters |
-| right column | 1,456 → **1,274** |
-| left column | 970, unchanged |
-| the columns | 1.5 : 1 → **1.31 : 1** |
+| Proficiencies panel | **174** tall tabbed, against **288** as one flowing run and **1,046** as full meters |
+| right column | 1,274 tabbed, against **1,456** untabbed |
+| the columns | 1.31 : 1 tabbed, against **1.5 : 1** untabbed |
+| the tab strip | **1,128 pt of content in a 756 pt column** — a third of the nine tabs behind a horizontal scroll, though `flutter test` over-estimates widths by roughly a third |
 
-**So tabbing did most of the rebalancing the previous section asked for**, without moving a block.
-Sending Proficiencies back to the left column — the move that section proposed — would now
-*overshoot*: 1,144 against 1,100 is still an improvement, but the case for it is much weaker than it
-was this morning. ⚠️ **That is the second time today a layout decision has been undercut by a later
-measurement**; it is the same lesson as the stale 2,013 : 1,995 figure.
+⚠️ **So the page is back to 1.5 : 1**, and the rebalancing suggestion in the previous section stands
+after all: sending Proficiencies to the left column is still the single move that levels the two.
 
-⚠️ **The one thing a capture must settle: the tab strip is wider than its column.** Nine tabs
-measure **1,128** points of content in a **756**-point column — 372 off the end, about a third of
-them behind a horizontal scroll. But this is `flutter test`'s em-square font, where widths are
-over-estimates by roughly a third, so on screen it may fit or may not. **Look at it.** If it does
-not fit, the options in order of honesty are: two rows of tabs; shortening the three "… Weapons"
-labels to `Blunt` · `Spiked` · `Missile` (a departure from the game's words, but only a trim); or a
-different control entirely.
+### Two design points the attempt settled, which outlive it
 
-Re-proved as throwaway tests, run green and deleted: nine tabs in the game's order and words; only
-the chosen tab's proficiencies drawn; choosing Missile Weapons shows Sling/Dart/Crossbow and hides
-Bastard Sword; the Style tab holds exactly the four styles; an unselected tab holding a conflict
-marks itself while the word stays on the pill; **editing a pip does not throw you back to tab one**;
-and a pip edit applies with Save going live. `analyze` clean, `dart format` a no-op, **859 + 399
-green**, zero suppressions.
-
-⚠️ **The tab taps missed on the first run** — the strip scrolls, the later tabs were off-screen, and
-Flutter reports that as a *warning* rather than a failure. Two of the seven tests were false greens
-for a minute. That is the same trap recorded yesterday, hit again the next day: `ensureVisible`
-before every tap.
-
-### One more for the capture list
-
-7. The nine-tab strip: does it fit the column, or is a third of it behind a horizontal scroll?
-   And the conflict mark on a tab — make Two-Weapon Style over its ceiling to see it.
+1. ⚠️ **Tabs and this page's other decisions pull against each other.** The merged page has **no
+   findings badge and no way to search the record**, and both were decided on the grounds that it
+   draws everything at once. Any control that hides part of the record weakens that argument — and
+   the panel it would hide is the only one that can carry a *conflict*. The built version answered
+   it with a mark on the tab; anything else that folds the record away needs its own answer.
+2. **Nine of anything does not fit this column.** 756 points is the width, and it is shared with a
+   4 × 4 item grid.
